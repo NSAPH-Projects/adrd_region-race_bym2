@@ -1,0 +1,198 @@
+# ADRD hospitalization rates per county
+
+## Limited to NC
+
+```{r, message=F, warning=F}
+## The interactive Rstudio session was started with 36 GB and 8 cores
+## The  default working directory of an Rmd in Rstudio is the Rmd location
+## The details of the symbolic links to the input data are provided in the README of the  /data/input folder
+
+## load packages ----
+library(tidyverse)
+library(magrittr)
+library(fst, lib.loc = ".")
+library(data.table)
+library(sf)
+library(tictoc, lib.loc = ".")
+```
+
+### Read num enrollees
+
+```{r}
+fips_num_enroll <- read_csv("../data/input/fips_num_enroll.csv")
+zcta_num_enroll <- read_csv("../data/input/zcta_num_enroll.csv")
+```
+
+### Read shp files
+
+* read county shp files
+
+```{r}
+county_sf <- read_sf("../data/input/scratch/tl_2022_us_county/tl_2022_us_county.shp")
+
+dim(county_sf)
+names(county_sf)
+```
+
+* read zcta shp files
+
+```{r}
+zcta_sf <- read_sf("../data/input/scratch/tl_2022_us_zcta520/tl_2022_us_zcta520.shp")
+
+dim(zcta_sf)
+names(zcta_sf)
+```
+
+### Read zcta to fips crosswalk file
+
+```{r}
+countyzipcrosswalk <- read_tsv("../data/input/countyzipcrosswalk.tab")
+```
+
+* Obtain weights
+
+```{r}
+xx <- countyzipcrosswalk %>% 
+  select(county, ZCTA5) %>% 
+  group_by(ZCTA5) %>% 
+  summarise(n = n()) %>% 
+  mutate(w = 1/n)
+
+countyzipcrosswalk %<>% 
+  left_join(xx)
+
+head(countyzipcrosswalk)
+```
+
+### Read ADRD events
+
+```{r}
+tic("Read denom files")
+ffs_entry_exit_adrd <- read_fst("../data/input/denom/ffs_entry_exit_adrd.fst" 
+                                #, as.data.table = TRUE
+)
+toc()
+```
+
+```{r}
+class(ffs_entry_exit_adrd)
+dim(ffs_entry_exit_adrd)
+lapply(ffs_entry_exit_adrd, class)
+```
+
+* determine unique ID's.
+
+A single row per ID
+
+```{r}
+tic("sum duplicates")
+sum(duplicated(ffs_entry_exit_adrd$qid))
+toc()
+```
+
+### Prepare data
+
+* Filter beneficiaries with ADRD
+
+```{r}
+adrd_df <- ffs_entry_exit_adrd %>% 
+  filter(ADRD_hosp) %>% 
+  select(qid, race_cat, sex, ADRD_year, ADRD_zip, ADRD_age)
+
+dim(adrd_df)
+```
+
+* Mapping of ADRD_zip with state and county
+
+Some zip codes not found in crosswalk file
+
+```{r}
+sum(!unique(as.numeric(adrd_df$ADRD_zip)) %in% countyzipcrosswalk$ZCTA5)
+```
+
+Some zero zip codes
+
+```{r}
+sum(as.numeric(adrd_df$ADRD_zip) == 0, na.rm = T)
+```
+
+The left join produces duplicated q_id entries
+
+Beneficiaries that live in zips that intersect more than one county contribute more than once. The weights distribure them.
+
+```{r}
+tic("map ADRD_zip")
+adrd_df %<>%
+  mutate(ADRD_zip = as.numeric(ADRD_zip)) %>%
+  left_join(
+    countyzipcrosswalk,
+    by = c("ADRD_zip" = "ZCTA5")
+  )
+toc()
+```
+
+* Limit to NC
+
+```{r}
+adrd_df %<>% 
+  filter(state == "NC")
+```
+
+### ADRD hospitalizations in NC
+
+* Summarize number of ADRD cases per county
+
+```{r}
+yy <- adrd_df %>% 
+  group_by(FIPS) %>% 
+  summarize(adrd_count = sum(w))
+
+summary(yy$adrd_count)
+```
+
+* Map adrd counts
+
+```{r}
+county_sf %>% 
+  filter(STATEFP == "37") %>% 
+  select(GEOID) %>% 
+  left_join(
+    yy %>%  
+      mutate(FIPS = as.character(FIPS)), 
+    by = c("GEOID" = "FIPS")
+  ) %>% 
+  ggplot() + 
+  geom_sf(aes(fill = adrd_count), aes = 0.5)
+```
+
+### Compute ADRD rates per county
+
+```{r}
+xx <- fips_num_enroll %>% 
+  group_by(year, fips5) %>% 
+  summarise(count = sum(count)) %>% 
+  group_by(fips5) %>% 
+  summarise(
+    num_enrollee = mean(count, na.rm = T) 
+  ) 
+
+zz <- left_join(xx, yy, by = c("fips5" = "FIPS")) %>% 
+  mutate(adrd_rate = adrd_count / num_enrollee)
+
+summary(zz$adrd_rate)
+```
+
+* Map adrd rates
+
+```{r}
+county_sf %>% 
+  filter(STATEFP == "37") %>% 
+  select(GEOID) %>% 
+  left_join(
+    zz %>%  
+      mutate(fips5 = as.character(fips5)), 
+    by = c("GEOID" = "fips5")
+  ) %>% 
+  ggplot() + 
+  geom_sf(aes(fill = sqrt(adrd_rate)))
+```
