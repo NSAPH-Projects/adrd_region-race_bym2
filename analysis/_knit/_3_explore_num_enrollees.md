@@ -324,14 +324,10 @@ county_sf %>%
     by = c("GEOID" = "fips5")
   ) %>% 
   ggplot() + 
-  geom_sf(aes(fill = num_enrollee), aes = 0.5)
+  geom_sf(aes(fill = num_enrollee))
 ```
 
-```
-## Warning: Ignoring unknown parameters: aes
-```
-
-![](_3_-explore_num_enrollees_files/figure-html/unnamed-chunk-16-1.png)<!-- -->
+![](_3_explore_num_enrollees_files/figure-html/unnamed-chunk-16-1.png)<!-- -->
 
 ### Enrollee pop per county per race
 
