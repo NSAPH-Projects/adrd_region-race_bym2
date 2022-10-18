@@ -1,0 +1,180 @@
+
+# Explore num enrollees
+
+```{r, warning=F, message=F}
+## The interactive Rstudio session was started with 38 GB and 8 cores
+## The  default working directory of an Rmd in Rstudio is the Rmd location
+
+## load packages ----
+library(tidyverse)
+library(magrittr)
+library(sf)
+```
+
+### Read shp files
+
+* read county shp files
+
+```{r}
+county_sf <- read_sf("../data/input/scratch/tl_2022_us_county/tl_2022_us_county.shp")
+
+dim(county_sf)
+names(county_sf)
+```
+
+
+* read zcta shp files
+
+```{r}
+zcta_sf <- read_sf("../data/input/scratch/tl_2022_us_zcta520/tl_2022_us_zcta520.shp")
+
+dim(zcta_sf)
+names(zcta_sf)
+```
+
+### Read num enrollees
+
+```{r}
+fips_num_enroll <- read_csv("../data/input/fips_num_enroll.csv")
+zcta_num_enroll <- read_csv("../data/input/zcta_num_enroll.csv")
+```
+
+```{r}
+dim(fips_num_enroll)
+dim(zcta_num_enroll)
+```
+
+* mapping fips in the shp files
+
+There are fips not found in shp files
+
+```{r}
+length(unique(fips_num_enroll$fips5))
+sum(!unique(fips_num_enroll$fips5) %in% county_sf$GEOID)
+```
+
+* mapping zctas are in the shp files
+
+There are zctas not found in shp files
+
+```{r}
+length(unique(zcta_num_enroll$zip))
+sum(unique(zcta_num_enroll$zip) %in% zcta_sf$ZCTA5CE20)
+```
+
+### Explore race
+
+```{r}
+table(fips_num_enroll$race)
+```
+
+```{r}
+prop.table(table(fips_num_enroll$race))
+```
+
+### Explore num enrollees
+
+* All counties have enrollee counts in all years
+
+```{r}
+xx <- fips_num_enroll %>% 
+  group_by(year, fips5) %>% 
+  summarise(count = sum(count)) %>% 
+  group_by(fips5) %>% 
+  summarise(
+    n = n(),
+    max = max(count, na.rm = T), 
+    min = min(count, na.rm = T), 
+    pct_diff = max / min - 1 
+  )
+
+summary(xx$n)
+```
+
+* Pct change through years by county
+
+```{r}
+xx %>% 
+  arrange(desc(pct_diff))
+```
+
+
+* Zcta's have varying number of years with enrollees
+
+To obtain the mean through year, zcta-year having enrollee counts of zero have to be included.
+
+```{r}
+xx <- zcta_num_enroll %>% 
+  group_by(year, zip) %>% 
+  summarise(count = sum(count)) %>% 
+  group_by(zip) %>% 
+  summarise(
+    n = n(),
+    max = max(count, na.rm = T), 
+    min = min(count, na.rm = T), 
+    pct_diff = max / min - 1 
+  ) 
+
+summary(xx$n) 
+```
+
+```{r}
+xx %>% 
+  arrange(desc(pct_diff))
+```
+
+### Enrollee pop per county
+
+```{r}
+xx <- fips_num_enroll %>% 
+  group_by(year, fips5) %>% 
+  summarise(count = sum(count)) %>% 
+  group_by(fips5) %>% 
+  summarise(
+    num_enrollee = mean(count, na.rm = T) 
+  ) 
+
+summary(xx$num_enrollee)
+```
+
+```{r}
+hist(xx$num_enrollee)
+```
+
+* Map num enrollees
+
+```{r}
+county_sf %>% 
+  filter(STATEFP == "37") %>% 
+  select(GEOID) %>% 
+  left_join(
+    xx %>%  
+      mutate(fips5 = as.character(fips5)), 
+    by = c("GEOID" = "fips5")
+  ) %>% 
+  ggplot() + 
+  geom_sf(aes(fill = num_enrollee), aes = 0.5)
+```
+
+### Enrollee pop per county per race
+
+```{r}
+# xx <- fips_num_enroll %>% 
+#   group_by(year, fips5, race) %>% 
+#   summarise(count = sum(count)) %>% 
+#   group_by(fips5, race) %>% 
+#   summarise(
+#     num_enrollee = mean(count, na.rm = T) 
+#   ) %>%
+#   group_by(race)
+#   nest()
+# 
+# lapply(xx$num_enrollee, summary)
+```
+
+
+
+
+
+
+
