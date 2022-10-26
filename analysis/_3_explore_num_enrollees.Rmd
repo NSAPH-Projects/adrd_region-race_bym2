@@ -32,44 +32,104 @@ dim(zcta_sf)
 names(zcta_sf)
 ```
 
+### Read zip to zcta crosswalk file
+
+```{r}
+zctazipcrosswalk <- read_csv("../data/input/zip_to_zcta/Zip_to_ZCTA_crosswalk_2015_JSI.csv")
+```
+
+```{r}
+dim(zctazipcrosswalk)
+length(unique(zctazipcrosswalk$ZIP))
+length(unique(zctazipcrosswalk$ZCTA))
+```
+
+* Obtain crosswalk weights
+
+```{r}
+zctazipcrosswalk %<>% 
+  left_join(
+    zctazipcrosswalk %>% 
+      select(ZIP, ZCTA) %>% 
+      group_by(ZCTA) %>% 
+      summarise(n = n()) %>% 
+      mutate(w = 1/n)
+  )
+
+head(zctazipcrosswalk)
+```
+
 ### Read num enrollees
 
 ```{r}
 fips_num_enroll <- read_csv("../data/input/fips_num_enroll.csv")
-zcta_num_enroll <- read_csv("../data/input/zcta_num_enroll.csv")
+zips_num_enroll <- read_csv("../data/input/zips_num_enroll.csv")
 ```
 
 ```{r}
 dim(fips_num_enroll)
-dim(zcta_num_enroll)
+dim(zips_num_enroll)
+```
+
+### Prepare datasets
+
+* corroborate both zips and zip counts consider the same number of enrollees
+
+```{r}
+sum(fips_num_enroll$count)
+sum(zips_num_enroll$count)
 ```
 
 * mapping fips in the shp files
 
-There are fips not found in shp files
+Some fips not found in shp files.
 
 ```{r}
 length(unique(fips_num_enroll$fips5))
 sum(!unique(fips_num_enroll$fips5) %in% county_sf$GEOID)
 ```
 
-* mapping zctas are in the shp files
+* mapping zips into zctas into shp files
+
+Some zip codes not found in crosswalk file.
+
+```{r}
+length(unique(as.numeric(zips_num_enroll$zip)))
+sum(!unique(as.numeric(zips_num_enroll$zip)) %in% zctazipcrosswalk$ZIP)
+```
 
 There are zctas not found in shp files
 
 ```{r}
-length(unique(zcta_num_enroll$zip))
-sum(unique(zcta_num_enroll$zip) %in% zcta_sf$ZCTA5CE20)
+zips_num_enroll %<>% 
+  left_join(
+    zctazipcrosswalk %>% 
+      mutate(ZIP = as.numeric(ZIP)), 
+    by = c("zip" = "ZIP")
+  )
+
+length(unique(zips_num_enroll$ZCTA))
+sum(!unique(zips_num_enroll$ZCTA) %in% zcta_sf$ZCTA5CE20)
 ```
 
 ### Explore race
 
+* corroborate both zips and zip race counts give the same numbers
+
 ```{r}
-table(fips_num_enroll$race)
+tapply(fips_num_enroll$count, fips_num_enroll$race, sum)
 ```
 
 ```{r}
-prop.table(table(fips_num_enroll$race))
+tapply(fips_num_enroll$count, fips_num_enroll$race, sum)
+```
+
+* look at proportions by race
+
+77% white and 19% black
+
+```{r}
+prettyNum(prop.table(tapply(fips_num_enroll$count, fips_num_enroll$race, sum)))
 ```
 
 ### Explore num enrollees
@@ -85,6 +145,7 @@ xx <- fips_num_enroll %>%
     n = n(),
     max = max(count, na.rm = T), 
     min = min(count, na.rm = T), 
+    mean = mean(count, na.rm = T), 
     pct_diff = max / min - 1 
   )
 
@@ -98,50 +159,13 @@ xx %>%
   arrange(desc(pct_diff))
 ```
 
-
-* Zcta's have varying number of years with enrollees
-
-To obtain the mean through year, zcta-year having enrollee counts of zero have to be included.
+* Summary of mean enrollees per county
 
 ```{r}
-xx <- zcta_num_enroll %>% 
-  group_by(year, zip) %>% 
-  summarise(count = sum(count)) %>% 
-  group_by(zip) %>% 
-  summarise(
-    n = n(),
-    max = max(count, na.rm = T), 
-    min = min(count, na.rm = T), 
-    pct_diff = max / min - 1 
-  ) 
-
-summary(xx$n) 
+summary(xx$mean) 
 ```
 
-```{r}
-xx %>% 
-  arrange(desc(pct_diff))
-```
-
-### Enrollee pop per county
-
-```{r}
-xx <- fips_num_enroll %>% 
-  group_by(year, fips5) %>% 
-  summarise(count = sum(count)) %>% 
-  group_by(fips5) %>% 
-  summarise(
-    num_enrollee = mean(count, na.rm = T) 
-  ) 
-
-summary(xx$num_enrollee)
-```
-
-```{r}
-hist(xx$num_enrollee)
-```
-
-* Map num enrollees
+* Map num enrollees per county
 
 ```{r}
 county_sf %>% 
@@ -153,28 +177,119 @@ county_sf %>%
     by = c("GEOID" = "fips5")
   ) %>% 
   ggplot() + 
-  geom_sf(aes(fill = num_enrollee), aes = 0.5)
+  geom_sf(aes(fill = mean), aes = 0.5)
+```
+
+* Zip's have varying number of years with enrollees
+
+Zip with zero enrollees are not included.
+
+```{r}
+xx <- zips_num_enroll %>% 
+  group_by(year, zip) %>% 
+  summarise(count = sum(count)) %>% 
+  group_by(zip) %>% 
+  summarise(
+    n = n(),
+    max = max(count, na.rm = T), 
+    min = min(count, na.rm = T), 
+    mean = mean(count, na.rm = T), 
+    pct_diff = max / min - 1 
+  ) 
+
+summary(xx$n) 
+```
+
+* Pct change through years by zip
+
+```{r}
+xx %>% 
+  arrange(desc(pct_diff))
+```
+
+* Summary of mean enrollees per zip
+
+To obtain the mean through year, zip-year having enrollee counts of zero have to be included.
+
+```{r}
+summary(xx$mean) 
+```
+
+* Map num enrollees per zip
+
+Zips to Zcta crosswalk or shapefiles seem to be outdated.
+
+```{r}
+xx <- zips_num_enroll %>% 
+  group_by(year, ZCTA) %>% 
+  summarise(count = sum(count * w)) %>% 
+  group_by(ZCTA) %>% 
+  summarise(
+    n = n(),
+    max = max(count, na.rm = T), 
+    min = min(count, na.rm = T), 
+    mean = mean(count, na.rm = T), 
+    pct_diff = max / min - 1 
+  ) 
+
+zcta_sf %>% 
+  select(ZCTA5CE20) %>% 
+  right_join(
+    xx, 
+    by = c("ZCTA5CE20" = "ZCTA")
+  ) %>% 
+  ggplot() + 
+  geom_sf(aes(fill = mean), aes = 0.5)
 ```
 
 ### Enrollee pop per county per race
 
+* County-race (white & black) have varying number of years with enrollees. County-race-year with zero counts are excluded
+
 ```{r}
-# xx <- fips_num_enroll %>% 
-#   group_by(year, fips5, race) %>% 
-#   summarise(count = sum(count)) %>% 
-#   group_by(fips5, race) %>% 
-#   summarise(
-#     num_enrollee = mean(count, na.rm = T) 
-#   ) %>%
-#   group_by(race)
-#   nest()
-# 
-# lapply(xx$num_enrollee, summary)
+xx <- fips_num_enroll %>% 
+  filter(race %in% c(1,2)) %>% 
+  group_by(year, fips5, race) %>% 
+  summarise(count = sum(count)) %>% 
+  ungroup() %>% 
+  group_by(fips5, race) %>% 
+  summarise(
+    n = n(),
+    max = max(count, na.rm = T), 
+    min = min(count, na.rm = T), 
+    mean = mean(count, na.rm = T), 
+    pct_diff = max / min - 1 
+  ) %>% 
+  ungroup()
+
+tapply(xx$n, xx$race, summary)
 ```
 
+* Pct change through years by county
 
+```{r}
+xx %>% 
+  arrange(desc(pct_diff))
+```
 
+* Summary of mean enrollees per county-race
 
+```{r}
+tapply(xx$mean, xx$race, summary)
+```
 
+* Map num enrollees per county
 
-
+```{r}
+county_sf %>% 
+  filter(STATEFP == "37") %>% 
+  select(GEOID) %>% 
+  left_join(
+    xx %>%  
+      mutate(fips5 = as.character(fips5)), 
+    by = c("GEOID" = "fips5")
+  ) %>% 
+  ggplot() + 
+  geom_sf(aes(fill = mean), aes = 0.5) +
+  facet_wrap(~race)
+```
