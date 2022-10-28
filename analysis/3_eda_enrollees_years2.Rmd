@@ -1,0 +1,201 @@
+
+# Explore num enrollees
+
+For a subset of 16 years.
+
+```{r, warning=F, message=F}
+## The interactive Rstudio session was started with 38 GB and 8 cores
+## The  default working directory of an Rmd in Rstudio is the Rmd location
+
+## load packages ----
+library(tidyverse)
+library(magrittr)
+library(sf)
+```
+
+### Read shp files
+
+* read county shp files
+
+```{r}
+county_sf <- read_sf("../data/input/scratch/tl_2022_us_county/tl_2022_us_county.shp")
+
+dim(county_sf)
+names(county_sf)
+```
+
+
+* read zcta shp files
+
+```{r}
+zcta_sf <- read_sf("../data/input/scratch/tl_2022_us_zcta520/tl_2022_us_zcta520.shp")
+
+dim(zcta_sf)
+names(zcta_sf)
+```
+
+### Read zip to zcta crosswalk file
+
+```{r}
+zctazipcrosswalk <- read_csv("../data/input/zip_to_zcta/Zip_to_ZCTA_crosswalk_2015_JSI.csv")
+```
+
+```{r}
+dim(zctazipcrosswalk)
+length(unique(zctazipcrosswalk$ZIP))
+length(unique(zctazipcrosswalk$ZCTA))
+```
+
+* Obtain crosswalk weights
+
+```{r}
+zctazipcrosswalk %<>% 
+  left_join(
+    zctazipcrosswalk %>% 
+      select(ZIP, ZCTA) %>% 
+      group_by(ZCTA) %>% 
+      summarise(n = n()) %>% 
+      mutate(w = 1/n)
+  )
+
+head(zctazipcrosswalk)
+```
+
+## All years
+
+### Read num enrollees
+
+```{r}
+fips_num_enroll_ <- read_csv("../data/input/fips_num_enroll_.csv")
+```
+
+```{r}
+dim(fips_num_enroll_)
+```
+
+### Prepare datasets
+
+* mapping fips in the shp files
+
+Some fips not found in shp files.
+
+```{r}
+length(unique(fips_num_enroll_$fips5))
+sum(!unique(fips_num_enroll_$fips5) %in% county_sf$GEOID)
+```
+
+### Explore race
+
+* fips race counts
+
+```{r}
+tapply(fips_num_enroll_$count, fips_num_enroll_$race, sum)
+```
+
+* look at proportions by race
+
+80% white and 20% black
+
+```{r}
+prettyNum(prop.table(tapply(fips_num_enroll_$count, fips_num_enroll_$race, sum)))
+```
+
+### Explore num enrollees
+
+* There are counties that do not have enrollees in all years. 
+
+```{r}
+xx <- fips_num_enroll_ %>% 
+  group_by(year, fips5) %>% 
+  summarise(count = sum(count)) %>% 
+  group_by(fips5) %>% 
+  summarise(
+    n = n(),
+    max = max(count, na.rm = T), 
+    min = min(count, na.rm = T), 
+    mean = mean(count, na.rm = T), 
+    pct_diff = max / min - 1 
+  )
+
+summary(xx$n)
+```
+
+* Pct change through years by county
+
+```{r}
+xx %>% 
+  arrange(desc(pct_diff))
+```
+
+* Summary of mean enrollees per county
+
+```{r}
+summary(xx$mean) 
+```
+
+* Map num enrollees per county
+
+```{r}
+county_sf %>% 
+  filter(STATEFP == "37") %>% 
+  select(GEOID) %>% 
+  left_join(
+    xx %>%  
+      mutate(fips5 = as.character(fips5)), 
+    by = c("GEOID" = "fips5")
+  ) %>% 
+  ggplot() + 
+  geom_sf(aes(fill = mean), aes = 0.5)
+```
+
+### Enrollee pop per county per race
+
+* County-race (white & black) have varying number of years with enrollees. County-race-year with zero counts are excluded
+
+```{r}
+xx <- fips_num_enroll_ %>% 
+  filter(race %in% c(1,2)) %>% 
+  group_by(year, fips5, race) %>% 
+  summarise(count = sum(count)) %>% 
+  ungroup() %>% 
+  group_by(fips5, race) %>% 
+  summarise(
+    n = n(),
+    max = max(count, na.rm = T), 
+    min = min(count, na.rm = T), 
+    mean = mean(count, na.rm = T), 
+    pct_diff = max / min - 1 
+  ) %>% 
+  ungroup()
+
+tapply(xx$n, xx$race, summary)
+```
+
+* Pct change through years by county
+
+```{r}
+xx %>% 
+  arrange(desc(pct_diff))
+```
+
+* Summary of mean enrollees per county-race
+
+```{r}
+tapply(xx$mean, xx$race, summary)
+```
+
+* Map num enrollees per county
+
+```{r}
+county_sf %>% 
+  filter(STATEFP == "37") %>% 
+  select(GEOID) %>% 
+  left_join(
+    xx %>%  
+      mutate(fips5 = as.character(fips5)), 
+    by = c("GEOID" = "fips5")
+  ) %>% 
+  ggplot() + 
+  geom_sf(aes(fill = mean), aes = 0.5) +
+  facet_wrap(~race)
+```

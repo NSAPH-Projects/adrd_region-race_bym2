@@ -1,0 +1,91 @@
+## query number of enrollees per year per fips
+## filename: _fips_num_enroll.csv
+
+```
+SELECT 
+    year, fips5, count(bene_id)
+FROM 
+    medicare.enrollments
+WHERE 
+    year in ('2011', '2012', '2013', '2014', '2016', '2017') AND
+    state = 'NC'
+GROUP BY 
+    year,  
+    fips5
+;
+```
+
+## query number of enrollees per year per fips stratified by race
+## filename: fips_num_enroll.csv
+
+```
+SELECT 
+    medicare.enrollments.year, medicare.enrollments.fips5, medicare.beneficiaries.race, count(medicare.enrollments.bene_id)
+FROM 
+    medicare.enrollments
+LEFT JOIN medicare.beneficiaries ON medicare.enrollments.bene_id = medicare.beneficiaries.bene_id
+WHERE 
+    medicare.enrollments.year in ('2011', '2012', '2013', '2014', '2016', '2017') AND
+    medicare.enrollments.state = 'NC'
+GROUP BY 
+    medicare.enrollments.year,  
+    medicare.enrollments.fips5, 
+    medicare.beneficiaries.race
+;
+```
+
+## query number of enrollees per year per fips stratified by race (16 years)
+## filename: fips_num_enroll_.csv
+
+```
+SELECT 
+    medicare.enrollments.year, medicare.enrollments.fips5, medicare.beneficiaries.race, count(medicare.enrollments.bene_id)
+FROM 
+    medicare.enrollments
+LEFT JOIN medicare.beneficiaries ON medicare.enrollments.bene_id = medicare.beneficiaries.bene_id
+WHERE 
+    medicare.enrollments.year in ('2000', '2001', '2002', '2003', '2004', '2005', '2006', '2007', '2008', '2009', '2010', '2011', '2012', '2013', '2014', '2016') AND
+    medicare.enrollments.state = 'NC' AND
+    medicare.beneficiaries.race in ('1', '2')
+GROUP BY 
+    medicare.enrollments.year,  
+    medicare.enrollments.fips5, 
+    medicare.beneficiaries.race
+;
+```
+
+## query number of enrolees per yer per zip
+## filename: _zips_num_enroll.csv
+
+'''   
+SELECT 
+    year, zip, count(bene_id)
+FROM 
+    medicare.enrollments
+WHERE 
+    year in ('2011', '2012', '2013', '2014', '2016', '2017') AND
+    state = 'NC'
+GROUP BY 
+    year,  
+    zip
+;
+'''
+
+## query number of enrollees per year per zips stratified by race
+## filename: zips_num_enroll.csv
+
+```
+SELECT 
+    medicare.enrollments.year, medicare.enrollments.zip, medicare.beneficiaries.race, count(medicare.enrollments.bene_id)
+FROM 
+    medicare.enrollments
+LEFT JOIN medicare.beneficiaries ON medicare.enrollments.bene_id = medicare.beneficiaries.bene_id
+WHERE 
+    medicare.enrollments.year in ('2011', '2012', '2013', '2014', '2016', '2017') AND
+    medicare.enrollments.state = 'NC'
+GROUP BY 
+    medicare.enrollments.year,  
+    medicare.enrollments.zip, 
+    medicare.beneficiaries.race
+;
+```
