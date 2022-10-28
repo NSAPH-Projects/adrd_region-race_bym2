@@ -1,0 +1,186 @@
+# ADRD hospitalization rates per county
+
+## Limited to NC
+
+```{r, message=F, warning=F}
+## The interactive Rstudio session was started with 36 GB and 8 cores
+## The  default working directory of an Rmd in Rstudio is the Rmd location
+## The details of the symbolic links to the input data are provided in the README of the  /data/input folder
+
+## load packages ----
+library(tidyverse)
+library(magrittr)
+library(fst)
+library(data.table)
+library(sf)
+library(tictoc)
+```
+
+### Read num enrollees
+
+```{r}
+fips_num_enroll_ <- read_csv("../data/input/fips_num_enroll_.csv") %>% 
+  rename(fips = fips5, 
+         num_enroll = count) %>% 
+  mutate(fips = as.character(fips))
+```
+
+### Read shp files
+
+* read county shp files
+
+```{r}
+county_sf <- read_sf("../data/input/scratch/tl_2022_us_county/tl_2022_us_county.shp") %>% 
+  rename(fips = GEOID) %>% 
+  mutate(fips = as.character(as.numeric(fips)))
+
+dim(county_sf)
+names(county_sf)
+```
+
+### Read SSA5 to FIPS
+
+```{r}
+ssa_fips <- read_csv("../data/input/ssa_fips_state_county2016.csv") %>% 
+  rename(ssa = ssacounty, 
+         fips = fipscounty)
+```
+
+```{r}
+dim(ssa_fips)
+length(unique(ssa_fips$ssa))
+length(unique(ssa_fips$fips))
+```
+
+### Read ADRD admissions
+
+```{r}
+admissions <- read_csv("../data/intermediate/admissions.csv") %>% 
+  rename(ssa = SSA5, 
+         race = RACE, 
+         adrd_hosp = counts) %>% 
+  mutate(ssa = as.character(ssa))
+```
+
+```{r}
+class(admissions)
+dim(admissions)
+```
+
+* crosswalk ssa5 and fips
+
+some counties not in crosswalk file
+
+```{r}
+sum(!unique(as.numeric(admissions$ssa)) %in% ssa_fips$ssa)
+```
+
+```{r}
+admissions %<>% 
+  left_join(
+    select(ssa_fips, ssa, fips))
+```
+
+### Prepare data
+
+* Mapping of enrollment fips with admissions fips
+
+```{r}
+sum(!unique(admissions$fips) %in% fips_num_enroll_$fips)
+sum(!unique(fips_num_enroll_$fips) %in% admissions$fips )
+```
+
+```{r}
+fips_rates <- fips_num_enroll_ %>% 
+  left_join(admissions) %>% 
+  mutate(rates = adrd_hosp / num_enroll)
+```
+
+* there are counties with quite a large enrollee populations that are not mapped to hospitalizations using (but maybe they do with correct ssa?).
+
+```{r}
+fips_rates %>% 
+  filter(is.na(rates)) %>% 
+  select(fips, race, year, num_enroll) %>% 
+  pivot_wider(
+    id_cols = c('fips', 'race'), 
+    values_from = 'num_enroll', 
+    names_from = 'year') %>% 
+  DT::datatable()
+```
+
+### Explore rates per race
+
+* summary
+
+```{r}
+tapply(fips_rates$rates, fips_rates$race, summary)
+```
+
+* some fips do not have rates for all years
+
+```{r}
+xx <- fips_rates %>%  
+  filter(
+    !is.na(rates), 
+    !is.na(fips)
+  ) %>% 
+  group_by(fips, race) %>% 
+  summarise(
+    n = n(),
+    max = max(rates, na.rm = T), 
+    min = min(rates, na.rm = T), 
+    mean = mean(rates, na.rm = T), 
+    pct_diff = max / min - 1 
+  )
+
+summary(xx$n)
+```
+
+* Pct change through years by county
+
+```{r}
+summary(xx$pct_diff)
+```
+
+* County 37990 is suspicious.
+
+```{r}
+fips_rates %>% 
+  filter(
+    !is.na(rates), 
+    !is.na(fips)
+  ) %>% 
+  left_join(xx) %>% 
+  arrange(desc(pct_diff, year))
+```
+
+* time series of a sample of hospitalizations per county
+
+```{r}
+yy <- fips_rates %>% 
+  filter(
+    !fips == '37990', 
+    !is.na(rates), 
+    !is.na(fips)
+  ) %>% 
+  left_join(xx) %>% 
+  arrange(desc(pct_diff, year)) 
+
+yy[1:170,] %>% 
+  ggplot() + 
+  geom_line(aes(x = year, y = rates, color = fips, linetype = as.factor(race)))
+```
+
+* Map mean rates per county
+
+```{r}
+county_sf %>% 
+  filter(STATEFP == "37") %>% 
+  select(fips) %>% 
+  left_join(xx) %>% 
+  filter(!is.na(race)) %>% 
+  ggplot() + 
+  geom_sf(aes(fill = mean), aes = 0.5) + 
+  facet_grid(~race)
+```
