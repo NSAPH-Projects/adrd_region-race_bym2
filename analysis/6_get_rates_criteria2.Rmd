@@ -106,12 +106,12 @@ fips_rates %>%
     id_cols = c('fips', 'race'), 
     values_from = 'num_enroll', 
     names_from = 'year') %>% 
-  DT::datatable()
+  head(15)
 ```
 
 ### Explore rates per race
 
-* summary
+* summary all years
 
 ```{r}
 tapply(fips_rates$rates, fips_rates$race, summary)
@@ -142,6 +142,13 @@ summary(xx$n)
 ```{r}
 summary(xx$pct_diff)
 ```
+
+* mean rate distribuition per race
+
+```{r}
+tapply(xx$mean, xx$race, summary)
+```
+
 
 * County 37990 is suspicious.
 
@@ -181,6 +188,6 @@ county_sf %>%
   left_join(xx) %>% 
   filter(!is.na(race)) %>% 
   ggplot() + 
-  geom_sf(aes(fill = mean), aes = 0.5) + 
+  geom_sf(aes(fill = mean)) + 
   facet_grid(~race)
 ```
