@@ -158,12 +158,12 @@ obs_df$obs_rate[is.na(obs_df$obs_rate)] <- 0
 
 ```{r}
 ## Merge with exp_df ----
-adrd_rates_df <- obs_df %>%
+adrd_ratios_df <- obs_df %>%
     dplyr::left_join(exp_df %>%
                          dplyr::select(sex, age_grp, exp_rate),
                      by = c("sex", "age_grp"))
 
-adrd_rates_df %>% 
+adrd_ratios_df %>% 
   mutate(
     person_years = n_enrollees,
     expected = person_years * exp_rate, 
@@ -178,7 +178,7 @@ adrd_rates_df %>%
 
 ```{r}
 ## Now aggregate age ----
-adrd_rates_df %<>%
+adrd_ratios_df %<>%
     dplyr::group_by(county, race) %>%
     dplyr::summarize(
       person_years = sum(n_enrollees),
@@ -188,7 +188,7 @@ adrd_rates_df %<>%
       observed = person_years * obs_rate) %>%
     dplyr::ungroup()
 
-adrd_rates_df %>% 
+adrd_ratios_df %>% 
   mutate(
     rel_ratio = obs_rate / exp_rate,
     race = as.character(race)
@@ -198,7 +198,7 @@ adrd_rates_df %>%
 ```
 
 ```{r}
-adrd_rates_df %>% 
+adrd_ratios_df %>% 
   mutate(
     log_diff = log(obs_rate) - log(exp_rate),
     race = as.character(race)
@@ -210,5 +210,5 @@ adrd_rates_df %>%
 
 ```{r}
 ## Save ----
-write_rds(adrd_rates_df, "../data/intermediate/adrd_rates_df.rds")
+write_rds(adrd_ratios_df, "../data/intermediate/adrd_ratios_df.rds")
 ```
