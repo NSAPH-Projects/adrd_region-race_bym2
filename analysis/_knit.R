@@ -9,3 +9,19 @@ md_filename <- "./_knit/01_prep_adrd_ratios_df.md"
 md_txt <- readLines(md_filename)
 md_txt <- gsub(paste0(getwd(), "/_knit/"), "./", md_txt)
 cat(md_txt, file=md_filename, sep="\n")
+
+rmarkdown::render("./02_prep_county_adj.Rmd", 
+                  output_dir = "./_knit")
+
+md_filename <- "./_knit/02_prep_county_adj.md"
+md_txt <- readLines(md_filename)
+md_txt <- gsub(paste0(getwd(), "/_knit/"), "./", md_txt)
+cat(md_txt, file=md_filename, sep="\n")
+
+rmarkdown::render("./04_get_samples.Rmd", 
+                  output_dir = "./_knit")
+
+md_filename <- "./_knit/04_get_samples.md"
+md_txt <- readLines(md_filename)
+md_txt <- gsub(paste0(getwd(), "/_knit/"), "./", md_txt)
+cat(md_txt, file=md_filename, sep="\n")
