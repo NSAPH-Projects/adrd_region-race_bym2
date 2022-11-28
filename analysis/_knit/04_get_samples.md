@@ -162,7 +162,7 @@ rbind(
   geom_density(aes(x = med, color = race))
 ```
 
-![](./04_get_samples_files/figure-html/unnamed-chunk-19-1.png)<!-- -->
+![](./04_get_samples_files/figure-html/unnamed-chunk-8-1.png)<!-- -->
 
 
 
@@ -181,7 +181,7 @@ rbind(
   geom_density(aes(x = med, color = race))
 ```
 
-![](./04_get_samples_files/figure-html/unnamed-chunk-20-1.png)<!-- -->
+![](./04_get_samples_files/figure-html/unnamed-chunk-9-1.png)<!-- -->
 
 
 ```r
@@ -192,4 +192,4 @@ med %>%
   geom_density(aes(x = med, color = race))
 ```
 
-![](./04_get_samples_files/figure-html/unnamed-chunk-21-1.png)<!-- -->
+![](./04_get_samples_files/figure-html/unnamed-chunk-10-1.png)<!-- -->
