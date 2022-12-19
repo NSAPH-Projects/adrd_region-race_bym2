@@ -1,0 +1,172 @@
+
+```{r, message=FALSE, warning=FALSE}
+## Load libraries ----
+library(tidyverse)
+library(magrittr)
+library(rstan)
+```
+
+```{r}
+## Read data ----
+county_fips_df <- read_rds('../data/intermediate/county_fips_df.rds')
+
+county_fips_df %<>% 
+  mutate(county = as.integer(fipschar))
+
+stanfit_object <- read_rds("./models/model_run_20221207_223858/stanfit_object.rds")
+```
+
+```{r}
+## Define functions ----
+extract_samples <- function(stanfit) {
+    ## Extract samples from a stanfit object and return a list of variables
+    ## NOTE: Random effects will be matrices of dimensions iterations x areas
+    ##       while the fixed effects will just be columns of length iterations
+    
+    ## Extract the samples of fixed effects from stan_fit object
+    fixed_pars <- stanfit@model_pars[grepl(stanfit@model_pars,
+                                           pattern = "alpha|beta|delta|sigma")]
+    x <- as.matrix(stanfit, pars = fixed_pars)
+    
+    ## Get a list of the names and make them prettier
+    var_names <-
+        gsub(x = colnames(x),
+             pattern = "\\[|\\]",
+             replacement = "")
+    
+    ## Turn the named matrix into a list of vectors
+    x <- split(x, c(col(x)))
+    
+    ## Put back in the variable names
+    names(x) <- var_names
+    
+    ## Now extract the random effects and attach the random effects
+    random_pars <- stanfit@model_pars[grepl(stanfit@model_pars,
+                                            pattern = "nu|psi|phi")]
+    r_effs <- as.matrix(stanfit, pars = random_pars)
+    x$psi1 <- r_effs[, grep(x = colnames(r_effs),
+                            pattern = 'psi[1',
+                            fixed = TRUE)]
+    x$psi2 <- r_effs[, grep(x = colnames(r_effs),
+                            pattern = 'psi[2',
+                            fixed = TRUE)]
+    x$phi  <- r_effs[, grep(x = colnames(r_effs),
+                            pattern = 'phi',
+                            fixed = TRUE)]
+    x$nu   <- r_effs[, grep(x = colnames(r_effs),
+                            pattern = 'nu',
+                            fixed = TRUE)]
+    
+    return(x)
+}
+
+calc_residual_disparity <-
+    function(extracted_samples, expo = FALSE) {
+        ## Residual disparity, disparities not including the baseline (alphas):
+        ##  log residual disparity = phi * (1/delta - delta) + psi2 - psi1
+        res_disp <- extracted_samples$phi *
+            (1 / extracted_samples$delta - extracted_samples$delta) +
+            extracted_samples$psi2 - extracted_samples$psi1
+        
+        res_disp <- unname(res_disp)
+        
+        if (expo) {
+            res_disp <- exp(res_disp)
+        }
+        return(res_disp)
+    }
+
+summarize_by_columns <- function(samps_matrix) {
+    x <- data_frame(
+        c_idx = 1:ncol(samps_matrix),
+        avg   = colMeans(samps_matrix),
+        p500  = matrixStats::colMedians(samps_matrix),
+        p025  = matrixStats::colQuantiles(samps_matrix, probs = .025),
+        p975  = matrixStats::colQuantiles(samps_matrix, probs = .975),
+        sd    = matrixStats::colSds(samps_matrix),
+        count = apply(
+            samps_matrix,
+            MARGIN = 2,
+            FUN = function(x)
+                sum(!is.na(x))
+        ),
+        n_pos = apply(
+            samps_matrix,
+            MARGIN = 2,
+            FUN = function(x)
+                sum(x >= 0)
+        ),
+        n_neg = apply(
+            samps_matrix,
+            MARGIN = 2,
+            FUN = function(x)
+                sum(x < 0)
+        )
+    )
+    return(x)
+}
+
+summarize_stanfit <- function(stanfit,
+                              pars = c("alpha",
+                                       "beta",
+                                       "delta",
+                                       "nu",
+                                       "psi",
+                                       "phi",
+                                       "sigma_u",
+                                       "sigma_v",
+                                       "state_s")) {
+    ## Just a wrapper to get stanfit summary as a dataframe with better
+    ## column names and for parameters we care about.
+    df <-
+        as.data.frame(rstan::summary(stanfit, pars = pars)$summary)
+    names(df)[4:8] <- c("p025", "p250", "med", "p750", "p975")
+    return(df)
+}
+```
+
+## Figure out the components of total disparity
+
+```{r}
+stanfit_summary <- summarize_stanfit(stanfit_object, 
+                                     pars = c("alpha","delta"))
+
+## difference in alphas ----
+stanfit_summary['alpha[2]', 'mean'] - stanfit_summary['alpha[1]', 'mean']
+
+# delta minus delta ----
+1 / stanfit_summary['delta', 'mean'] - stanfit_summary['delta', 'mean']
+```
+
+```{r}
+stanfit_samples <- extract_samples(stanfit_object)
+
+## residual disparity
+## log residual disparity = (phi * (1/delta - delta)) + (psi2 - psi1)
+pos_res_disp <- calc_residual_disparity(stanfit_samples)
+## total disparity
+pos_tot_disp <- (stanfit_samples$alpha2 - stanfit_samples$alpha1) + pos_res_disp
+## specific
+specific <- summarize_by_columns(stanfit_samples$psi2 - stanfit_samples$psi1) %>%
+        dplyr::select(c_idx, specific = p500)
+
+# posterior median
+pos_disparity <- tibble(
+    residual_disparity = matrixStats::colMedians(pos_res_disp), 
+    total_disparity = matrixStats::colMedians(pos_tot_disp),
+    c_idx = 1:ncol(pos_res_disp)
+  ) %>% 
+  left_join(specific) 
+
+summary(pos_disparity$total_disparity)
+summary(pos_disparity$residual_disparity)
+
+```
+
+```{r}
+## Add in correct fipschar ----
+pos_disparity <- county_fips_df %>% 
+  dplyr::left_join(pos_disparity, by = c("c_idx"))
+
+write_rds(pos_disparity, "../data/intermediate/pos_disparity.rds")
+```
