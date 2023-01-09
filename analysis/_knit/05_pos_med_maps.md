@@ -5,6 +5,8 @@
 library(tidyverse)
 library(magrittr)
 library(sf)
+library(cowplot)
+library(RColorBrewer)
 ```
 
 
@@ -29,7 +31,9 @@ names(county_sf)
 ## [11] "CBSAFP"   "METDIVFP" "FUNCSTAT" "ALAND"    "AWATER"   "INTPTLAT" "INTPTLON" "geometry"
 ```
 
-## log ratios (y)
+## Observed vs Predicted
+
+### log ratios (y)
 
 
 ```r
@@ -59,7 +63,9 @@ pos_med_sf %>%
 
 ![](./05_pos_med_maps_files/figure-html/unnamed-chunk-3-1.png)<!-- -->
 
-## posterior median log ratios (pos_med_y)
+### posterior median log ratios (pos_med_y)
+
+In this model the "prediction" is a smoothed version of the observed.
 
 
 ```r
@@ -76,28 +82,111 @@ pos_med_sf %>%
 
 ![](./05_pos_med_maps_files/figure-html/unnamed-chunk-4-1.png)<!-- -->
 
-## shared
+## Risk decomposition
+
+## shared unscaled
 
 
 ```r
-pos_med_sf %>% 
+shared_ <- c(pos_med$shared_unscaled, pos_med$specific)
+myPalette <- colorRampPalette(rev(RColorBrewer::brewer.pal(11, "Spectral")))
+sc <- scale_fill_gradientn(colors = myPalette(100), 
+                           limits = c(min(shared_), max(shared_)))
+
+p1 <- pos_med_sf %>% 
+  filter(race == 1) %>% 
   ggplot() +
-  geom_sf(aes(fill = shared), lwd = 0.2) +
-  facet_grid(~race) +
-  theme(legend.position = "bottom")
+  geom_sf(aes(fill = specific), lwd = 0.2) + 
+  theme_map() +
+  labs(subtitle = "white specific") + 
+  theme(legend.title = element_blank()) + 
+  sc
+
+p2 <- pos_med_sf %>% 
+  filter(race == 1) %>% #shared_unscaled is non-race specific
+  ggplot() +
+  geom_sf(aes(fill = shared_unscaled), lwd = 0.2) + 
+  theme_map() + 
+  labs(subtitle = "shared unscaled") + 
+  sc
+
+p3 <- pos_med_sf %>% 
+  filter(race == 2) %>% 
+  ggplot() +
+  geom_sf(aes(fill = specific), lwd = 0.2) + 
+  theme_map() + 
+  labs(subtitle = "black specific") +
+  sc
+  
+p <- cowplot::plot_grid(
+  p1 + theme(legend.position = "none"), 
+  p2 + theme(legend.position = "none"), 
+  p3  + theme(legend.position = "none"),
+  nrow = 3)
+
+cowplot::plot_grid(
+  p, 
+  cowplot::get_legend(p1), 
+  ncol = 2
+)
 ```
 
 ![](./05_pos_med_maps_files/figure-html/unnamed-chunk-5-1.png)<!-- -->
 
-## specific
+## shared unscaled
 
 
 ```r
-pos_med_sf %>% 
+shared_ <- c(pos_med$shared, pos_med$specific)
+myPalette <- colorRampPalette(rev(RColorBrewer::brewer.pal(11, "Spectral")))
+sc <- scale_fill_gradientn(colors = myPalette(100), 
+                           limits = c(min(shared_), max(shared_)))
+
+p1 <- pos_med_sf %>% 
+  filter(race == 1) %>% 
   ggplot() +
-  geom_sf(aes(fill = specific), lwd = 0.2) +
-  facet_grid(~race) +
-  theme(legend.position = "bottom")
+  geom_sf(aes(fill = specific), lwd = 0.2) + 
+  theme_map() +
+  labs(subtitle = "white specific") + 
+  theme(legend.title = element_blank()) + 
+  sc
+
+p2 <- pos_med_sf %>% 
+  filter(race == 1) %>% #shared_unscaled is non-race specific
+  ggplot() +
+  geom_sf(aes(fill = shared), lwd = 0.2) + 
+  theme_map() + 
+  labs(subtitle = "shared white") + 
+  sc
+
+p3 <- pos_med_sf %>% 
+  filter(race == 2) %>% #shared_unscaled is non-race specific
+  ggplot() +
+  geom_sf(aes(fill = shared), lwd = 0.2) + 
+  theme_map() + 
+  labs(subtitle = "shared black") + 
+  sc
+
+p4 <- pos_med_sf %>% 
+  filter(race == 2) %>% 
+  ggplot() +
+  geom_sf(aes(fill = specific), lwd = 0.2) + 
+  theme_map() + 
+  labs(subtitle = "black specific") +
+  sc
+  
+p <- cowplot::plot_grid(
+  p1 + theme(legend.position = "none"), 
+  p2 + theme(legend.position = "none"), 
+  p3  + theme(legend.position = "none"),
+  p4  + theme(legend.position = "none"),
+  nrow = 4)
+
+cowplot::plot_grid(
+  p, 
+  cowplot::get_legend(p1), 
+  ncol = 2
+)
 ```
 
 ![](./05_pos_med_maps_files/figure-html/unnamed-chunk-6-1.png)<!-- -->
