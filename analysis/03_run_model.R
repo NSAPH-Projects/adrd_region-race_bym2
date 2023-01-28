@@ -22,7 +22,7 @@ get_random_seed <-
   }
 
 copy_rename_stan <- function(orig_file,
-                             f_time = tstamp,
+                             f_time,
                              return_new_file = TRUE) {
   ## Function that copies a file, renames it, and returns new file
   ## Extract just the file name
@@ -39,23 +39,6 @@ copy_rename_stan <- function(orig_file,
   }
 }
 
-summarize_stanfit <- function(stanfit,
-                              pars = c("alpha",
-                                       "beta",
-                                       "delta",
-                                       "nu",
-                                       "psi",
-                                       "phi",
-                                       "sigma_u",
-                                       "sigma_v",
-                                       "state_s")) {
-  ## Just a wrapper to get stanfit summary as a dataframe with better
-  ## column names and for parameters we care about.
-  df <-
-    as.data.frame(rstan::summary(stanfit, pars = pars)$summary)
-  return(df)
-}
-
 ## Modeling parameters ----
 ##  Naming
 tstamp <- format(Sys.time(), format = "%Y%m%d_%H%M%S")
@@ -67,10 +50,10 @@ random_seed <- get_random_seed(paste0('./models/model_run_', tstamp,
                                       '/seed_', tstamp, '.rds'))
 
 ##  Run parameters
-n_chains <- 8
-n_iter <- 500
-n_burnin <- floor(n_iter / 2)
-n_thin <- 40
+n_chains <- 4
+n_iter <- 1300
+n_burnin <- min(floor(n_iter / 2), 300)
+n_thin <- 10
 verbose_flag <- FALSE
 dont_save_pars = c("v_unstr", "u_str_unscaled", "u_str")
 
@@ -142,11 +125,12 @@ write_rds(pre_df,
 ## bug doesn't respect chain_id when auto_write == TRUE
 ## see: https://github.com/stan-dev/rstan/issues/294
 # rstan_options(auto_write = FALSE)
+new_stan_file <- copy_rename_stan(stan_file, f_time = tstamp)
+
 rstan_options(auto_write = TRUE)
 options(mc.cores = parallel::detectCores())
 
-new_stan_file <- copy_rename_stan(stan_file)
-premature_fit <- stan(
+fit <- stan(
     file = new_stan_file,
     model_name = model_name,
     data = pre_df,
@@ -166,30 +150,11 @@ premature_fit <- stan(
                          '/sample_file')
 )
 
-## Save summary and fit objects ----
-write_rds(premature_fit, 
+## Save fit objects ----
+write_rds(fit, 
           paste0('./models/model_run_', 
                  tstamp, 
                  '/stanfit_object.rds'))
-
-prem_summary <- summarize_stanfit(
-  premature_fit,
-  pars = c(
-    "alpha",
-    "delta",
-    "psi",
-    "phi",
-    "nu",
-    "sigma_u",
-    "sigma_v",
-    "sigma_s"
-  )
-)
-
-write_rds(prem_summary,
-         paste0('./models/model_run_', 
-                tstamp, 
-                '/stanfit_summary.rds'))
 
 ## Move stan file into model_run ----
 file.rename(from = new_stan_file,
