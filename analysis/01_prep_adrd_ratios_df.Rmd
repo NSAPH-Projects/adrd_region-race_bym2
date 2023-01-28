@@ -4,6 +4,7 @@
 library(tidyverse)
 library(magrittr)
 library(ggplot2)
+library(sf)
 ```
 
 ```{r}
@@ -11,6 +12,11 @@ library(ggplot2)
 adrd_county_df <- read_csv("../data/input/local/adrd_county_df.csv")
 county_fips_df <- read_rds("../data/intermediate/county_fips_df.rds")
 county_adj_df <- read_rds("../data/intermediate/county_adj_df.rds")
+```
+
+```{r}
+## read county shp files
+county_sf <- read_sf("../data/input/local/tl_2022_us_county/tl_2022_us_county.shp")
 ```
 
 ```{r}
@@ -103,18 +109,57 @@ adrd_county_df %>%
 ```
 
 ```{r}
-## Adrd equally-weighted (sex/age_gtp) rates for each county/race ----
-adrd_county_df %>% 
+xx <- adrd_county_df
+
+xx$sex[adrd_county_df$sex == 1] = "male"
+xx$sex[adrd_county_df$sex == 2] = "female"
+
+## Reference adrd rates for each sex/age_grp blind to race ----
+xx %>% 
   mutate(race = as.character(race)) %>% 
-  group_by(county, race, sex, age_grp) %>% 
+  group_by(race, sex, age_grp) %>% 
   summarise(n_enrollees = sum(n_enrollees), 
             n_adrd = sum(n_adrd),
             adrd_rate = n_adrd / n_enrollees * 1e5) %>% 
+  group_by(sex, age_grp) %>% 
+  summarise(adrd_rate = mean(adrd_rate)) %>%  
+  ggplot() + 
+  geom_point(aes(x = age_grp, y = adrd_rate, color = sex)) + 
+  labs(title = "ADRD reference rates", x = "Age group", y = "ADRD rate") + 
+  theme_bw()
+  
+```
+
+```{r}
+## look at proportions by race
+prettyNum(prop.table(tapply(adrd_county_df$n_enrollees, adrd_county_df$race, sum)))
+```
+
+```{r}
+xx <- adrd_county_df
+
+## Observed county-level ADRD counts
+xx$race[adrd_county_df$race == 1] = "white"
+xx$race[adrd_county_df$race == 2] = "black"
+
+xx %<>% 
   group_by(county, race) %>% 
-  summarise(adrd_rate = mean(adrd_rate)) %>% 
-  ggplot() +
-  geom_boxplot(aes(x = race, y = adrd_rate)) + 
-  geom_jitter(aes(x = race, y = adrd_rate, color = race))
+  summarise(n_adrd = sum(n_adrd))
+
+county_sf %>% 
+  filter(STATEFP == "37") %>% 
+  select(GEOID) %>% 
+  left_join(
+    xx %>%  
+      mutate(county = as.character(county)), 
+    by = c("GEOID" = "county")
+  ) %>% 
+  ggplot() + 
+  geom_sf(aes(fill = n_adrd), alpha = 0.75) +
+  facet_wrap(~race, nrow = 2) + 
+  labs(title = "Observed") + 
+  guides(fill = guide_legend(title = "ADRD counts")) + 
+  theme_classic()
 ```
 
 * adrd hospitalizations entangle prevalence and severity, specially in "small" counties 
@@ -163,12 +208,30 @@ adrd_ratios_df <- obs_df %>%
                          dplyr::select(sex, age_grp, exp_rate),
                      by = c("sex", "age_grp"))
 
+## Now aggregate age ----
+adrd_ratios_df %<>% 
+  mutate(
+    expected = n_enrollees * exp_rate, 
+    observed = n_adrd
+  ) %>% 
+  dplyr::group_by(county, race) %>%
+  dplyr::summarize(
+    person_years = sum(n_enrollees),
+    expected = sum(expected), 
+    observed = sum(observed)) %>%
+  dplyr::ungroup()
+
 adrd_ratios_df %>% 
   mutate(
-    person_years = n_enrollees,
-    expected = person_years * exp_rate, 
-    observed = person_years * obs_rate
+    rel_ratio = observed / expected,
+    race = as.character(race)
   ) %>% 
+  ggplot() + 
+  geom_density(aes(x = rel_ratio, color = race))
+```
+
+```{r}
+adrd_ratios_df %>% 
   ggplot() + 
   geom_point(aes(x = observed, y = expected, color = race), alpha = 0.5) + 
   scale_x_sqrt() + 
@@ -177,30 +240,9 @@ adrd_ratios_df %>%
 
 
 ```{r}
-## Now aggregate age ----
-adrd_ratios_df %<>%
-    dplyr::group_by(county, race) %>%
-    dplyr::summarize(
-      person_years = sum(n_enrollees),
-      exp_rate = mean(exp_rate), 
-      obs_rate = mean(obs_rate), 
-      expected = person_years * exp_rate, 
-      observed = person_years * obs_rate) %>%
-    dplyr::ungroup()
-
 adrd_ratios_df %>% 
   mutate(
-    rel_ratio = obs_rate / exp_rate,
-    race = as.character(race)
-    ) %>% 
-  ggplot() + 
-  geom_density(aes(x = rel_ratio, color = race))
-```
-
-```{r}
-adrd_ratios_df %>% 
-  mutate(
-    log_diff = log(obs_rate) - log(exp_rate),
+    log_diff = log(observed) - log(expected),
     race = as.character(race)
     ) %>% 
   ggplot() + 
