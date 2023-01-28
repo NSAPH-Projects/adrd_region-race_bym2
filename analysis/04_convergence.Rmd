@@ -1,0 +1,84 @@
+
+```{r, message=FALSE, warning=FALSE}
+## Load libraries ----
+library(tidyverse)
+library(magrittr)
+library(bayesplot)
+```
+
+```{r}
+## Read data ----
+stanfit_object <- read_rds("./models/model_run_20221207_223858/stanfit_object.rds")
+
+class(stanfit_object)
+```
+
+```{r}
+list_of_draws <- rstan::extract(stanfit_object)
+print(names(list_of_draws))
+```
+
+```{r}
+rhat_of_draws <- rhat(stanfit_object)
+mcmc_rhat(rhat_of_draws)
+```
+
+```{r}
+names(rhat_of_draws)
+```
+
+```{r}
+rhat_of_draws[c('alpha[1]', # white surface intercept
+                'alpha[2]', # black surface intercept
+                'delta', # shared surface scaling factor
+                'nu[1]', # state random effect
+                'lp__') # Stan's lp__ variable
+              ] 
+```
+
+```{r}
+rhat_of_draws[c('sigma_u[1]', # SD of CAR part
+                'sigma_u[2]', # SD of CAR part
+                'sigma_u[3]', # SD of CAR part
+                'sigma_v[1]', # SD of iid spatial part
+                'sigma_v[2]', # SD of iid spatial part
+                'sigma_v[3]', # SD of iid spatial part
+                'sigma_s', # SD of state random effect
+                'tau_u[1]', # precision of CAR part
+                'tau_u[2]', # precision of CAR part
+                'tau_u[3]', # precision of CAR part
+                'tau_v[1]', # precision of iid spatial part
+                'tau_v[2]', # precision of iid spatial part
+                'tau_v[3]' # precision of iid spatial part
+                )
+              ]
+```
+
+```{r}
+# phi
+mcmc_rhat(rhat_of_draws[grep('phi', names(rhat_of_draws))])
+```
+
+```{r}
+# psi
+mcmc_rhat(rhat_of_draws[grep('psi\\[1', names(rhat_of_draws))])
+```
+
+```{r}
+# psi
+mcmc_rhat(rhat_of_draws[grep('psi\\[2', names(rhat_of_draws))])
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
