@@ -150,6 +150,11 @@ pos_med %>%
 ## Decompose log ratios
 
 ```{r}
+summary(stanfit_samples$delta)
+```
+
+
+```{r}
 shared_w <- (stanfit_samples$phi * stanfit_samples$delta)
 shared_b <- (stanfit_samples$phi / stanfit_samples$delta)
 
@@ -157,10 +162,12 @@ shared_b <- (stanfit_samples$phi / stanfit_samples$delta)
 shared <- rbind(
   tibble(
     shared = matrixStats::colMedians(shared_w), 
+    shared_unscaled = matrixStats::colMedians(stanfit_samples$phi), 
     race = 1, 
     c_idx = 1:ncol(shared_w)), 
   tibble(
     shared = matrixStats::colMedians(shared_b), 
+    shared_unscaled = matrixStats::colMedians(stanfit_samples$phi), 
     race = 2, 
     c_idx = 1:ncol(shared_b))
 )
@@ -172,6 +179,7 @@ pos_med %<>%
 shared %>% 
   mutate(race = as.character(race)) %>% 
   ggplot() + 
+  geom_density(aes(x = shared_unscaled), size = 1) + 
   geom_density(aes(x = shared, color = race), size = 1) + 
   theme_classic()
 ```
