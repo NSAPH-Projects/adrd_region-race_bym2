@@ -1,0 +1,165 @@
+
+```{r, message=FALSE, warning=FALSE}
+## Load libraries ----
+library(tidyverse)
+library(magrittr)
+library(rstan)
+```
+
+```{r}
+#fit <- read_stan_csv("./models/model_run_20230205_045017/sample_file_4.csv")
+#stanfit_object <- read_rds("./m0s_no_covar_20230205_045017.rds")
+#stanfit_object
+```
+
+
+```{r}
+## Read data ----
+stanfit_object <- read_rds("./models/model_run_20230211_075658/stanfit_object.rds")
+county_fips_df <- read_rds("../data/intermediate/county_fips_df.rds")
+```
+
+```{r}
+## Functions ----
+extract_samples <- function(stanfit) {
+    ## Extract samples from a stanfit object and return a list of variables
+    ## NOTE: Random effects will be matrices of dimensions iterations x areas
+    ##       while the fixed effects will just be columns of length iterations
+    
+    ## Extract the samples of fixed effects from stan_fit object
+    fixed_pars <- stanfit@model_pars[grepl(stanfit@model_pars,
+                                           pattern = "alpha|beta|delta|sigma")]
+    x <- as.matrix(stanfit, pars = fixed_pars)
+    
+    ## Get a list of the names and make them prettier
+    var_names <-
+        gsub(x = colnames(x),
+             pattern = "\\[|\\]",
+             replacement = "")
+    
+    ## Turn the named matrix into a list of vectors
+    x <- split(x, c(col(x)))
+    
+    ## Put back in the variable names
+    names(x) <- var_names
+    
+    ## Now extract the random effects and attach the random effects
+    random_pars <- stanfit@model_pars[grepl(stanfit@model_pars,
+                                            pattern = "nu|psi|phi")]
+    r_effs <- as.matrix(stanfit, pars = random_pars)
+    x$psi1 <- r_effs[, grep(x = colnames(r_effs),
+                            pattern = 'psi[1',
+                            fixed = TRUE)]
+    x$psi2 <- r_effs[, grep(x = colnames(r_effs),
+                            pattern = 'psi[2',
+                            fixed = TRUE)]
+    x$phi  <- r_effs[, grep(x = colnames(r_effs),
+                            pattern = 'phi',
+                            fixed = TRUE)]
+    x$nu   <- r_effs[, grep(x = colnames(r_effs),
+                            pattern = 'nu',
+                            fixed = TRUE)]
+    
+    return(x)
+}
+```
+
+```{r}
+## summary stats of fixed effects ----
+stanfit_summary[c('alpha[1]', 'alpha[2]', 'nu[1]', 'delta'), ]
+```
+
+```{r}
+# intercept of surface for white pop
+stanfit_summary['alpha[1]', 'mean'] + stanfit_summary['nu[1]', 'mean']
+```
+
+```{r}
+# intercept of shared surface for black pop
+stanfit_summary['alpha[2]', 'mean'] + stanfit_summary['nu[1]', 'mean']
+```
+
+```{r}
+## organize samples from stanfit_object ----
+stanfit_samples <- extract_samples(stanfit_object)
+
+## obtain posterior predictive values ----
+## Make a version of nu that is expanded such that every state column
+## repeats as many times as their are counties. Then we can just add
+## the expanded matrix when calculating posterior quantities.
+nu_counts <- county_fips_df %>%
+    dplyr::group_by(s_idx) %>%
+    dplyr::summarize(count = dplyr::n()) %>%
+    dplyr::mutate(c_sum = cumsum(count))
+
+## Initialize a holder
+nu_expanded <- matrix(NA,
+                      nrow = nrow(stanfit_samples$psi1),
+                      ncol = max(nu_counts$c_sum))
+
+for (s in 1:nrow(nu_counts)) {
+    start_ix <- ifelse(length(nu_counts$c_sum[s - 1]) > 0,
+                       nu_counts$c_sum[s - 1], 0) + 1
+    end_ix <- nu_counts$c_sum[s]
+    
+    nu_expanded[, start_ix:end_ix] <- stanfit_samples$nu #! ----> temporary
+}
+
+# white log ratios
+posterior_white <- stanfit_samples$alpha1 + stanfit_samples$psi1 + 
+  (stanfit_samples$phi * stanfit_samples$delta) + 
+  nu_expanded
+
+# black log ratios
+posterior_black <- stanfit_samples$alpha2 + stanfit_samples$psi2 +
+            (stanfit_samples$phi / stanfit_samples$delta) +
+            nu_expanded
+
+# posterior median log ratios
+med <- rbind(
+  tibble(med = matrixStats::colMedians(posterior_white), race = 1), 
+  tibble(med = matrixStats::colMedians(posterior_black), race = 2)
+)
+```
+
+```{r}
+# shared surface contributions
+rbind(
+  tibble(
+    med = matrixStats::colMedians(stanfit_samples$phi), 
+    race = 3),
+  tibble(
+    med = matrixStats::colMedians(stanfit_samples$phi * stanfit_samples$delta), 
+    race = 1), 
+  tibble(
+    med = matrixStats::colMedians(stanfit_samples$phi / stanfit_samples$delta), 
+    race = 2)
+) %>% 
+  mutate(race = as.character(race)) %>% 
+  ggplot() + 
+  geom_density(aes(x = med, color = race))
+```
+
+
+```{r}
+# race-specific surface contributions
+rbind(
+  tibble(
+    med = matrixStats::colMedians(stanfit_samples$psi1), 
+    race = 1),
+  tibble(
+    med = matrixStats::colMedians(stanfit_samples$psi2), 
+    race = 2)
+) %>% 
+  mutate(race = as.character(race)) %>% 
+  ggplot() + 
+  geom_density(aes(x = med, color = race))
+```
+
+```{r}
+## posterior values ----
+med %>% 
+  mutate(race = as.character(race)) %>% 
+  ggplot() + 
+  geom_density(aes(x = med, color = race))
+```
