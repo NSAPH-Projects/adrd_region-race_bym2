@@ -43,9 +43,8 @@ copy_rename_stan <- function(orig_file,
 ##  Naming
 tstamp <- format(Sys.time(), format = "%Y%m%d_%H%M%S")
 mkdir_p(paste0('./models/model_run_', tstamp))
-model_name <- 'm0s_cp_reg_25k_4c_4t_995d'
-#model_file <- 'm0s_cp_reg_25k_4c_4t_995d'
-stan_file <- './models/m0s_no_covar.stan'
+model_name <- 'm0_no_covar_invdelta'
+stan_file <- './models/m0s_no_covar_invdelta.stan'
 random_seed <- get_random_seed(paste0('./models/model_run_', tstamp,
                                       '/seed_', tstamp, '.rds'))
 
@@ -62,30 +61,11 @@ a_delta = .995  # default = .8
 t_depth = 35    # max tree depth, default = 10
 
 ## Load data ----
-adrd_ratios_df <- read_rds('../data/intermediate/adrd_ratios_df_.rds')
-county_fips_df <- read_rds('../data/intermediate/county_fips_df_.rds')
+adrd_ratios_df <- read_rds('../data/intermediate/adrd_ratios_df.rds')
 county_adj_sparse_list <- read_rds('../data/intermediate/county_adj_sparse_list_.rds')
 
-## Prep data ----
-adrd_ratios_df %<>% 
-  mutate(
-    black = as.integer(if_else(race == 2, 1, 0)),
-    expected = as.integer(ceiling(expected)) + 1, 
-    observed = as.integer(ceiling(observed)) + 1
-  ) %>% 
-  left_join(
-    county_fips_df %>% 
-      mutate(county = as.integer(fipschar))
-  )
-
-## validate no NA ----
-#summary(log(adrd_ratios_df$expected))
-#summary(log(adrd_ratios_df$observed))
-adrd_ratios_df <- adrd_ratios_df[!is.na(adrd_ratios_df$c_idx), ]
-adrd_ratios_df <- adrd_ratios_df[adrd_ratios_df$s_idx != 52, ]
-
 ## Get the data in order ----
-pre_df  <-
+adrd_stan_list  <-
     list(
         m = nrow(adrd_ratios_df),
         # number of observations
@@ -94,6 +74,8 @@ pre_df  <-
         n = length(county_adj_sparse_list$D_sparse),
         # number of areas
         y = adrd_ratios_df$observed,
+        # population_years
+        pop = adrd_ratios_df$person_years,
         # vector of observed (int)
         log_offset = log(adrd_ratios_df$expected),
         # log of expected
@@ -118,16 +100,21 @@ pre_df  <-
     )   # number of edges
 
 ## Save the passed data in case we need it later ----
-write_rds(pre_df,
+write_rds(adrd_stan_list,
           paste0('./models/model_run_', tstamp, 
-                 '/pre_df_', tstamp, '.rds'))
+                 '/adrd_stan_list_', tstamp, '.rds'))
 
 ## Stan ----
 ## RStan options
 ## bug doesn't respect chain_id when auto_write == TRUE
 ## see: https://github.com/stan-dev/rstan/issues/294
 # rstan_options(auto_write = FALSE)
+
+## copy and move stan file into model_run ----
 new_stan_file <- copy_rename_stan(stan_file, f_time = tstamp)
+file.rename(from = new_stan_file,
+            to = paste0('./models/model_run_', tstamp, '/',
+                        substr(new_stan_file, 3, nchar(new_stan_file))))
 
 rstan_options(auto_write = TRUE)
 options(mc.cores = parallel::detectCores())
@@ -135,7 +122,7 @@ options(mc.cores = parallel::detectCores())
 fit <- stan(
     file = new_stan_file,
     model_name = model_name,
-    data = pre_df,
+    data = adrd_stan_list,
     thin = n_thin,
     iter = n_iter,
     warmup = n_burnin,
@@ -158,10 +145,7 @@ write_rds(fit,
                  tstamp, 
                  '/stanfit_object.rds'))
 
-## Move stan file into model_run ----
-file.rename(from = new_stan_file,
-            to = paste0('./models/model_run_', tstamp, '/',
-                        substr(new_stan_file, 3, nchar(new_stan_file))))
+
 
 ## Remove the compiled stan model ----
 file.remove(paste0(substr(new_stan_file, 1, nchar(new_stan_file) - 4), 'rds'))
