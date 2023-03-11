@@ -3,7 +3,10 @@
 ## load packages ----
 library(tidyverse)
 library(magrittr)
+library(sf)
 ```
+
+In this notebook we make sure that the counties match in all three objects: the adjacency matrix, geometry and adrd data.
 
 ```{r}
 ####
@@ -44,7 +47,88 @@ county_adj_df <- dplyr::filter(county_adj_df,
                                   !state_i %in% c("02","15", "66", "72", "60", "69", "78"),
                                   !state_j %in% c("02","15", "66", "72", "60", "69", "78"))
 
+county_adj_df %<>% 
+  mutate(county = as.numeric(fips_i))
+
 county_adj_df
+```
+
+```{r}
+## read county shp files
+county_sf <- read_sf("../data/input/local/tl_2015_us_county/tl_2015_us_county.shp") %>%
+  filter(!STATEFP %in% c("02","15", "66", "72", "60", "69", "78")) %>% 
+  mutate(county = as.numeric(GEOID))
+
+dim(county_sf)
+length(unique(county_adj_df$fips_i))
+length(unique(county_adj_df$fips_j))
+length(unique(county_adj_df$county))
+
+counties_adj_ = unique(county_adj_df$county)
+counties_shp_ = unique(county_sf$county)
+
+setdiff(counties_shp_, counties_adj_)
+setdiff(counties_adj_, counties_shp_)
+```
+
+```{r}
+county_sf %>%
+  st_simplify() %>%
+  ggplot() +
+  geom_sf() + 
+  geom_sf(data = county_sf[!county_sf$county %in% counties_adj_, ], fill="blue")
+```
+
+```{r}
+county_sf$county[county_sf$county == 46102] <- 46113 #Oglala Lakota County, SD. Shannon County, SD (FIPS code = 46113) was renamed Oglala Lakota County and assigned anew FIPS code (46102) effective in 2014
+
+counties_adj_ = unique(county_adj_df$county)
+counties_shp_ = unique(county_sf$county)
+
+setdiff(counties_shp_, counties_adj_)
+setdiff(counties_adj_, counties_shp_)
+
+write_rds(county_sf, "../data/intermediate/county_sf.rds")
+```
+
+```{r}
+adrd_county_df <- read_csv("../data/input/local/adrd_county_df.csv") %>% 
+  filter(!state %in% c(2, 15, 66, 72, 60, 69, 78))
+
+counties_adrd_ = unique(adrd_county_df$county)
+
+length(counties_adrd_) #3109
+setdiff(counties_adrd_, counties_adj_) #51515 51560
+setdiff(counties_adj_, counties_adrd_) #8014
+```
+
+```{r}
+colorado_sf <- county_sf %>% 
+  filter(STATEFP == "08") 
+
+colorado_sf %>% 
+  st_simplify() %>%
+  ggplot() +
+  geom_sf() + 
+  geom_sf(data = colorado_sf[!colorado_sf$county %in% counties_adrd_, ], fill="blue")
+```
+
+```{r}
+# county 8014 = CO,08,014,Broomfield County
+# Broomfield county (FIPS 8014) is created out of parts of Adams, Boulder, Jefferson, and Weld counties. The Census Bureau estimates that the resulting population loss was 21,512 for Boulder, 15,870 for Adams, 1,726 for Jefferson, and 69 for Weld county.
+xx <- adrd_county_df[adrd_county_df$county == 8013, ]
+xx$county <- 8014
+adrd_county_df <- rbind(adrd_county_df, xx)
+
+adrd_county_df <- adrd_county_df[!adrd_county_df$county %in% c(51515, 51560), ]
+
+counties_adrd_ = unique(adrd_county_df$county)
+
+length(counties_adrd_)
+setdiff(counties_adrd_, counties_adj_)
+setdiff(counties_adj_, counties_adrd_)
+
+write_rds(adrd_county_df, "../data/intermediate/adrd_county_df.rds")
 ```
 
 ```{r}
@@ -101,8 +185,33 @@ county_adj_df
 
 ```{r}
 ####
-# Explode as n_counties x n_counties matrix
+# Obtain a table of county IDs
 ####
+
+## Save a unique mapping of FIPS to state and county dummy codes ----
+county_fips_df <- county_adj_df %>%
+    dplyr::select(
+        county_name = name_i,
+        county = county, 
+        fipschar = fips_i,
+        fips_st = state_i,
+        c_idx = dummy_i,
+        s_idx = dummy_state_i
+    ) %>%
+    dplyr::distinct() %>%
+    dplyr::mutate(st_abbr = unlist(lapply(strsplit(county_name, split = ", "),
+                                          function(x)
+                                              x[[2]])))
+county_fips_df
+```
+
+```{r}
+length(unique(county_fips_df$county))
+length(unique(adrd_county_df$county))
+```
+
+```{r}
+## Save a sparse adjacency representation (for Stan) ----
 
 make_county_adj_matrix <- function(county_adj_df) {
     ## Converts a County Adjacency dataframe into a traditional adjacency matrix
@@ -136,16 +245,6 @@ make_county_adj_matrix <- function(county_adj_df) {
     return(A)
 }
 
-county_adj_matrix <- make_county_adj_matrix(county_adj_df)
-
-county_adj_matrix[1:10, 1:10]
-```
-
-```{r}
-####
-# Make sparse
-####
-
 make_county_adj_sparse_list <- function(adj_matrix) {
   ## This is taken from mbjoseph CARstan repo -- returns a sparse
   ## representation of an adjacency matrix in the format that Stan needs
@@ -172,35 +271,28 @@ make_county_adj_sparse_list <- function(adj_matrix) {
   ))
 }
 
-## Save a sparse adjacency representation (for Stan) ----
+county_adj_matrix <- make_county_adj_matrix(county_adj_df)
 county_adj_sparse_list <- make_county_adj_sparse_list(county_adj_matrix)
 names(county_adj_sparse_list)
 ```
 
 ```{r}
-####
-# Obtain a table of county IDs
-####
-
-## Save a unique mapping of FIPS to state and county dummy codes ----
-county_fips_df <- county_adj_df %>%
-    dplyr::select(
-        county_name = name_i,
-        fipschar = fips_i,
-        fips_st = state_i,
-        c_idx = dummy_i,
-        s_idx = dummy_state_i
-    ) %>%
-    dplyr::distinct() %>%
-    dplyr::mutate(st_abbr = unlist(lapply(strsplit(county_name, split = ", "),
-                                          function(x)
-                                              x[[2]])))
-county_fips_df
+# Use return_sparse_parts(A) for these next ones
+D_sparse = county_adj_sparse_list$D_sparse
+# neighbors per node
+W_sparse = county_adj_sparse_list$W_sparse
+# adjacent pairs
+lambda = county_adj_sparse_list$lambdas
+# eigenvalues
+W_n = nrow(county_adj_sparse_list$W_sparse)
+           
+length(D_sparse)
+dim(W_sparse)
+length(lambda)
+W_n
 ```
 
 ```{r}
-write_rds(county_adj_df, "../data/intermediate/county_adj_df_.rds")
-write_rds(county_adj_sparse_list, "../data/intermediate/county_adj_sparse_list_.rds")
-write_rds(county_fips_df, "../data/intermediate/county_fips_df_.rds")
+write_rds(county_adj_sparse_list, "../data/intermediate/county_adj_sparse_list.rds")
+write_rds(county_fips_df, "../data/intermediate/county_fips_df.rds")
 ```
-
