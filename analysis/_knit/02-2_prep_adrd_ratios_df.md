@@ -829,7 +829,9 @@ adrd_ratios_df %<>%
   mutate(
     black = as.integer(if_else(race == 2, 1, 0)),
     expected = as.integer(ceiling(expected)), 
-    observed = as.integer(ceiling(observed))
+    observed = as.integer(ceiling(observed)), 
+    person_years = as.integer(ceiling(person_years)), 
+    log_expected = log(expected + 0.001)
   ) %>% 
   left_join(county_fips_df)
 ```
@@ -876,6 +878,27 @@ sum(is.na(adrd_ratios_df$person_years))
 
 ```
 ## [1] 0
+```
+
+```r
+adrd_ratios_df
+```
+
+```
+## # A tibble: 6,216 × 13
+##    county  race person_years expected observed black log_expected county_name        fipschar fips_st c_idx s_idx
+##     <dbl> <dbl>        <int>    <int>    <int> <int>        <dbl> <chr>              <chr>    <chr>   <int> <int>
+##  1   1001     1        85881      307      486     0         5.73 Autauga County, AL 01001    01          1     1
+##  2   1001     2        22762       86      179     1         4.45 Autauga County, AL 01001    01          1     1
+##  3   1003     1       475644     1762     1990     0         7.47 Baldwin County, AL 01003    01          2     1
+##  4   1003     2        28113      104      133     1         4.64 Baldwin County, AL 01003    01          2     1
+##  5   1005     1        31145      120      260     0         4.79 Barbour County, AL 01005    01          3     1
+##  6   1005     2        16972       68      143     1         4.22 Barbour County, AL 01005    01          3     1
+##  7   1007     1        56774      206      403     0         5.33 Bibb County, AL    01007    01          4     1
+##  8   1007     2         7962       31       47     1         3.43 Bibb County, AL    01007    01          4     1
+##  9   1009     1       161161      590      966     0         6.38 Blount County, AL  01009    01          5     1
+## 10   1009     2         3342       13       21     1         2.57 Blount County, AL  01009    01          5     1
+## # … with 6,206 more rows, and 1 more variable: st_abbr <chr>
 ```
 
 
