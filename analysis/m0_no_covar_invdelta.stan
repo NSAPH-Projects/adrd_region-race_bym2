@@ -109,7 +109,7 @@ transformed parameters {
 model {
     // Container so we can vectorize the poisson_log() call. Never use `~` 
     // inside of a for(). *Super* slow in Stan.
-    real log_mu[m];
+    // real log_mu[m];
     
     // Spatial priors -- u for CAR, v for iid.
     for (i in 1:3) {
@@ -136,14 +136,13 @@ model {
     // Likelihood
     for (i in 1:m) {
         if(pop[i] != 0){
-            log_mu[i] = log_offset[i] + 
+            real log_mu = log_offset[i] + 
                 alpha[1]  * d1_idx[i] +                 // white average
                 alpha[2]  * d2_idx[i] +                 // black average 
                 d1_idx[i] * (phi[c_idx[i]] * delta + psi[1][c_idx[i]]) +  
                 d2_idx[i] * (phi[c_idx[i]] / delta + psi[2][c_idx[i]]) + 
                 nu[s_idx[i]];
+            y[i] ~ poisson_log(log_mu);
         }
     }
-    
-    y ~ poisson_log(log_mu);
 }
