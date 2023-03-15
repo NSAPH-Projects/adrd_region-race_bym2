@@ -5,30 +5,30 @@ library(tidyverse)
 library(magrittr)
 library(ggplot2)
 library(sf)
+#library(feather)
 #library(cowplot)
 library(RColorBrewer)
+library(viridis)
 ```
 
 ```{r}
 ## Read data ----
-adrd_county_df <- read_csv("../data/input/adrd_county_df_1.csv") %>% 
-  bind_rows(read_csv("../data/input/adrd_county_df_2.csv"))
-table(adrd_county_df$state)
-```
+adrd_county_df <- read_rds("../data/intermediate/adrd_county_df.rds")
+county_sf <- read_rds("../data/intermediate/county_sf.rds")
+county_fips_df <- read_rds("../data/intermediate/county_fips_df.rds")
 
-```{r}
-## read county shp files
-county_sf <- read_sf("../data/input/local/tl_2022_us_county/tl_2022_us_county.shp")
-dim(county_sf)
 length(unique(adrd_county_df$county))
-```
+length(unique(county_sf$county))
+length(unique(county_fips_df$county))
 
-```{r}
-# county_sf %>% 
-#   filter(!STATEFP %in% c("02","15", "66", "72")) %>%
-#   st_simplify() %>% 
-#   ggplot() + 
-#   geom_sf()
+counties_shp_ = unique(county_sf$county)
+counties_adrd_ = unique(adrd_county_df$county)
+counties_ = unique(county_fips_df$county)
+
+setdiff(counties_shp_, counties_adrd_)
+setdiff(counties_adrd_, counties_shp_)
+setdiff(counties_, counties_shp_)
+setdiff(counties_shp_, counties_)
 ```
 
 ```{r}
@@ -41,8 +41,14 @@ adrd_county_df %<>%
 adrd_county_df$n_enrollees[is.na(adrd_county_df$n_enrollees)] <- 0 
 adrd_county_df$n_adrd[is.na(adrd_county_df$n_adrd)] <- 0 
 
-sum(adrd_county_df$n_enrollees) #enrollee-years
+sum(adrd_county_df$n_enrollees)
 sum(adrd_county_df$n_adrd)
+
+counties_shp_ = unique(county_sf$county)
+counties_adrd_ = unique(adrd_county_df$county)
+
+setdiff(counties_shp_, counties_adrd_)
+setdiff(counties_adrd_, counties_shp_)
 ```
 
 ```{r}
@@ -63,15 +69,6 @@ adrd_county_df %>%
   summarise(n_adrd = sum(n_adrd)) %>% 
   ggplot() + 
   geom_line(aes(x = year, y = n_adrd, color = race))
-```
-
-```{r}
-#! ----> temporarily remove 2011 onwards
-# adrd_county_df %<>% 
-#   filter(year <= 2010)
-# 
-# sum(adrd_county_df$n_enrollees)
-# sum(adrd_county_df$n_adrd)
 ```
 
 ```{r}
@@ -120,6 +117,16 @@ adrd_county_df %>%
 ```
 
 ```{r}
+adrd_county_df %>% 
+  group_by(race, sex, age_grp) %>% 
+  summarise(n_enrollees = sum(n_enrollees), 
+            n_adrd = sum(n_adrd),
+            adrd_rate = n_adrd / n_enrollees * 1e5) %>% 
+  group_by(sex, age_grp) %>% 
+  summarise(adrd_rate = mean(adrd_rate))
+```
+
+```{r}
 xx <- adrd_county_df
 
 xx$sex[adrd_county_df$sex == 1] = "male"
@@ -138,6 +145,7 @@ xx %>%
   geom_point(aes(x = age_grp, y = adrd_rate, color = sex)) + 
   labs(title = "ADRD reference rates", x = "Age group", y = "ADRD rate") + 
   theme_bw()
+ggsave("../results/figures/adrd_reference_rates.png")
 ```
 
 ```{r}
@@ -153,29 +161,55 @@ xx$race[xx$race == 1] = "white"
 xx$race[xx$race == 2] = "black"
 
 xx %<>% 
-  group_by(state, county, race) %>% 
+  group_by(county, race) %>% 
   summarise(n_adrd = sum(n_adrd))
-#length(unique(xx$county))
-#sum(is.na(xx$race))
-#table(xx$state)
 
+counties_shp_ = unique(county_sf$county)
+counties_xx_w_ = unique(xx$county[xx$race == "white"])
+counties_xx_b_ = unique(xx$county[xx$race == "black"])
+
+setdiff(counties_shp_, counties_xx_w_)
+setdiff(counties_xx_w_, counties_shp_)
+setdiff(counties_shp_, counties_xx_b_)
+setdiff(counties_xx_b_, counties_shp_)
+```
+
+```{r}
+length(unique(xx$county))
+sum(is.na(xx$race))
+```
+
+```{r}
 yy <- county_sf %>% 
-  filter(!STATEFP %in% c("02","15", "66", "72")) %>% 
-  mutate(county = as.numeric(GEOID)) %>% 
   select(county) %>% 
   left_join(xx) 
-#length(unique(xx$GEOID))
-#sum(is.na(xx$race))
-#xx[is.na(xx$race), ]
-#table(xx$state)
 
+length(unique(yy$county))
+sum(is.na(yy$race))
+sum(is.na(yy$n_adrd))
+```
+
+```{r}
+yy %>%
+  filter(race == "white") %>% 
+  st_simplify() %>%
+  ggplot() +
+  geom_sf(aes(fill = n_adrd), alpha = 1, lwd = 0.0)
+
+yy %>%
+  filter(race == "black") %>% 
+  st_simplify() %>%
+  ggplot() +
+  geom_sf(aes(fill = n_adrd), alpha = 1, lwd = 0.0)
+```
+
+```{r}
 n_adrd_ <- yy$n_adrd
 myPalette <- colorRampPalette(rev(RColorBrewer::brewer.pal(11, "Spectral")))
-sc <- scale_fill_gradientn(colors = myPalette(100), 
-                           limits = c(min(n_adrd_), max(n_adrd_)))
+sc <- scale_fill_gradientn(colors = myPalette(10), 
+                           limits = c(min(n_adrd_, na.rm = TRUE), max(n_adrd_, na.rm = TRUE)))
 
 yy  %>% 
-  filter(!is.na(race)) %>% 
   ggplot() + 
   geom_sf(aes(fill = n_adrd), alpha = 1, lwd = 0.0) +
   facet_wrap(~race, ncol = 2) + 
@@ -184,6 +218,18 @@ yy  %>%
   theme_classic() + 
   theme(legend.position = "bottom") + 
   sc
+#the yellow looks like white, try another visualization package
+```
+
+```{r}
+yy %>% 
+  ggplot() + 
+  geom_sf(aes(fill = n_adrd), alpha = 1, lwd = 0.0) +
+  facet_wrap(~race, ncol = 2) + 
+  labs(title = "Observed") + 
+  guides(fill = guide_legend(title = "ADRD counts")) + 
+  theme_classic() + 
+  scale_fill_viridis(name = "n_adrd", option = "D")
 ```
 
 * adrd hospitalizations entangle prevalence and severity, specially in "small" counties 
@@ -191,7 +237,7 @@ yy  %>%
 * even if not affecting certain groups, measurement error decreases the power of the model
 * variance of the inference, will not detect statistical differences in the output
 
-## Observed vs expected rates
+## Observed vs expected
 
 ```{r}
 ## Get the standard rates ----
@@ -262,7 +308,6 @@ adrd_ratios_df %>%
   scale_y_sqrt()
 ```
 
-
 ```{r}
 adrd_ratios_df %>% 
   mutate(
@@ -275,37 +320,119 @@ adrd_ratios_df %>%
 
 ```{r}
 xx <- adrd_ratios_df
-
-## Observed county-level ADRD counts
 xx$race[xx$race == 1] = "white"
 xx$race[xx$race == 2] = "black"
 
-xx <- xx %>% 
+xx %<>% 
   mutate(
-    log_diff = log(observed/expected + 0.000001),
-    race = as.character(race)
+    log_diff = log(observed/expected),
+    log_diff = if_else(observed == 0, as.numeric(NA), log_diff)
     )
 
-yy <- yy %>% 
-  left_join(xx) %>% 
-  filter(!is.na(log_diff))
+counties_shp_ = unique(county_sf$county)
+counties_xx_w_ = unique(xx$county[xx$race == "white"])
+counties_xx_b_ = unique(xx$county[xx$race == "black"])
 
-log_diff_ <- yy$log_diff
-myPalette <- colorRampPalette(rev(RColorBrewer::brewer.pal(5, "Spectral")))
-sc <- scale_fill_gradientn(colors = myPalette(10), 
-                           limits = c(min(log_diff_), max(log_diff_)))
+setdiff(counties_shp_, counties_xx_w_)
+setdiff(counties_xx_w_, counties_shp_)
+setdiff(counties_shp_, counties_xx_b_)
+setdiff(counties_xx_b_, counties_shp_)
+```
 
+```{r}
+length(unique(xx$county))
+sum(is.na(xx$race))
+```
+
+```{r}
+yy <- county_sf %>% 
+  select(county) %>% 
+  left_join(xx) 
+
+length(unique(yy$county))
+sum(is.na(yy$race))
+sum(is.na(yy$log_diff))
+sum(yy$person_years == 0)
+sum(yy$observed == 0)
+```
+
+```{r}
+yy %>% 
+  mutate(person_years = log(person_years)) %>% 
+  ggplot() + 
+  geom_sf(aes(fill = person_years), alpha = 1, lwd = 0.0) +
+  scale_fill_viridis(name = "person_years", option = "D") +
+  facet_wrap(~race, ncol = 2) + 
+  labs(title = "log person years") + 
+  theme(legend.position = "bottom")
+```
+
+```{r}
+## person years is zero
+yy %>%
+  st_simplify() %>%
+  mutate(zero_persons = (person_years == 0)) %>%
+  ggplot() + 
+  geom_sf(aes(fill = zero_persons), alpha = 1, lwd = 0.0) + 
+  facet_grid(~race)
+```
+
+```{r}
+## observed is zero
+yy %>%
+  st_simplify() %>%
+  mutate(zero_observed = (observed == 0)) %>%
+  ggplot() + 
+  geom_sf(aes(fill = zero_observed), alpha = 1, lwd = 0.0) + 
+  facet_grid(~race)
+```
+
+```{r}
+yy %>%
+  filter(race == "white") %>% 
+  st_simplify() %>%
+  ggplot() +
+  geom_sf(aes(fill = log_diff), alpha = 1, lwd = 0.0)
+
+yy %>%
+  filter(race == "black") %>% 
+  st_simplify() %>%
+  ggplot() +
+  geom_sf(aes(fill = log_diff), alpha = 1, lwd = 0.0)
+```
+
+```{r}
 yy %>% 
   ggplot() + 
   geom_sf(aes(fill = log_diff), alpha = 1, lwd = 0.0) +
+  scale_fill_viridis(name = "log_diff", option = "D") +
   facet_wrap(~race, ncol = 2) + 
   labs(title = "log(observed) - log(expected)") + 
-  guides(fill = guide_legend(title = "log_diff")) + 
-  scale_fill_continuous()
+  theme(legend.position = "bottom")
 ```
 
+```{r}
+## Prep data ----
+adrd_ratios_df %<>% 
+  mutate(
+    black = as.integer(if_else(race == 2, 1, 0)),
+    expected = as.integer(ceiling(expected)), 
+    observed = as.integer(ceiling(observed)), 
+    person_years = as.integer(ceiling(person_years)), 
+    log_expected = log(expected + 0.001)
+  ) %>% 
+  left_join(county_fips_df)
+
+sum(is.na(adrd_ratios_df$c_idx))
+sum(is.na(adrd_ratios_df$s_idx))
+sum(is.na(adrd_ratios_df$observed))
+sum(is.na(adrd_ratios_df$expected))
+sum(is.na(adrd_ratios_df$person_years))
+```
+```{r}
+adrd_ratios_df
+```
 
 ```{r}
-## Save ----
-write_rds(adrd_ratios_df, "../data/intermediate/adrd_ratios_df_.rds")
+write_rds(adrd_ratios_df, "../data/intermediate/adrd_ratios_df.rds")
 ```

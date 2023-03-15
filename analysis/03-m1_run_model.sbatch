@@ -4,4 +4,4 @@
 #SBATCH --mem=100GB # memory pool for all cores
 #SBATCH -t 6-12:00 # time (D-HH:MM)
 
-singularity exec $HOME/apps/rstan_latest.sif Rscript --vanilla 03_run_model_.R
+singularity exec $HOME/apps/rstan_latest.sif Rscript --vanilla 03-m1_run_model.R
