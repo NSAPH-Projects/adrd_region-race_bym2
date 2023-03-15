@@ -7,20 +7,32 @@ library(rstan)
 ```
 
 ```{r}
-#fit <- read_stan_csv("./models/model_run_20230205_045017/sample_file_4.csv")
-#stanfit_object <- read_rds("./m0s_no_covar_20230205_045017.rds")
-#stanfit_object
-```
-
-
-```{r}
 ## Read data ----
-stanfit_object <- read_rds("./models/model_run_20230211_075658/stanfit_object.rds")
-county_fips_df <- read_rds("../data/intermediate/county_fips_df.rds")
+adrd_ratios_df <- read_rds('../data/intermediate/adrd_ratios_df.rds')
+adrd_ratios_df
 ```
 
 ```{r}
-## Functions ----
+county_fips_df <- read_rds("../data/intermediate/county_fips_df.rds")
+county_fips_df
+```
+
+```{r}
+#slurm job number 1307333 for m1 is labeled model_run_20230311_191123
+# 1285340 model_run_20230311_190811
+stanfit_object <- read_rds("../results/models/model_run_20230311_191123/stanfit_object.rds")
+
+class(stanfit_object)
+```
+
+```{r}
+stanfit_summary <- summary(stanfit_object)
+## summary stats of fixed effects ----
+stanfit_summary$summary[c('alpha[1]', 'alpha[2]', 'delta'), ]
+```
+
+```{r}
+## Define functions ----
 extract_samples <- function(stanfit) {
     ## Extract samples from a stanfit object and return a list of variables
     ## NOTE: Random effects will be matrices of dimensions iterations x areas
@@ -65,24 +77,18 @@ extract_samples <- function(stanfit) {
 ```
 
 ```{r}
-## summary stats of fixed effects ----
-stanfit_summary[c('alpha[1]', 'alpha[2]', 'nu[1]', 'delta'), ]
-```
-
-```{r}
-# intercept of surface for white pop
-stanfit_summary['alpha[1]', 'mean'] + stanfit_summary['nu[1]', 'mean']
-```
-
-```{r}
-# intercept of shared surface for black pop
-stanfit_summary['alpha[2]', 'mean'] + stanfit_summary['nu[1]', 'mean']
-```
-
-```{r}
 ## organize samples from stanfit_object ----
 stanfit_samples <- extract_samples(stanfit_object)
 
+names(stanfit_samples)
+length(stanfit_samples$alpha1)
+dim(stanfit_samples$phi)
+dim(stanfit_samples$nu)
+```
+
+# log ratios
+
+```{r}
 ## obtain posterior predictive values ----
 ## Make a version of nu that is expanded such that every state column
 ## repeats as many times as their are counties. Then we can just add
@@ -102,7 +108,7 @@ for (s in 1:nrow(nu_counts)) {
                        nu_counts$c_sum[s - 1], 0) + 1
     end_ix <- nu_counts$c_sum[s]
     
-    nu_expanded[, start_ix:end_ix] <- stanfit_samples$nu #! ----> temporary
+    nu_expanded[, start_ix:end_ix] <- stanfit_samples$nu[, s]
 }
 
 # white log ratios
@@ -112,54 +118,109 @@ posterior_white <- stanfit_samples$alpha1 + stanfit_samples$psi1 +
 
 # black log ratios
 posterior_black <- stanfit_samples$alpha2 + stanfit_samples$psi2 +
-            (stanfit_samples$phi / stanfit_samples$delta) +
+            (stanfit_samples$phi * stanfit_samples$delta) +
             nu_expanded
 
+dim(posterior_white)
+dim(posterior_white)
+```
+
+```{r}
 # posterior median log ratios
-med <- rbind(
-  tibble(med = matrixStats::colMedians(posterior_white), race = 1), 
-  tibble(med = matrixStats::colMedians(posterior_black), race = 2)
+pos_med <- rbind(
+  tibble(
+    pos_med_y = matrixStats::colMedians(posterior_white), 
+    race = 1, 
+    c_idx = 1:ncol(posterior_white)), 
+  tibble(
+    pos_med_y = matrixStats::colMedians(posterior_black), 
+    race = 2, 
+    c_idx = 1:ncol(posterior_black))
 )
-```
 
-```{r}
-# shared surface contributions
-rbind(
-  tibble(
-    med = matrixStats::colMedians(stanfit_samples$phi), 
-    race = 3),
-  tibble(
-    med = matrixStats::colMedians(stanfit_samples$phi * stanfit_samples$delta), 
-    race = 1), 
-  tibble(
-    med = matrixStats::colMedians(stanfit_samples$phi / stanfit_samples$delta), 
-    race = 2)
-) %>% 
+pos_med %>% 
   mutate(race = as.character(race)) %>% 
   ggplot() + 
-  geom_density(aes(x = med, color = race))
+  geom_density(aes(x = pos_med_y, color = race), size = 1) + 
+  theme_classic()
 ```
 
 
 ```{r}
-# race-specific surface contributions
-rbind(
+## Add in correct fipschar ----
+pos_med <- adrd_ratios_df %>%
+  mutate(y = log(observed) - log(expected)) %>% 
+  dplyr::left_join(pos_med, by = c("c_idx", "race"))
+
+pos_med %>% 
+  ggplot() +
+  geom_point(aes(x = y, y = pos_med_y, col = as.factor(race)))
+```
+
+## Decompose log ratios
+
+```{r}
+summary(stanfit_samples$delta)
+```
+
+
+```{r}
+shared_w <- (stanfit_samples$phi * stanfit_samples$delta)
+shared_b <- (stanfit_samples$phi * stanfit_samples$delta)
+
+# posterior median
+shared <- rbind(
   tibble(
-    med = matrixStats::colMedians(stanfit_samples$psi1), 
-    race = 1),
+    shared = matrixStats::colMedians(shared_w), 
+    shared_unscaled = matrixStats::colMedians(stanfit_samples$phi), 
+    race = 1, 
+    c_idx = 1:ncol(shared_w)), 
   tibble(
-    med = matrixStats::colMedians(stanfit_samples$psi2), 
-    race = 2)
-) %>% 
+    shared = matrixStats::colMedians(shared_b), 
+    shared_unscaled = matrixStats::colMedians(stanfit_samples$phi), 
+    race = 2, 
+    c_idx = 1:ncol(shared_b))
+)
+
+## Add in correct fipschar ----
+pos_med %<>% 
+  dplyr::left_join(shared, by = c("c_idx", "race"))
+
+shared %>% 
   mutate(race = as.character(race)) %>% 
   ggplot() + 
-  geom_density(aes(x = med, color = race))
+  geom_density(aes(x = shared_unscaled), size = 1) + 
+  geom_density(aes(x = shared, color = race, lty = race), size = 1) + 
+  theme_classic()
 ```
 
 ```{r}
-## posterior values ----
-med %>% 
+specific_w <- stanfit_samples$psi1
+specific_b <- stanfit_samples$psi2
+
+# posterior median
+specific <- rbind(
+  tibble(
+    specific = matrixStats::colMedians(specific_w), 
+    race = 1, 
+    c_idx = 1:ncol(specific_w)), 
+  tibble(
+    specific = matrixStats::colMedians(specific_b), 
+    race = 2, 
+    c_idx = 1:ncol(specific_b))
+)
+
+## Add in correct fipschar ----
+pos_med %<>% 
+  dplyr::left_join(specific, by = c("c_idx", "race"))
+
+specific %>% 
   mutate(race = as.character(race)) %>% 
   ggplot() + 
-  geom_density(aes(x = med, color = race))
+  geom_density(aes(x = specific, color = race), size = 1) + 
+  theme_classic()
+```
+
+```{r}
+write_rds(pos_med, "../data/intermediate/m1-pos_med.rds")
 ```
