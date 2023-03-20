@@ -429,6 +429,7 @@ sum(is.na(adrd_ratios_df$observed))
 sum(is.na(adrd_ratios_df$expected))
 sum(is.na(adrd_ratios_df$person_years))
 ```
+
 ```{r}
 adrd_ratios_df
 ```
