@@ -304,6 +304,31 @@ yy %>%
   scale_fill_continuous()
 ```
 
+<<<<<<< Updated upstream:analysis/01_prep_adrd_ratios_df.Rmd
+=======
+```{r}
+## Prep data ----
+adrd_ratios_df %<>% 
+  mutate(
+    black = as.integer(if_else(race == 2, 1, 0)),
+    expected = as.integer(ceiling(expected)), 
+    observed = as.integer(ceiling(observed)), 
+    person_years = as.integer(ceiling(person_years)), 
+    log_expected = log(expected + 0.001)
+  ) %>% 
+  left_join(county_fips_df)
+
+sum(is.na(adrd_ratios_df$c_idx))
+sum(is.na(adrd_ratios_df$s_idx))
+sum(is.na(adrd_ratios_df$observed))
+sum(is.na(adrd_ratios_df$expected))
+sum(is.na(adrd_ratios_df$person_years))
+```
+
+```{r}
+adrd_ratios_df
+```
+>>>>>>> Stashed changes:analysis/02-2_prep_adrd_ratios_df.Rmd
 
 ```{r}
 ## Save ----
