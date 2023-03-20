@@ -304,8 +304,6 @@ yy %>%
   scale_fill_continuous()
 ```
 
-<<<<<<< Updated upstream:analysis/01_prep_adrd_ratios_df.Rmd
-=======
 ```{r}
 ## Prep data ----
 adrd_ratios_df %<>% 
@@ -328,7 +326,6 @@ sum(is.na(adrd_ratios_df$person_years))
 ```{r}
 adrd_ratios_df
 ```
->>>>>>> Stashed changes:analysis/02-2_prep_adrd_ratios_df.Rmd
 
 ```{r}
 ## Save ----
