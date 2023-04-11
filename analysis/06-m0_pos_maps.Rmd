@@ -13,6 +13,7 @@ library(RColorBrewer)
 ## Read data ----
 stanfit_samples <- read_rds("../data/intermediate/m0-stanfit_samples.rds")
 stanfit_summary <- read_rds("../data/intermediate/m0-stanfit_summary.rds")
+county_sf <- read_rds("../data/intermediate/county_sf.rds")
 pos_med <- read_rds("../data/intermediate/m0-pos_med.rds")
 
 pos_med_sf <- county_sf %>% 
@@ -90,10 +91,41 @@ state_sf %>%
 ## shared unscaled
 
 ```{r}
-shared_ <- c(pos_med$shared_unscaled, pos_med$specific)
+summary(pos_med$shared_unscaled)
+hist(pos_med$shared_unscaled)
+```
+
+```{r}
+summary(pos_med$specific)
+hist(pos_med$specific)
+```
+
+```{r}
+pos_med_sf %<>% 
+  mutate(
+    shared_unscaled_inliers = if_else(shared_unscaled > -1 & shared_unscaled < 1, 
+                                      shared_unscaled, as.numeric(NA)),
+    shared_unscaled_outliers = if_else(shared_unscaled <= -1 | shared_unscaled >= 1, 
+                                       shared_unscaled, as.numeric(NA)),
+    shared_unscaled_outliers = if_else(shared_unscaled_outliers <= -1, -1, shared_unscaled_outliers),
+    shared_unscaled_outliers = if_else(shared_unscaled_outliers >= 1, 1, shared_unscaled_outliers)
+  ) 
+
+pos_med_sf %>% 
+  st_drop_geometry() %>% 
+  select(shared_unscaled, shared_unscaled_inliers, shared_unscaled_outliers)
+```
+
+```{r}
+filter(pos_med_sf, !is.na(shared_unscaled_outliers)) %>% 
+  st_drop_geometry() %>% 
+  select(shared_unscaled, shared_unscaled_inliers, shared_unscaled_outliers)
+```
+
+```{r}
 myPalette <- colorRampPalette(rev(RColorBrewer::brewer.pal(11, "Spectral")))
 sc <- scale_fill_gradientn(colors = myPalette(100), 
-                           limits = c(min(shared_), max(shared_)))
+                           limits = c(-1, 1))
 
 p1 <- pos_med_sf %>% 
   filter(race == 1) %>% 
@@ -107,7 +139,69 @@ p1 <- pos_med_sf %>%
 p2 <- pos_med_sf %>% 
   filter(race == 1) %>% #shared_unscaled is non-race specific
   ggplot() +
-  geom_sf(aes(fill = shared_unscaled), lwd = 0.0) + 
+  geom_sf(aes(fill = shared_unscaled_inliers), lwd = 0.0) + 
+  geom_sf(data = filter(pos_med_sf, shared_unscaled_outliers == 1), color = "red", lwd = 0.5) + 
+  geom_sf(data = filter(pos_med_sf, shared_unscaled_outliers == -1), color = "blue", lwd = 0.5) + 
+  theme_map() + 
+  labs(subtitle = "shared unscaled") + 
+  sc
+
+p3 <- pos_med_sf %>% 
+  filter(race == 2) %>% 
+  ggplot() +
+  geom_sf(aes(fill = specific), lwd = 0.0) + 
+  theme_map() + 
+  labs(subtitle = "black specific") +
+  sc
+  
+p <- cowplot::plot_grid(
+  p1 + theme(legend.position = "none"), 
+  p2 + theme(legend.position = "none"), 
+  p3  + theme(legend.position = "none"),
+  nrow = 3)
+
+cowplot::plot_grid(
+  p, 
+  cowplot::get_legend(p1), 
+  ncol = 2
+)
+```
+
+```{r}
+filter(pos_med_sf, person_years == 0) %>% 
+  st_drop_geometry() %>% 
+  select(county, race, person_years, shared_unscaled, shared_unscaled_inliers, shared_unscaled_outliers)
+```
+
+```{r}
+pos_med_sf %<>% 
+  mutate(
+    specific = if_else(person_years == 0, as.numeric(NA), specific),
+    shared_unscaled_inliers = if_else(person_years == 0, as.numeric(NA), shared_unscaled_inliers),
+    shared_unscaled_outliers = if_else(person_years == 0, as.numeric(NA), shared_unscaled_outliers)
+  )
+```
+
+```{r}
+myPalette <- colorRampPalette(rev(RColorBrewer::brewer.pal(11, "Spectral")))
+sc <- scale_fill_gradientn(colors = myPalette(100), 
+                           limits = c(-1, 1))
+
+p1 <- pos_med_sf %>% 
+  filter(race == 1) %>% 
+  ggplot() +
+  geom_sf(aes(fill = specific), lwd = 0.0) + 
+  theme_map() +
+  labs(subtitle = "white specific") + 
+  theme(legend.title = element_blank()) + 
+  sc
+
+p2 <- pos_med_sf %>% 
+  filter(race == 1) %>% #shared_unscaled is non-race specific
+  ggplot() +
+  geom_sf(aes(fill = shared_unscaled_inliers), lwd = 0.0) + 
+  geom_sf(data = filter(pos_med_sf, shared_unscaled_outliers == 1), color = "red", lwd = 0.5) + 
+  geom_sf(data = filter(pos_med_sf, shared_unscaled_outliers == -1), color = "blue", lwd = 0.5) + 
   theme_map() + 
   labs(subtitle = "shared unscaled") + 
   sc
