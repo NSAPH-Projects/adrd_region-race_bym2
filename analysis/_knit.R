@@ -33,3 +33,11 @@ md_filename <- "./_knit/05-m1_pos_med.md"
 md_txt <- readLines(md_filename)
 md_txt <- gsub(paste0(getwd(), "/_knit/"), "./", md_txt)
 cat(md_txt, file=md_filename, sep="\n")
+
+rmarkdown::render("./06-m0_pos_maps.Rmd", 
+                  output_dir = "./_knit")
+
+md_filename <- "./_knit/06-m0_pos_maps.md"
+md_txt <- readLines(md_filename)
+md_txt <- gsub(paste0(getwd(), "/_knit/"), "./", md_txt)
+cat(md_txt, file=md_filename, sep="\n")
