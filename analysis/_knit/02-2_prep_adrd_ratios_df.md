@@ -101,7 +101,7 @@ sum(adrd_county_df$n_adrd)
 ```
 
 ```
-## [1] 2129768
+## [1] 27420816
 ```
 
 ```r
@@ -138,7 +138,7 @@ adrd_county_df %>%
 ## `summarise()` has grouped output by 'year'. You can override using the `.groups` argument.
 ```
 
-![](./02-2_prep_adrd_ratios_df_files/figure-html/unnamed-chunk-4-1.png)<!-- -->
+![](./02-2_prep_adrd_ratios_df_files/figure-html/unnamed-chunk-97-1.png)<!-- -->
 
 
 ```r
@@ -155,7 +155,7 @@ adrd_county_df %>%
 ## `summarise()` has grouped output by 'year'. You can override using the `.groups` argument.
 ```
 
-![](./02-2_prep_adrd_ratios_df_files/figure-html/unnamed-chunk-5-1.png)<!-- -->
+![](./02-2_prep_adrd_ratios_df_files/figure-html/unnamed-chunk-98-1.png)<!-- -->
 
 
 ```r
@@ -166,7 +166,7 @@ adrd_county_df %>%
   geom_density(aes(x = n_enrollees, color = race))
 ```
 
-![](./02-2_prep_adrd_ratios_df_files/figure-html/unnamed-chunk-6-1.png)<!-- -->
+![](./02-2_prep_adrd_ratios_df_files/figure-html/unnamed-chunk-99-1.png)<!-- -->
 
 
 ```r
@@ -183,7 +183,7 @@ adrd_county_df %>%
 ## `stat_bin()` using `bins = 30`. Pick better value with `binwidth`.
 ```
 
-![](./02-2_prep_adrd_ratios_df_files/figure-html/unnamed-chunk-7-1.png)<!-- -->
+![](./02-2_prep_adrd_ratios_df_files/figure-html/unnamed-chunk-100-1.png)<!-- -->
 
 
 ```r
@@ -203,7 +203,7 @@ adrd_county_df %>%
 ## `summarise()` has grouped output by 'race', 'sex'. You can override using the `.groups` argument.
 ```
 
-![](./02-2_prep_adrd_ratios_df_files/figure-html/unnamed-chunk-8-1.png)<!-- -->
+![](./02-2_prep_adrd_ratios_df_files/figure-html/unnamed-chunk-101-1.png)<!-- -->
 
 
 ```r
@@ -232,7 +232,7 @@ adrd_county_df %>%
 ## Warning: Removed 1818 rows containing missing values (geom_point).
 ```
 
-![](./02-2_prep_adrd_ratios_df_files/figure-html/unnamed-chunk-9-1.png)<!-- -->
+![](./02-2_prep_adrd_ratios_df_files/figure-html/unnamed-chunk-102-1.png)<!-- -->
 
 
 ```r
@@ -255,12 +255,12 @@ adrd_county_df %>%
 ## # Groups:   sex [2]
 ##     sex age_grp adrd_rate
 ##   <dbl> <chr>       <dbl>
-## 1     1 [65,75)      173.
-## 2     1 [75,85)      582.
-## 3     1 >85         1033.
-## 4     2 [65,75)      138.
-## 5     2 [75,85)      533.
-## 6     2 >85          974.
+## 1     1 [65,75)     1769.
+## 2     1 [75,85)     6795.
+## 3     1 >85        15372.
+## 4     2 [65,75)     1526.
+## 5     2 [75,85)     6833.
+## 6     2 >85        16476.
 ```
 
 
@@ -290,7 +290,7 @@ xx %>%
 ## `summarise()` has grouped output by 'sex'. You can override using the `.groups` argument.
 ```
 
-![](./02-2_prep_adrd_ratios_df_files/figure-html/unnamed-chunk-11-1.png)<!-- -->
+![](./02-2_prep_adrd_ratios_df_files/figure-html/unnamed-chunk-104-1.png)<!-- -->
 
 ```r
 ggsave("../results/figures/adrd_reference_rates.png")
@@ -425,7 +425,7 @@ yy %>%
   geom_sf(aes(fill = n_adrd), alpha = 1, lwd = 0.0)
 ```
 
-![](./02-2_prep_adrd_ratios_df_files/figure-html/unnamed-chunk-16-1.png)<!-- -->
+![](./02-2_prep_adrd_ratios_df_files/figure-html/unnamed-chunk-109-1.png)<!-- -->
 
 ```r
 yy %>%
@@ -435,7 +435,7 @@ yy %>%
   geom_sf(aes(fill = n_adrd), alpha = 1, lwd = 0.0)
 ```
 
-![](./02-2_prep_adrd_ratios_df_files/figure-html/unnamed-chunk-16-2.png)<!-- -->
+![](./02-2_prep_adrd_ratios_df_files/figure-html/unnamed-chunk-109-2.png)<!-- -->
 
 
 ```r
@@ -455,7 +455,7 @@ yy  %>%
   sc
 ```
 
-![](./02-2_prep_adrd_ratios_df_files/figure-html/unnamed-chunk-17-1.png)<!-- -->
+![](./02-2_prep_adrd_ratios_df_files/figure-html/unnamed-chunk-110-1.png)<!-- -->
 
 ```r
 #the yellow looks like white, try another visualization package
@@ -473,7 +473,7 @@ yy %>%
   scale_fill_viridis(name = "n_adrd", option = "D")
 ```
 
-![](./02-2_prep_adrd_ratios_df_files/figure-html/unnamed-chunk-18-1.png)<!-- -->
+![](./02-2_prep_adrd_ratios_df_files/figure-html/unnamed-chunk-111-1.png)<!-- -->
 
 * adrd hospitalizations entangle prevalence and severity, specially in "small" counties 
 * biased measurement error? noise systematically affects certain groups
@@ -512,12 +512,12 @@ exp_df
 ## # Groups:   sex [2]
 ##     sex age_grp exp_rate
 ##   <dbl> <chr>      <dbl>
-## 1     1 [65,75)  0.00173
-## 2     1 [75,85)  0.00582
-## 3     1 >85      0.0103 
-## 4     2 [65,75)  0.00138
-## 5     2 [75,85)  0.00533
-## 6     2 >85      0.00974
+## 1     1 [65,75)   0.0177
+## 2     1 [75,85)   0.0680
+## 3     1 >85       0.154 
+## 4     2 [65,75)   0.0153
+## 5     2 [75,85)   0.0683
+## 6     2 >85       0.165
 ```
 
 
@@ -603,7 +603,7 @@ adrd_ratios_df %>%
 ## Warning: Removed 83 rows containing non-finite values (stat_density).
 ```
 
-![](./02-2_prep_adrd_ratios_df_files/figure-html/unnamed-chunk-21-1.png)<!-- -->
+![](./02-2_prep_adrd_ratios_df_files/figure-html/unnamed-chunk-114-1.png)<!-- -->
 
 
 ```r
@@ -614,7 +614,7 @@ adrd_ratios_df %>%
   scale_y_sqrt()
 ```
 
-![](./02-2_prep_adrd_ratios_df_files/figure-html/unnamed-chunk-22-1.png)<!-- -->
+![](./02-2_prep_adrd_ratios_df_files/figure-html/unnamed-chunk-115-1.png)<!-- -->
 
 
 ```r
@@ -628,10 +628,10 @@ adrd_ratios_df %>%
 ```
 
 ```
-## Warning: Removed 863 rows containing non-finite values (stat_density).
+## Warning: Removed 389 rows containing non-finite values (stat_density).
 ```
 
-![](./02-2_prep_adrd_ratios_df_files/figure-html/unnamed-chunk-23-1.png)<!-- -->
+![](./02-2_prep_adrd_ratios_df_files/figure-html/unnamed-chunk-116-1.png)<!-- -->
 
 
 ```r
@@ -729,7 +729,7 @@ sum(is.na(yy$log_diff))
 ```
 
 ```
-## [1] 861
+## [1] 383
 ```
 
 ```r
@@ -745,7 +745,7 @@ sum(yy$observed == 0)
 ```
 
 ```
-## [1] 861
+## [1] 383
 ```
 
 
@@ -760,7 +760,7 @@ yy %>%
   theme(legend.position = "bottom")
 ```
 
-![](./02-2_prep_adrd_ratios_df_files/figure-html/unnamed-chunk-27-1.png)<!-- -->
+![](./02-2_prep_adrd_ratios_df_files/figure-html/unnamed-chunk-120-1.png)<!-- -->
 
 
 ```r
@@ -773,7 +773,7 @@ yy %>%
   facet_grid(~race)
 ```
 
-![](./02-2_prep_adrd_ratios_df_files/figure-html/unnamed-chunk-28-1.png)<!-- -->
+![](./02-2_prep_adrd_ratios_df_files/figure-html/unnamed-chunk-121-1.png)<!-- -->
 
 
 ```r
@@ -786,7 +786,7 @@ yy %>%
   facet_grid(~race)
 ```
 
-![](./02-2_prep_adrd_ratios_df_files/figure-html/unnamed-chunk-29-1.png)<!-- -->
+![](./02-2_prep_adrd_ratios_df_files/figure-html/unnamed-chunk-122-1.png)<!-- -->
 
 
 ```r
@@ -797,7 +797,7 @@ yy %>%
   geom_sf(aes(fill = log_diff), alpha = 1, lwd = 0.0)
 ```
 
-![](./02-2_prep_adrd_ratios_df_files/figure-html/unnamed-chunk-30-1.png)<!-- -->
+![](./02-2_prep_adrd_ratios_df_files/figure-html/unnamed-chunk-123-1.png)<!-- -->
 
 ```r
 yy %>%
@@ -807,7 +807,7 @@ yy %>%
   geom_sf(aes(fill = log_diff), alpha = 1, lwd = 0.0)
 ```
 
-![](./02-2_prep_adrd_ratios_df_files/figure-html/unnamed-chunk-30-2.png)<!-- -->
+![](./02-2_prep_adrd_ratios_df_files/figure-html/unnamed-chunk-123-2.png)<!-- -->
 
 
 ```r
@@ -820,7 +820,7 @@ yy %>%
   theme(legend.position = "bottom")
 ```
 
-![](./02-2_prep_adrd_ratios_df_files/figure-html/unnamed-chunk-31-1.png)<!-- -->
+![](./02-2_prep_adrd_ratios_df_files/figure-html/unnamed-chunk-124-1.png)<!-- -->
 
 
 ```r
@@ -880,6 +880,7 @@ sum(is.na(adrd_ratios_df$person_years))
 ## [1] 0
 ```
 
+
 ```r
 adrd_ratios_df
 ```
@@ -888,16 +889,16 @@ adrd_ratios_df
 ## # A tibble: 6,216 × 13
 ##    county  race person_years expected observed black log_expected county_name        fipschar fips_st c_idx s_idx
 ##     <dbl> <dbl>        <int>    <int>    <int> <int>        <dbl> <chr>              <chr>    <chr>   <int> <int>
-##  1   1001     1        85881      307      486     0         5.73 Autauga County, AL 01001    01          1     1
-##  2   1001     2        22762       86      179     1         4.45 Autauga County, AL 01001    01          1     1
-##  3   1003     1       475644     1762     1990     0         7.47 Baldwin County, AL 01003    01          2     1
-##  4   1003     2        28113      104      133     1         4.64 Baldwin County, AL 01003    01          2     1
-##  5   1005     1        31145      120      260     0         4.79 Barbour County, AL 01005    01          3     1
-##  6   1005     2        16972       68      143     1         4.22 Barbour County, AL 01005    01          3     1
-##  7   1007     1        56774      206      403     0         5.33 Bibb County, AL    01007    01          4     1
-##  8   1007     2         7962       31       47     1         3.43 Bibb County, AL    01007    01          4     1
-##  9   1009     1       161161      590      966     0         6.38 Blount County, AL  01009    01          5     1
-## 10   1009     2         3342       13       21     1         2.57 Blount County, AL  01009    01          5     1
+##  1   1001     1        85881     3967     3726     0         8.29 Autauga County, AL 01001    01          1     1
+##  2   1001     2        22762     1137     1419     1         7.04 Autauga County, AL 01001    01          1     1
+##  3   1003     1       475644    22875    18871     0        10.0  Baldwin County, AL 01003    01          2     1
+##  4   1003     2        28113     1374     1576     1         7.23 Baldwin County, AL 01003    01          2     1
+##  5   1005     1        31145     1574     1804     0         7.36 Barbour County, AL 01005    01          3     1
+##  6   1005     2        16972      919     1096     1         6.82 Barbour County, AL 01005    01          3     1
+##  7   1007     1        56774     2665     3040     0         7.89 Bibb County, AL    01007    01          4     1
+##  8   1007     2         7962      413      424     1         6.02 Bibb County, AL    01007    01          4     1
+##  9   1009     1       161161     7662     7753     0         8.94 Blount County, AL  01009    01          5     1
+## 10   1009     2         3342      162      164     1         5.09 Blount County, AL  01009    01          5     1
 ## # … with 6,206 more rows, and 1 more variable: st_abbr <chr>
 ```
 
