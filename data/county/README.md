@@ -1,8 +1,3 @@
-## input
-
-* Run all the scripts/notebooks in `/analysis` that begin with ` 01_` to get medicare input datasets
-
-* Run the following code in this folder
 
 ```
 wget https://www2.census.gov/geo/docs/reference/county_adjacency.txt
