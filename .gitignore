@@ -1,13 +1,13 @@
-# Other
 /results/models/
+/logs/
 
 #### 
 # slurm
 ####
-*/slurm*
+**/slurm*.out
 
 ####
-# yython
+# python
 ####
 # Byte-compiled / optimized / DLL files
 __pycache__/
