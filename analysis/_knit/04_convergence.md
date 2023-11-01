@@ -10,7 +10,8 @@ library(bayesplot)
 
 ```r
 ## Read data ----
-stanfit_object <- read_rds("./models/model_run_20221207_223858/stanfit_object.rds")
+#slurm job number 1307317 for m0 is labeled model_run_20230311_185502
+stanfit_object <- read_rds("../results/models/model_run_20230311_185502/stanfit_object.rds")
 
 class(stanfit_object)
 ```
@@ -38,78 +39,34 @@ rhat_of_draws <- rhat(stanfit_object)
 mcmc_rhat(rhat_of_draws)
 ```
 
-![](./04_convergence_files/figure-html/unnamed-chunk-25-1.png)<!-- -->
+![](./04_convergence_files/figure-html/unnamed-chunk-4-1.png)<!-- -->
 
 
 ```r
-names(rhat_of_draws)
+names(rhat_of_draws)[1:100]
 ```
 
 ```
-##   [1] "alpha[1]"   "alpha[2]"   "nu[1]"      "sigma_u[1]" "sigma_u[2]"
-##   [6] "sigma_u[3]" "sigma_v[1]" "sigma_v[2]" "sigma_v[3]" "sigma_s"   
-##  [11] "delta"      "psi[1,1]"   "psi[1,2]"   "psi[1,3]"   "psi[1,4]"  
-##  [16] "psi[1,5]"   "psi[1,6]"   "psi[1,7]"   "psi[1,8]"   "psi[1,9]"  
-##  [21] "psi[1,10]"  "psi[1,11]"  "psi[1,12]"  "psi[1,13]"  "psi[1,14]" 
-##  [26] "psi[1,15]"  "psi[1,16]"  "psi[1,17]"  "psi[1,18]"  "psi[1,19]" 
-##  [31] "psi[1,20]"  "psi[1,21]"  "psi[1,22]"  "psi[1,23]"  "psi[1,24]" 
-##  [36] "psi[1,25]"  "psi[1,26]"  "psi[1,27]"  "psi[1,28]"  "psi[1,29]" 
-##  [41] "psi[1,30]"  "psi[1,31]"  "psi[1,32]"  "psi[1,33]"  "psi[1,34]" 
-##  [46] "psi[1,35]"  "psi[1,36]"  "psi[1,37]"  "psi[1,38]"  "psi[1,39]" 
-##  [51] "psi[1,40]"  "psi[1,41]"  "psi[1,42]"  "psi[1,43]"  "psi[1,44]" 
-##  [56] "psi[1,45]"  "psi[1,46]"  "psi[1,47]"  "psi[1,48]"  "psi[1,49]" 
-##  [61] "psi[1,50]"  "psi[1,51]"  "psi[1,52]"  "psi[1,53]"  "psi[1,54]" 
-##  [66] "psi[1,55]"  "psi[1,56]"  "psi[1,57]"  "psi[1,58]"  "psi[1,59]" 
-##  [71] "psi[1,60]"  "psi[1,61]"  "psi[1,62]"  "psi[1,63]"  "psi[1,64]" 
-##  [76] "psi[1,65]"  "psi[1,66]"  "psi[1,67]"  "psi[1,68]"  "psi[1,69]" 
-##  [81] "psi[1,70]"  "psi[1,71]"  "psi[1,72]"  "psi[1,73]"  "psi[1,74]" 
-##  [86] "psi[1,75]"  "psi[1,76]"  "psi[1,77]"  "psi[1,78]"  "psi[1,79]" 
-##  [91] "psi[1,80]"  "psi[1,81]"  "psi[1,82]"  "psi[1,83]"  "psi[1,84]" 
-##  [96] "psi[1,85]"  "psi[1,86]"  "psi[1,87]"  "psi[1,88]"  "psi[1,89]" 
-## [101] "psi[1,90]"  "psi[1,91]"  "psi[1,92]"  "psi[1,93]"  "psi[1,94]" 
-## [106] "psi[1,95]"  "psi[1,96]"  "psi[1,97]"  "psi[1,98]"  "psi[1,99]" 
-## [111] "psi[1,100]" "psi[2,1]"   "psi[2,2]"   "psi[2,3]"   "psi[2,4]"  
-## [116] "psi[2,5]"   "psi[2,6]"   "psi[2,7]"   "psi[2,8]"   "psi[2,9]"  
-## [121] "psi[2,10]"  "psi[2,11]"  "psi[2,12]"  "psi[2,13]"  "psi[2,14]" 
-## [126] "psi[2,15]"  "psi[2,16]"  "psi[2,17]"  "psi[2,18]"  "psi[2,19]" 
-## [131] "psi[2,20]"  "psi[2,21]"  "psi[2,22]"  "psi[2,23]"  "psi[2,24]" 
-## [136] "psi[2,25]"  "psi[2,26]"  "psi[2,27]"  "psi[2,28]"  "psi[2,29]" 
-## [141] "psi[2,30]"  "psi[2,31]"  "psi[2,32]"  "psi[2,33]"  "psi[2,34]" 
-## [146] "psi[2,35]"  "psi[2,36]"  "psi[2,37]"  "psi[2,38]"  "psi[2,39]" 
-## [151] "psi[2,40]"  "psi[2,41]"  "psi[2,42]"  "psi[2,43]"  "psi[2,44]" 
-## [156] "psi[2,45]"  "psi[2,46]"  "psi[2,47]"  "psi[2,48]"  "psi[2,49]" 
-## [161] "psi[2,50]"  "psi[2,51]"  "psi[2,52]"  "psi[2,53]"  "psi[2,54]" 
-## [166] "psi[2,55]"  "psi[2,56]"  "psi[2,57]"  "psi[2,58]"  "psi[2,59]" 
-## [171] "psi[2,60]"  "psi[2,61]"  "psi[2,62]"  "psi[2,63]"  "psi[2,64]" 
-## [176] "psi[2,65]"  "psi[2,66]"  "psi[2,67]"  "psi[2,68]"  "psi[2,69]" 
-## [181] "psi[2,70]"  "psi[2,71]"  "psi[2,72]"  "psi[2,73]"  "psi[2,74]" 
-## [186] "psi[2,75]"  "psi[2,76]"  "psi[2,77]"  "psi[2,78]"  "psi[2,79]" 
-## [191] "psi[2,80]"  "psi[2,81]"  "psi[2,82]"  "psi[2,83]"  "psi[2,84]" 
-## [196] "psi[2,85]"  "psi[2,86]"  "psi[2,87]"  "psi[2,88]"  "psi[2,89]" 
-## [201] "psi[2,90]"  "psi[2,91]"  "psi[2,92]"  "psi[2,93]"  "psi[2,94]" 
-## [206] "psi[2,95]"  "psi[2,96]"  "psi[2,97]"  "psi[2,98]"  "psi[2,99]" 
-## [211] "psi[2,100]" "phi[1]"     "phi[2]"     "phi[3]"     "phi[4]"    
-## [216] "phi[5]"     "phi[6]"     "phi[7]"     "phi[8]"     "phi[9]"    
-## [221] "phi[10]"    "phi[11]"    "phi[12]"    "phi[13]"    "phi[14]"   
-## [226] "phi[15]"    "phi[16]"    "phi[17]"    "phi[18]"    "phi[19]"   
-## [231] "phi[20]"    "phi[21]"    "phi[22]"    "phi[23]"    "phi[24]"   
-## [236] "phi[25]"    "phi[26]"    "phi[27]"    "phi[28]"    "phi[29]"   
-## [241] "phi[30]"    "phi[31]"    "phi[32]"    "phi[33]"    "phi[34]"   
-## [246] "phi[35]"    "phi[36]"    "phi[37]"    "phi[38]"    "phi[39]"   
-## [251] "phi[40]"    "phi[41]"    "phi[42]"    "phi[43]"    "phi[44]"   
-## [256] "phi[45]"    "phi[46]"    "phi[47]"    "phi[48]"    "phi[49]"   
-## [261] "phi[50]"    "phi[51]"    "phi[52]"    "phi[53]"    "phi[54]"   
-## [266] "phi[55]"    "phi[56]"    "phi[57]"    "phi[58]"    "phi[59]"   
-## [271] "phi[60]"    "phi[61]"    "phi[62]"    "phi[63]"    "phi[64]"   
-## [276] "phi[65]"    "phi[66]"    "phi[67]"    "phi[68]"    "phi[69]"   
-## [281] "phi[70]"    "phi[71]"    "phi[72]"    "phi[73]"    "phi[74]"   
-## [286] "phi[75]"    "phi[76]"    "phi[77]"    "phi[78]"    "phi[79]"   
-## [291] "phi[80]"    "phi[81]"    "phi[82]"    "phi[83]"    "phi[84]"   
-## [296] "phi[85]"    "phi[86]"    "phi[87]"    "phi[88]"    "phi[89]"   
-## [301] "phi[90]"    "phi[91]"    "phi[92]"    "phi[93]"    "phi[94]"   
-## [306] "phi[95]"    "phi[96]"    "phi[97]"    "phi[98]"    "phi[99]"   
-## [311] "phi[100]"   "tau_u[1]"   "tau_u[2]"   "tau_u[3]"   "tau_v[1]"  
-## [316] "tau_v[2]"   "tau_v[3]"   "lp__"
+##   [1] "alpha[1]"   "alpha[2]"   "nu[1]"      "nu[2]"      "nu[3]"     
+##   [6] "nu[4]"      "nu[5]"      "nu[6]"      "nu[7]"      "nu[8]"     
+##  [11] "nu[9]"      "nu[10]"     "nu[11]"     "nu[12]"     "nu[13]"    
+##  [16] "nu[14]"     "nu[15]"     "nu[16]"     "nu[17]"     "nu[18]"    
+##  [21] "nu[19]"     "nu[20]"     "nu[21]"     "nu[22]"     "nu[23]"    
+##  [26] "nu[24]"     "nu[25]"     "nu[26]"     "nu[27]"     "nu[28]"    
+##  [31] "nu[29]"     "nu[30]"     "nu[31]"     "nu[32]"     "nu[33]"    
+##  [36] "nu[34]"     "nu[35]"     "nu[36]"     "nu[37]"     "nu[38]"    
+##  [41] "nu[39]"     "nu[40]"     "nu[41]"     "nu[42]"     "nu[43]"    
+##  [46] "nu[44]"     "nu[45]"     "nu[46]"     "nu[47]"     "nu[48]"    
+##  [51] "nu[49]"     "sigma_u[1]" "sigma_u[2]" "sigma_u[3]" "sigma_v[1]"
+##  [56] "sigma_v[2]" "sigma_v[3]" "sigma_s"    "delta"      "psi[1,1]"  
+##  [61] "psi[1,2]"   "psi[1,3]"   "psi[1,4]"   "psi[1,5]"   "psi[1,6]"  
+##  [66] "psi[1,7]"   "psi[1,8]"   "psi[1,9]"   "psi[1,10]"  "psi[1,11]" 
+##  [71] "psi[1,12]"  "psi[1,13]"  "psi[1,14]"  "psi[1,15]"  "psi[1,16]" 
+##  [76] "psi[1,17]"  "psi[1,18]"  "psi[1,19]"  "psi[1,20]"  "psi[1,21]" 
+##  [81] "psi[1,22]"  "psi[1,23]"  "psi[1,24]"  "psi[1,25]"  "psi[1,26]" 
+##  [86] "psi[1,27]"  "psi[1,28]"  "psi[1,29]"  "psi[1,30]"  "psi[1,31]" 
+##  [91] "psi[1,32]"  "psi[1,33]"  "psi[1,34]"  "psi[1,35]"  "psi[1,36]" 
+##  [96] "psi[1,37]"  "psi[1,38]"  "psi[1,39]"  "psi[1,40]"  "psi[1,41]"
 ```
 
 
@@ -124,7 +81,7 @@ rhat_of_draws[c('alpha[1]', # white surface intercept
 
 ```
 ## alpha[1] alpha[2]    delta    nu[1]     lp__ 
-## 1.116025 1.115839 1.033044 1.116007 1.247641
+## 1.002164 1.011118 1.935585 1.008044 2.305810
 ```
 
 
@@ -148,11 +105,11 @@ rhat_of_draws[c('sigma_u[1]', # SD of CAR part
 
 ```
 ## sigma_u[1] sigma_u[2] sigma_u[3] sigma_v[1] sigma_v[2] sigma_v[3] 
-##  1.2348573  1.0729678  0.9988496  1.0120802  1.0355089  1.1348638 
+##   1.924810   1.630155   1.038039   1.982226   2.205336   1.089852 
 ##    sigma_s   tau_u[1]   tau_u[2]   tau_u[3]   tau_v[1]   tau_v[2] 
-##  1.0132134  1.0803350  1.0414958  0.9991347  1.0679743  1.0581181 
+##   1.003522   1.756572   1.446857   1.043754   1.701363   2.355906 
 ##   tau_v[3] 
-##  1.0541054
+##   1.086590
 ```
 
 
@@ -161,7 +118,7 @@ rhat_of_draws[c('sigma_u[1]', # SD of CAR part
 mcmc_rhat(rhat_of_draws[grep('phi', names(rhat_of_draws))])
 ```
 
-![](./04_convergence_files/figure-html/unnamed-chunk-29-1.png)<!-- -->
+![](./04_convergence_files/figure-html/unnamed-chunk-8-1.png)<!-- -->
 
 
 ```r
@@ -169,7 +126,7 @@ mcmc_rhat(rhat_of_draws[grep('phi', names(rhat_of_draws))])
 mcmc_rhat(rhat_of_draws[grep('psi\\[1', names(rhat_of_draws))])
 ```
 
-![](./04_convergence_files/figure-html/unnamed-chunk-30-1.png)<!-- -->
+![](./04_convergence_files/figure-html/unnamed-chunk-9-1.png)<!-- -->
 
 
 ```r
@@ -177,7 +134,7 @@ mcmc_rhat(rhat_of_draws[grep('psi\\[1', names(rhat_of_draws))])
 mcmc_rhat(rhat_of_draws[grep('psi\\[2', names(rhat_of_draws))])
 ```
 
-![](./04_convergence_files/figure-html/unnamed-chunk-31-1.png)<!-- -->
+![](./04_convergence_files/figure-html/unnamed-chunk-10-1.png)<!-- -->
 
 
 

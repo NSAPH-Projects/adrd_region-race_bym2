@@ -8,7 +8,8 @@ library(bayesplot)
 
 ```{r}
 ## Read data ----
-stanfit_object <- read_rds("./models/model_run_20221207_223858/stanfit_object.rds")
+#slurm job number 1307317 for m0 is labeled model_run_20230311_185502
+stanfit_object <- read_rds("../results/models/model_run_20230311_185502/stanfit_object.rds")
 
 class(stanfit_object)
 ```
@@ -24,7 +25,7 @@ mcmc_rhat(rhat_of_draws)
 ```
 
 ```{r}
-names(rhat_of_draws)
+names(rhat_of_draws)[1:100]
 ```
 
 ```{r}

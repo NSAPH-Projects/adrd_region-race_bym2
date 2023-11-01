@@ -1,5 +1,13 @@
+/results/models/
+/logs/
+
+#### 
+# slurm
 ####
-#Python
+**/slurm*.out
+
+####
+# python
 ####
 # Byte-compiled / optimized / DLL files
 __pycache__/
@@ -133,7 +141,7 @@ dmypy.json
 
 
 ####
-# R
+# r
 ####
 # History files
 .Rhistory
