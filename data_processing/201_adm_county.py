@@ -3,7 +3,7 @@ import duckdb
 import argparse
 import logging
 
-logging.basicConfig(filename='logs/prep_hosp_county.out', level=logging.INFO)
+logging.basicConfig(filename='logs/prep_adm_county.out', level=logging.INFO)
 
 def get_zip_to_county(zip_county_csv):
     zip_to_county = pd.read_csv(zip_county_csv, dtype = {'zip':str, 'county':str})
@@ -71,20 +71,24 @@ def main(args):
     logging.info(f"total number of admissions in counties: {df.n_admissions.sum()}")
 
     logging.info(f"## saving in {args.output_file} ----")
-    df.set_index(['county'])
+    df.set_index(['county'], inplace=True)
     df.to_csv(args.output_file)
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--nom_prefix', 
                         type=str, 
-                        default='data/symlinks/temp/hosp_nom')
+                        default='data/symlinks/temp/adrd_nom') # 'data/symlinks/temp/hosp_nom'
     parser.add_argument('--zip_county_csv', 
                         type=str,
                         default='data/county/zip_county_2015.csv')
     parser.add_argument('--output_file',
                         type=str,
-                        default='data/symlinks/temp/hosp_county.csv')
+                        default='data/symlinks/temp/adrd_county.csv') # 'data/symlinks/temp/hosp_county.csv'
     args = parser.parse_args()
 
+    logging.info(f"## args: {args}")
     main(args)
+
+# python data_processing/201_adm_county.py --nom_prefix data/symlinks/temp/adrd_nom --output_file data/symlinks/temp/adrd_county.csv
+# python data_processing/201_adm_county.py --nom_prefix data/symlinks/temp/hosp_nom --output_file data/symlinks/temp/hosp_county.csv

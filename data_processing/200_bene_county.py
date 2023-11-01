@@ -85,7 +85,7 @@ def main(args):
     logging.info(f"total number of enrollees in counties: {df.n_enrollees.sum()}")
 
     logging.info(f"## saving in {args.output_file} ----")
-    df.set_index(['county'])
+    df.set_index(['county'], inplace=True)
     df.to_csv(args.output_file)
 
 if __name__ == '__main__':
