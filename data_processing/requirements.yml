@@ -1,0 +1,13 @@
+name: race_inequalities-adrd-besag
+channels:
+  - defaults
+  - conda-forge
+dependencies:
+  - python=3.10
+  - pyarrow=11.0.0
+  - python-duckdb=0.8.1
+  - pandas=2.0.3
+  - numpy=1.25.1
+  - pip=23.1.2
+  - pip:
+    - ipykernel==6.24.0
