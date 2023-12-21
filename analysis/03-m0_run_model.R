@@ -5,7 +5,9 @@ library(rstan)
 
 ## functions ----
 mkdir_p <- function(dir_name) {
-  dir.create(dir_name, showWarnings = FALSE, recursive = TRUE)
+  dir.create(dir_name, 
+             #showWarnings = FALSE, 
+             recursive = TRUE)
 }
 
 get_random_seed <-
@@ -24,15 +26,16 @@ get_random_seed <-
 ## Modeling parameters ----
 ##  Naming
 tstamp <- format(Sys.time(), format = "%Y%m%d_%H%M%S")
-mkdir_p(paste0('../results/models/model_run_', tstamp))
+mkdir_p(paste0('results/models/m0/model_run_', tstamp))
 model_name <- 'model'
-stan_file <- './m0_no_covar_invdelta.stan'
-random_seed <- get_random_seed(paste0('../results/models/model_run_', tstamp,
+stan_file <- 'analysis/m0_no_covar_invdelta.stan'
+random_seed <- get_random_seed(paste0('results/models/m0/model_run_', tstamp,
                                       '/seed.rds'))
 
 ##  Run parameters
 n_chains <- 4
-n_iter <- 1300
+#n_iter <- 1300
+n_iter <- 50
 n_burnin <- min(floor(n_iter / 2), 300)
 n_thin <- 10
 verbose_flag <- FALSE
@@ -43,8 +46,8 @@ a_delta = .995  # default = .8
 t_depth = 35    # max tree depth, default = 10
 
 ## Load data ----
-adrd_ratios_df <- read_rds('../data/intermediate/adrd_ratios_df.rds')
-county_adj_sparse_list <- read_rds('../data/intermediate/county_adj_sparse_list.rds')
+adrd_ratios_df <- read_rds('data/symlinks/temp/adrd_ratios_df.rds')
+county_adj_sparse_list <- read_rds('data/symlinks/temp/county_adj_sparse_list.rds')
 
 ## Get the data in order ----
 adrd_stan_list  <-
@@ -83,11 +86,11 @@ adrd_stan_list  <-
 
 ## Save the passed data in case we need it later ----
 write_rds(adrd_stan_list,
-          paste0('../results/models/model_run_', tstamp, 
+          paste0('results/models/m0/model_run_', tstamp, 
                  '/adrd_stan_list.rds'))
 
 ## copy stan file into model_run ----
-new_stan_file <- paste0('./m_', tstamp, '.stan')
+new_stan_file <- paste0('results/models/m0/model_run_', tstamp, '/m_', tstamp, '.stan')
 file.copy(stan_file, 
           new_stan_file)
 
@@ -115,18 +118,18 @@ fit <- stan(
     control = list(adapt_delta = a_delta,
                    max_treedepth = t_depth),
     refresh = n_iter / 100,
-    sample_file = paste0('../results/models/model_run_', tstamp,
+    sample_file = paste0('results/models/m0/model_run_', tstamp,
                          '/sample_file')
 )
 
 ## Save fit objects ----
 write_rds(fit, 
-          paste0('../results/models/model_run_', 
+          paste0('results/models/m0/model_run_', 
                  tstamp, 
                  '/stanfit_object.rds'))
 
 
 
 ## Remove the compiled stan model ----
-file.remove(paste0('./m_', tstamp, '.rds'))
+file.remove(paste0('results/models/m0/model_run_', tstamp, '/m_', tstamp, '.rds'))
 file.remove(new_stan_file)
