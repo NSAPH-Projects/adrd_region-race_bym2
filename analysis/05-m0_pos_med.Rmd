@@ -1,26 +1,32 @@
 
+```{r setup, include=FALSE}
+## Set working directory as project root
+library(here)
+knitr::opts_knit$set(root.dir = here())
+```
+
 ```{r, message=FALSE, warning=FALSE}
 ## Load libraries ----
 library(tidyverse)
 library(magrittr)
 library(rstan)
+library(here)
 ```
-
 
 ```{r}
 ## Read data ----
-adrd_ratios_df <- read_rds('../data/intermediate/adrd_ratios_df.rds')
+adrd_ratios_df <- read_rds('data/symlinks/temp/adrd_ratios_df.rds')
 adrd_ratios_df
 ```
 
 ```{r}
-county_fips_df <- read_rds("../data/intermediate/county_fips_df.rds")
+county_fips_df <- read_rds("data/symlinks/temp/county_fips_df.rds")
 county_fips_df
 ```
 
 ```{r}
 #slurm job number 1307317 for m0 is labeled model_run_20230311_185502
-stanfit_object <- read_rds("../results/models/model_run_20230311_185502/stanfit_object.rds")
+stanfit_object <- read_rds("results/models/m0/model_run_20231109_142035/stanfit_object.rds")
 
 class(stanfit_object)
 ```
@@ -86,7 +92,7 @@ dim(stanfit_samples$phi)
 dim(stanfit_samples$nu)
 ```
 
-# log ratios
+# log relative risk
 
 ```{r}
 ## obtain posterior predictive values ----
@@ -111,12 +117,12 @@ for (s in 1:nrow(nu_counts)) {
     nu_expanded[, start_ix:end_ix] <- stanfit_samples$nu[, s]
 }
 
-# white log ratios
+# white log relative risk
 posterior_white <- stanfit_samples$alpha1 + stanfit_samples$psi1 + 
   (stanfit_samples$phi * stanfit_samples$delta) + 
   nu_expanded
 
-# black log ratios
+# black log relative risk
 posterior_black <- stanfit_samples$alpha2 + stanfit_samples$psi2 +
             (stanfit_samples$phi / stanfit_samples$delta) +
             nu_expanded
@@ -126,7 +132,22 @@ dim(posterior_white)
 ```
 
 ```{r}
-# posterior median log ratios
+# log risk ratios
+posterior_risk_ratio <- exp(posterior_black - posterior_white)
+
+pos_med_rr <- data.frame(
+  risk_ratio = matrixStats::colMedians(posterior_risk_ratio),
+  c_idx = 1:ncol(posterior_risk_ratio)
+)
+
+# which columns (counties) have risk ratios significantly different from zero?
+pos_med_rr$risk_ratio_sig <- (colMeans(posterior_risk_ratio > 1) > 0.8) | (colMeans(posterior_risk_ratio < 1) > 0.8)
+
+```
+
+
+```{r}
+# posterior median log relative risk
 pos_med <- rbind(
   tibble(
     pos_med_y = matrixStats::colMedians(posterior_white), 
@@ -147,6 +168,13 @@ pos_med %>%
 
 
 ```{r}
+# join pos_med and pos_med_rr
+pos_med <- pos_med %>%
+  dplyr::left_join(pos_med_rr, by = c("c_idx"))
+```
+
+
+```{r}
 ## Add in correct fipschar ----
 pos_med <- adrd_ratios_df %>%
   mutate(y = log(observed) - log(expected)) %>% 
@@ -157,7 +185,7 @@ pos_med %>%
   geom_point(aes(x = y, y = pos_med_y, col = as.factor(race)))
 ```
 
-## Decompose log ratios
+## Decompose log relative risk
 
 ```{r}
 summary(stanfit_samples$delta)
@@ -181,6 +209,18 @@ shared <- rbind(
     race = 2, 
     c_idx = 1:ncol(shared_b))
 )
+
+# is phi (shared, unscaled) for each county significantly different from 1?
+phi_sig <- data.frame(
+    shared_unscaled_sig = 
+      (colMeans(exp(stanfit_samples$phi) > 1) > 0.8) | 
+      (colMeans(exp(stanfit_samples$phi) < 1) > 0.8),
+    c_idx = 1:ncol(stanfit_samples$phi)
+)
+
+# Join sig column
+shared %<>% 
+  dplyr::left_join(phi_sig, by = c("c_idx"))
 
 ## Add in correct fipschar ----
 pos_med %<>% 
@@ -210,6 +250,26 @@ specific <- rbind(
     c_idx = 1:ncol(specific_b))
 )
 
+# is psi for each county for each race significantly different from 1?
+psi_sig <- rbind(
+  tibble(
+    race = 1,  
+    specific_sig = 
+      (colMeans(exp(specific_w) > 1) > 0.8) | 
+      (colMeans(exp(specific_w) < 1) > 0.8),
+    c_idx = 1:ncol(specific_w)),
+  tibble(
+    race = 2,  
+    specific_sig = 
+      (colMeans(exp(specific_b) > 1) > 0.8) | 
+      (colMeans(exp(specific_b) < 1) > 0.8),
+    c_idx = 1:ncol(specific_b))
+)
+
+# Join sig column
+specific %<>% 
+  dplyr::left_join(psi_sig, by = c("c_idx", "race"))
+
 ## Add in correct fipschar ----
 pos_med %<>% 
   dplyr::left_join(specific, by = c("c_idx", "race"))
@@ -222,7 +282,7 @@ specific %>%
 ```
 
 ```{r}
-write_rds(pos_med, "../data/intermediate/m0-pos_med.rds")
-write_rds(stanfit_samples, "../data/intermediate/m0-stanfit_samples.rds")
-write_rds(stanfit_summary, "../data/intermediate/m0-stanfit_summary.rds")
+write_rds(pos_med, "data/intermediate/m0-pos_med.rds")
+write_rds(stanfit_samples, "data/intermediate/m0-stanfit_samples.rds")
+write_rds(stanfit_summary, "data/intermediate/m0-stanfit_summary.rds")
 ```
