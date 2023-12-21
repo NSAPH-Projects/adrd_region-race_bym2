@@ -1,15 +1,22 @@
 
+```{r setup, include=FALSE}
+## Set working directory as project root
+library(here)
+knitr::opts_knit$set(root.dir = here())
+```
+
 ```{r, message=FALSE, warning=FALSE}
 ## Load libraries ----
 library(tidyverse)
 library(magrittr)
 library(bayesplot)
+library(here)
 ```
 
 ```{r}
 ## Read data ----
 #slurm job number 1307317 for m0 is labeled model_run_20230311_185502
-stanfit_object <- read_rds("../results/models/model_run_20230311_185502/stanfit_object.rds")
+stanfit_object <- read_rds("results/models/m0/model_run_20231109_142035/stanfit_object.rds")
 
 class(stanfit_object)
 ```
