@@ -136,7 +136,8 @@ model {
     // Likelihood
     for (i in 1:m) {
         if(pop[i] != 0){
-            real log_mu = log_offset[i] + 
+            real log_mu = log_offset[i] +
+            // log_mu[i] = log_offset[i] + 
                 alpha[1]  * d1_idx[i] +                 // white average
                 alpha[2]  * d2_idx[i] +                 // black average 
                 d1_idx[i] * (phi[c_idx[i]] * delta + psi[1][c_idx[i]]) +  
