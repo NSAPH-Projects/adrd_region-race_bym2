@@ -362,9 +362,9 @@ library(sf)
 library(RColorBrewer)
 library(viridis)</code></pre>
 <pre class="r"><code>## Read data ----
-hosp_county_df &lt;- read_rds(&quot;../data/symlinks/temp/hosp_county_df.rds&quot;)
-county_sf &lt;- read_rds(&quot;../data/symlinks/temp/county_sf.rds&quot;)
-county_fips_df &lt;- read_rds(&quot;../data/symlinks/temp/county_fips_df.rds&quot;)
+hosp_county_df &lt;- read_rds(&quot;../data/symlinks/scratch/hosp_county_df.rds&quot;)
+county_sf &lt;- read_rds(&quot;../data/symlinks/scratch/county_sf.rds&quot;)
+county_fips_df &lt;- read_rds(&quot;../data/symlinks/scratch/county_fips_df.rds&quot;)
 
 length(unique(hosp_county_df$county))</code></pre>
 <pre><code>## [1] 3108</code></pre>
@@ -796,7 +796,7 @@ hosp_ratios_df %&lt;&gt;%
 <pre><code>## [1] 0</code></pre>
 <pre class="r"><code>sum(is.na(hosp_ratios_df$person_years))</code></pre>
 <pre><code>## [1] 0</code></pre>
-<pre class="r"><code>write_rds(hosp_ratios_df, &quot;../data/symlinks/temp/hosp_ratios_df.rds&quot;)</code></pre>
+<pre class="r"><code>write_rds(hosp_ratios_df, &quot;../data/symlinks/scratch/hosp_ratios_df.rds&quot;)</code></pre>
 </div>
 
 
