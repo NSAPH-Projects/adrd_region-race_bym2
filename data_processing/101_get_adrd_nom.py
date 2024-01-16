@@ -86,13 +86,13 @@ if __name__ == "__main__":
                        )
     parser.add_argument('--outcomes_prefix', 
                         type=str, 
-                        default='data/symlinks/temp/outcomes')
+                        default='data/symlinks/scratch/outcomes')
     parser.add_argument("--output_format", 
                         default = "parquet", 
                         choices=["parquet", "feather", "csv"]
                        )           
     parser.add_argument("--output_prefix", 
-                    default = "data/symlinks/temp/adrd_nom"
+                    default = "data/symlinks/scratch/adrd_nom"
                    )
     args = parser.parse_args()
 

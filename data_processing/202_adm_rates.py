@@ -60,17 +60,17 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--bene_county_csv',
                         type=str, 
-                        default='data/symlinks/temp/bene_county.csv')
+                        default='data/symlinks/scratch/bene_county.csv')
     parser.add_argument('--admissions_county_csv', 
                         type=str,
-                        default='data/symlinks/temp/adrd_county.csv') # 'data/symlinks/temp/hosp_county.csv'
+                        default='data/symlinks/scratch/adrd_county.csv') # 'data/symlinks/scratch/hosp_county.csv'
     parser.add_argument('--output_file',
                         type=str,
-                        default='data/symlinks/temp/adrd_rates.csv') # 'data/symlinks/temp/hosp_rates.csv'
+                        default='data/symlinks/scratch/adrd_rates.csv') # 'data/symlinks/scratch/hosp_rates.csv'
     args = parser.parse_args()
 
     logging.info(args)
     main(args)
 
-# python data_processing/202_adm_rates.py --admissions_county_csv data/symlinks/temp/adrd_county.csv --output_file data/symlinks/temp/adrd_rates.csv
-# python data_processing/202_adm_rates.py --admissions_county_csv data/symlinks/temp/hosp_county.csv --output_file data/symlinks/temp/hosp_rates.csv
+# python data_processing/202_adm_rates.py --admissions_county_csv data/symlinks/scratch/adrd_county.csv --output_file data/symlinks/scratch/adrd_rates.csv
+# python data_processing/202_adm_rates.py --admissions_county_csv data/symlinks/scratch/hosp_county.csv --output_file data/symlinks/scratch/hosp_rates.csv
