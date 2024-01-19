@@ -1,0 +1,449 @@
+
+```{r setup, include=FALSE}
+## Set working directory as project root
+library(here)
+knitr::opts_knit$set(root.dir = here())
+```
+
+```{r, message=FALSE, warning=FALSE}
+## load packages ----
+library(tidyverse)
+library(magrittr)
+library(sf)
+```
+
+In this notebook we make sure that the counties match in all objects: the adjacency matrix, geometry, adrd rates, sociodemographic and pollution data.
+
+## Adjacency matrix
+
+```{r}
+####
+# Download adjacency
+####
+
+## Import data ----
+county_adj_df <- readr::read_delim(
+    'data/county/county_adjacency.txt',
+    delim = "\t",
+    escape_double = FALSE,
+    col_names = c("name_i", "fips_i",
+                  "name_j", "fips_j"),
+    trim_ws = TRUE
+)
+
+county_adj_df
+```
+
+```{r}
+## Forward fill ----
+county_adj_df <- zoo::na.locf(county_adj_df)
+
+## Remove self loops and add state fips ----
+county_adj_df <- county_adj_df %>%
+    dplyr::filter(fips_i != fips_j) %>%
+    dplyr::mutate(state_i = substr(fips_i, 1, 2),
+                  state_j = substr(fips_j, 1, 2))
+
+## Fix FIPS ----
+## Bedford City got lumped together with Bedford county in CMF data
+county_adj_df <- county_adj_df %>%
+    dplyr::filter(fips_i != "51515",
+                  fips_j != "51515")
+
+## Now remove states/territories we won't use ----
+county_adj_df <- dplyr::filter(county_adj_df,
+                                  !state_i %in% c("02","15", "66", "72", "60", "69", "78"),
+                                  !state_j %in% c("02","15", "66", "72", "60", "69", "78"))
+
+county_adj_df %<>% 
+  mutate(county = as.numeric(fips_i))
+
+county_adj_df
+```
+
+## Shapefiles
+
+```{r}
+## read county shp files
+county_sf <- read_sf("data/county/tl_2015_us_county/tl_2015_us_county.shp") %>%
+  filter(!STATEFP %in% c("02","15", "66", "72", "60", "69", "78")) %>% 
+  mutate(county = as.numeric(GEOID))
+
+dim(county_sf)
+length(unique(county_adj_df$fips_i))
+length(unique(county_adj_df$fips_j))
+length(unique(county_adj_df$county))
+
+counties_adj_ = unique(county_adj_df$county)
+counties_shp_ = unique(county_sf$county)
+
+setdiff(counties_shp_, counties_adj_) #46102
+setdiff(counties_adj_, counties_shp_) #46113
+```
+
+```{r}
+county_sf %>%
+  st_simplify() %>%
+  ggplot() +
+  geom_sf() + 
+  geom_sf(data = county_sf[!county_sf$county %in% counties_adj_, ], fill="blue")
+```
+
+```{r}
+county_sf$county[county_sf$county == 46102] <- 46113 #Oglala Lakota County, SD. Shannon County, SD (FIPS code = 46113) was renamed Oglala Lakota County and assigned anew FIPS code (46102) effective in 2014
+
+counties_adj_ = unique(county_adj_df$county)
+counties_shp_ = unique(county_sf$county)
+
+setdiff(counties_shp_, counties_adj_)
+setdiff(counties_adj_, counties_shp_)
+
+write_rds(county_sf, "data/symlinks/temp/county_sf.rds")
+```
+
+## ADRD data
+
+```{r}
+adrd_county_df <- read_csv("../data/symlinks/temp/adrd_rates.csv") %>% 
+  filter(!state %in% c(2, 15, 66, 72, 60, 69, 78))
+
+counties_adrd_ = unique(adrd_county_df$county)
+
+length(counties_adrd_) #3109
+setdiff(counties_adrd_, counties_adj_) 
+#when using 2010 crosswalk 51515 51560
+#when using 2015 crosswalk 46102
+setdiff(counties_adj_, counties_adrd_) 
+#when using 2010 crosswalk 8014
+#when using 2015 crosswalk none
+```
+
+```{r}
+#Shannon County, SD (FIPS code = 46113) was renamed Oglala Lakota County and assigned anew FIPS code (46102) effective in 2014
+zip_county <- read.csv("data/county/zip_county_2015.csv")
+
+zip_county %>% 
+  filter(county %in% c(46113, 46102))
+```
+
+```{r}
+adrd_county_df$county[adrd_county_df$county == 46102] <- 46113
+
+adrd_county_df %<>% 
+  group_by(county, year, race, sex, age_grp, state) %>% 
+  summarise(n_enrollees = sum(n_enrollees), 
+            n_admissions = sum(n_admissions)) %>% 
+  ungroup()
+```
+
+```{r}
+counties_adrd_ = unique(adrd_county_df$county)
+
+length(counties_adrd_)
+setdiff(counties_adrd_, counties_adj_)
+setdiff(counties_adj_, counties_adrd_)
+```
+
+## Sociodemographic
+
+* year 2000
+
+```{r}
+census_county_df <- read_csv("data/symlinks/prepped_census/census_county_interpolated.csv") %>% 
+  rename(county = fips) %>% 
+  mutate(county = as.numeric(county), 
+         state = round(county / 1000)) %>% 
+  filter(!state %in% c(2, 15, 66, 72, 60, 69, 78))
+
+census_county_2000_df <- census_county_df %>% 
+  filter(year == 2000, 
+         !is.na(median_household_income)) 
+
+counties_census_ = unique(census_county_2000_df$county)
+
+length(counties_census_)
+setdiff(counties_census_, counties_adj_) #46102
+setdiff(counties_adj_, counties_census_) #46113
+```
+
+```{r}
+census_county_2000_df$county[census_county_2000_df$county == 46102] <- 46113
+sum(is.na(census_county_2000_df$median_household_income))
+```
+
+* year 2010
+
+```{r}
+census_county_2010_df <- census_county_df %>% 
+  filter(year == 2010, 
+         !is.na(median_household_income)) 
+
+counties_census_ = unique(census_county_2010_df$county)
+
+length(counties_census_)
+setdiff(counties_census_, counties_adj_) #46102
+setdiff(counties_adj_, counties_census_) #46113
+```
+
+```{r}
+census_county_2010_df$county[census_county_2010_df$county == 46102] <- 46113
+sum(is.na(census_county_2010_df$median_household_income))
+```
+
+```{r}
+median_household_df <- census_county_2000_df %>% 
+  rename(med_house_income_2000 = median_household_income) %>% 
+  select(county, med_house_income_2000) %>% 
+  left_join(
+    census_county_2010_df %>% 
+    rename(med_house_income_2010 = median_household_income) %>% 
+    select(county, med_house_income_2010)
+  ) 
+
+median_household_df$med_house_income <- rowMeans(median_household_df[,-1])
+```
+
+## Pollution
+
+```{r, echo=FALSE, message=FALSE}
+pollution_county_df <- read_csv("data/symlinks/county_rm/data/county_pm25_2000.csv")
+years_ <- 2001:2018
+for(y_ in years_) {
+  pollution_county_df <- rbind(pollution_county_df, 
+                               read_csv(paste0("data/symlinks/county_rm/data/county_pm25_", y_, ".csv")))
+}
+pollution_county_df %<>% 
+  group_by(fips) %>% 
+  summarise(pm25 = mean(pm25))
+```
+
+```{r}
+pollution_county_df %<>% 
+  rename(county = fips) %>% 
+  mutate(county = as.numeric(county), 
+         state = round(county / 1000)) %>% 
+  filter(!state %in% c(2, 15, 66, 72, 60, 69, 78))
+
+counties_pollution_ = unique(pollution_county_df$county)
+
+length(counties_pollution_)
+setdiff(counties_pollution_, counties_adj_) #46102
+setdiff(counties_adj_, counties_pollution_) #46113
+```
+
+```{r}
+pollution_county_df$county[pollution_county_df$county == 46102] <- 46113
+```
+
+* merge datasets
+
+```{r}
+adrd_county_df %<>%
+  left_join(
+    median_household_df %>% select(county, med_house_income)
+  ) %>% 
+  left_join(
+    pollution_county_df %>% select(county, pm25)
+  )
+
+write_rds(adrd_county_df, "../data/symlinks/temp/adrd_county_df.rds")
+```
+
+```{r}
+lapply(adrd_county_df, summary)
+```
+
+<!-- ```{r} -->
+<!-- colorado_sf <- county_sf %>%  -->
+<!--   filter(STATEFP == "08")  -->
+
+<!-- colorado_sf %>%  -->
+<!--   st_simplify() %>% -->
+<!--   ggplot() + -->
+<!--   geom_sf() +  -->
+<!--   geom_sf(data = colorado_sf[!colorado_sf$county %in% counties_adrd_, ], fill="blue") -->
+<!-- ``` -->
+
+<!-- ```{r} -->
+<!-- # county 8014 = CO,08,014,Broomfield County -->
+<!-- # Broomfield county (FIPS 8014) is created out of parts of Adams, Boulder, Jefferson, and Weld counties. The Census Bureau estimates that the resulting population loss was 21,512 for Boulder, 15,870 for Adams, 1,726 for Jefferson, and 69 for Weld county. -->
+<!-- xx <- adrd_county_df[adrd_county_df$county == 8013, ] -->
+<!-- xx$county <- 8014 -->
+<!-- adrd_county_df <- rbind(adrd_county_df, xx) -->
+
+<!-- adrd_county_df <- adrd_county_df[!adrd_county_df$county %in% c(51515, 51560), ] -->
+
+<!-- counties_adrd_ = unique(adrd_county_df$county) -->
+
+<!-- length(counties_adrd_) -->
+<!-- setdiff(counties_adrd_, counties_adj_) -->
+<!-- setdiff(counties_adj_, counties_adrd_) -->
+
+<!-- write_rds(adrd_county_df, "../data/intermediate/adrd_county_df.rds") -->
+<!-- ``` -->
+
+```{r}
+####
+# Create IDs and dummies
+####
+
+## Adding dummy FIPS ----
+add_dummy_county_ids <- function(county_adj_df) {
+  ## Just returns a County Adjacency matrix with two new columns -- each
+  ## representing a dummy variable from 1:n_counties
+  
+  ## Sort by FIPS
+  new_adj <- dplyr::arrange(county_adj_df, fips_i, fips_j)
+  
+  ## Make a dummy dictionary that with FIPS as the key and a dummy as value.
+  dummies <- as.list(1:length(unique(new_adj$fips_i)))
+  names(dummies) <- unique(new_adj$fips_i)
+  
+  ## Then make a dummy for node_i and node_j
+  new_adj$dummy_i <-
+    unlist(dummies[new_adj$fips_i], use.names = FALSE)
+  new_adj$dummy_j <-
+    unlist(dummies[new_adj$fips_j], use.names = FALSE)
+  
+  return(new_adj)
+}
+
+add_dummy_state_ids <- function(county_adj_df) {
+  ## Just returns a County Adjacency matrix with two new columns -- each
+  ## representing a dummy variable from 1:n_states
+  
+  ## Sort by FIPS
+  new_adj <- dplyr::arrange(county_adj_df, fips_i, fips_j)
+  
+  ## Make a dummy dictionary that with FIPS as the key and a dummy as value.
+  dummies <- as.list(1:length(unique(new_adj$state_i)))
+  names(dummies) <- unique(new_adj$state_i)
+  
+  ## Then make a dummy for node_i and node_j
+  new_adj$dummy_state_i <-
+    unlist(dummies[new_adj$state_i], use.names = FALSE)
+  new_adj$dummy_state_j <-
+    unlist(dummies[new_adj$state_j], use.names = FALSE)
+  
+  return(new_adj)
+}
+
+county_adj_df <- add_dummy_county_ids(county_adj_df)
+county_adj_df <- add_dummy_state_ids(county_adj_df)
+
+county_adj_df
+```
+
+```{r}
+####
+# Obtain a table of county IDs
+####
+
+## Save a unique mapping of FIPS to state and county dummy codes ----
+county_fips_df <- county_adj_df %>%
+    dplyr::select(
+        county_name = name_i,
+        county = county, 
+        fipschar = fips_i,
+        fips_st = state_i,
+        c_idx = dummy_i,
+        s_idx = dummy_state_i
+    ) %>%
+    dplyr::distinct() %>%
+    dplyr::mutate(st_abbr = unlist(lapply(strsplit(county_name, split = ", "),
+                                          function(x)
+                                              x[[2]])))
+county_fips_df
+```
+
+```{r}
+length(unique(county_fips_df$county))
+length(unique(adrd_county_df$county))
+```
+
+```{r}
+## Save a sparse adjacency representation (for Stan) ----
+
+make_county_adj_matrix <- function(county_adj_df) {
+    ## Converts a County Adjacency dataframe into a traditional adjacency matrix
+    ## of size n_counties x n_counties with 1 representing neighbors.
+    
+    ## Number of neighbors
+    num <- county_adj_df %>%
+        dplyr::group_by(dummy_i) %>%
+        dplyr::summarize(neighbors_i = dplyr::n()) %>%
+        dplyr::pull(neighbors_i)
+    
+    ## List of neighbors
+    adj <- county_adj_df$dummy_j
+    
+    ## Create an appropriately sized matrix
+    n_nodes <- length(num)
+    A <- matrix(0L, nrow = n_nodes, ncol = n_nodes)
+    
+    ## Loop through num and adj and assign 1 to neighbors
+    start_ix <- end_ix <- 0
+    for (node in seq_along(num)) {
+        for (n_neigh in num[node]) {
+            start_ix  <- end_ix + 1
+            end_ix    <- end_ix + n_neigh
+            
+            neighbors <- adj[start_ix:end_ix]
+            
+            A[node, neighbors] <- 1L
+        }
+    }
+    return(A)
+}
+
+make_county_adj_sparse_list <- function(adj_matrix) {
+  ## This is taken from mbjoseph CARstan repo -- returns a sparse
+  ## representation of an adjacency matrix in the format that Stan needs
+  ## Number of neighbors
+  D_sparse <- rowSums(adj_matrix)
+  
+  ## Kyle Foreman script -- undirected graph so second line removes dupes
+  W_sparse <- which(adj_matrix == 1, arr.ind = TRUE)
+  W_sparse <- W_sparse[W_sparse[, 1] < W_sparse[, 2], ]
+  
+  ## Get eigenvalues of D^(-.5) * W * D^(-.5) for determinant computations
+  invsqrtD <- diag(1 / sqrt(D_sparse))
+  quadformDAD <- invsqrtD %*% adj_matrix %*% invsqrtD
+  lambdas <- eigen(quadformDAD)$values
+  
+  ## Number of edges
+  W_n <- nrow(W_sparse)
+  
+  return(list(
+    D_sparse = D_sparse,
+    W_sparse = W_sparse,
+    lambdas = lambdas,
+    W_n = W_n
+  ))
+}
+
+county_adj_matrix <- make_county_adj_matrix(county_adj_df)
+county_adj_sparse_list <- make_county_adj_sparse_list(county_adj_matrix)
+names(county_adj_sparse_list)
+```
+
+```{r}
+# Use return_sparse_parts(A) for these next ones
+D_sparse = county_adj_sparse_list$D_sparse
+# neighbors per node
+W_sparse = county_adj_sparse_list$W_sparse
+# adjacent pairs
+lambda = county_adj_sparse_list$lambdas
+# eigenvalues
+W_n = nrow(county_adj_sparse_list$W_sparse)
+           
+length(D_sparse)
+dim(W_sparse)
+length(lambda)
+W_n
+```
+
+```{r}
+write_rds(county_adj_sparse_list, "data/symlinks/temp/county_adj_sparse_list.rds")
+write_rds(county_fips_df, "data/symlinks/temp/county_fips_df.rds")
+```
