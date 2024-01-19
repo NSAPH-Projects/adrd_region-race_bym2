@@ -1,4 +1,10 @@
 
+```{r setup, include=FALSE}
+## Set working directory as project root
+library(here)
+knitr::opts_knit$set(root.dir = here())
+```
+
 ```{r, message=FALSE, warning=FALSE}
 ## Load libraries ----
 library(tidyverse)
@@ -13,9 +19,9 @@ library(viridis)
 
 ```{r}
 ## Read data ----
-adrd_county_df <- read_rds("../data/symlinks/temp/adrd_county_df.rds")
-county_sf <- read_rds("../data/symlinks/temp/county_sf.rds")
-county_fips_df <- read_rds("../data/symlinks/temp/county_fips_df.rds")
+adrd_county_df <- read_rds("data/symlinks/temp/adrd_county_df.rds")
+county_sf <- read_rds("data/symlinks/temp/county_sf.rds")
+county_fips_df <- read_rds("data/symlinks/temp/county_fips_df.rds")
 
 length(unique(adrd_county_df$county))
 length(unique(county_sf$county))
@@ -145,7 +151,7 @@ xx %>%
   geom_point(aes(x = age_grp, y = adrd_rate, color = sex)) + 
   labs(title = "ADRD reference rates", x = "Age group", y = "ADRD rate") + 
   theme_bw()
-ggsave("../results/figures/adrd_reference_rates.png")
+ggsave("results/figures/adrd_reference_rates.png")
 ```
 
 ```{r}
@@ -431,5 +437,13 @@ sum(is.na(adrd_ratios_df$person_years))
 ```
 
 ```{r}
-write_rds(adrd_ratios_df, "../data/symlinks/temp/adrd_ratios_df.rds")
+# merge back in median household income (eventually use ratio)
+adrd_ratios_df %<>%
+  left_join(adrd_county_df %>%
+              dplyr::select(county, med_house_income) %>% distinct(),
+            by = "county")
+```
+
+```{r}
+write_rds(adrd_ratios_df, "data/symlinks/temp/adrd_ratios_df.rds")
 ```

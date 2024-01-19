@@ -1,4 +1,10 @@
 
+```{r setup, include=FALSE}
+## Set working directory as project root
+library(here)
+knitr::opts_knit$set(root.dir = here())
+```
+
 ```{r, message=FALSE, warning=FALSE}
 ## load packages ----
 library(tidyverse)
@@ -17,7 +23,7 @@ In this notebook we make sure that the counties match in all objects: the adjace
 
 ## Import data ----
 county_adj_df <- readr::read_delim(
-    '../data/county/county_adjacency.txt',
+    'data/county/county_adjacency.txt',
     delim = "\t",
     escape_double = FALSE,
     col_names = c("name_i", "fips_i",
@@ -59,7 +65,7 @@ county_adj_df
 
 ```{r}
 ## read county shp files
-county_sf <- read_sf("../data/county/tl_2015_us_county/tl_2015_us_county.shp") %>%
+county_sf <- read_sf("data/county/tl_2015_us_county/tl_2015_us_county.shp") %>%
   filter(!STATEFP %in% c("02","15", "66", "72", "60", "69", "78")) %>% 
   mutate(county = as.numeric(GEOID))
 
@@ -92,7 +98,7 @@ counties_shp_ = unique(county_sf$county)
 setdiff(counties_shp_, counties_adj_)
 setdiff(counties_adj_, counties_shp_)
 
-write_rds(county_sf, "../data/symlinks/temp/county_sf.rds")
+write_rds(county_sf, "data/symlinks/temp/county_sf.rds")
 ```
 
 ## ADRD data
@@ -114,7 +120,7 @@ setdiff(counties_adj_, counties_adrd_)
 
 ```{r}
 #Shannon County, SD (FIPS code = 46113) was renamed Oglala Lakota County and assigned anew FIPS code (46102) effective in 2014
-zip_county <- read.csv("../data/county/zip_county_2015.csv")
+zip_county <- read.csv("data/county/zip_county_2015.csv")
 
 zip_county %>% 
   filter(county %in% c(46113, 46102))
@@ -143,7 +149,7 @@ setdiff(counties_adj_, counties_adrd_)
 * year 2000
 
 ```{r}
-census_county_df <- read_csv("../data/symlinks/prepped_census/census_county_interpolated.csv") %>% 
+census_county_df <- read_csv("data/symlinks/prepped_census/census_county_interpolated.csv") %>% 
   rename(county = fips) %>% 
   mutate(county = as.numeric(county), 
          state = round(county / 1000)) %>% 
@@ -200,11 +206,11 @@ median_household_df$med_house_income <- rowMeans(median_household_df[,-1])
 ## Pollution
 
 ```{r, echo=FALSE, message=FALSE}
-pollution_county_df <- read_csv("../data/symlinks/county_rm/data/county_pm25_2000.csv")
+pollution_county_df <- read_csv("data/symlinks/county_rm/data/county_pm25_2000.csv")
 years_ <- 2001:2018
 for(y_ in years_) {
   pollution_county_df <- rbind(pollution_county_df, 
-                               read_csv(paste0("../data/symlinks/county_rm/data/county_pm25_", y_, ".csv")))
+                               read_csv(paste0("data/symlinks/county_rm/data/county_pm25_", y_, ".csv")))
 }
 pollution_county_df %<>% 
   group_by(fips) %>% 
@@ -438,6 +444,6 @@ W_n
 ```
 
 ```{r}
-write_rds(county_adj_sparse_list, "../data/symlinks/temp/county_adj_sparse_list.rds")
-write_rds(county_fips_df, "../data/symlinks/temp/county_fips_df.rds")
+write_rds(county_adj_sparse_list, "data/symlinks/temp/county_adj_sparse_list.rds")
+write_rds(county_fips_df, "data/symlinks/temp/county_fips_df.rds")
 ```
