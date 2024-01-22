@@ -79,16 +79,38 @@ mcmc_rhat(rhat_of_draws[grep('psi\\[1', names(rhat_of_draws))])
 mcmc_rhat(rhat_of_draws[grep('psi\\[2', names(rhat_of_draws))])
 ```
 
+```{r}
+# nu
+mcmc_rhat(rhat_of_draws[grep('nu', names(rhat_of_draws))])
+```
 
 
 
+#### Lauren experimenting
+
+```{r}
+# try some trace plots
+mcmc_trace(stanfit_object, pars = "alpha[1]")
+mcmc_trace(stanfit_object, pars = "delta")
+mcmc_trace(stanfit_object, pars = "psi[1,62]")
+
+# now try trace plots specifically for variables with high Rhat values
+
+# get high rhat vars
+high_rhat <- rhat_of_draws[order(desc(rhat_of_draws))[1:50]]
+
+mcmc_trace(stanfit_object, pars = "psi[1,335]")
+
+```
 
 
+```{r}
+library(rstan)
 
+# Get summary information, including effective sample size
+summary_info <- summary(stanfit_object)
 
-
-
-
-
-
+# Extract the effective sample size for each parameter
+ess <- summary_info$summary[, "n_eff"]
+```
 
