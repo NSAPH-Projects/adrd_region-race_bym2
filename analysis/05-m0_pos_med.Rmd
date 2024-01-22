@@ -92,7 +92,7 @@ dim(stanfit_samples$phi)
 dim(stanfit_samples$nu)
 ```
 
-# log ratios
+# log relative risk
 
 ```{r}
 ## obtain posterior predictive values ----
@@ -117,12 +117,12 @@ for (s in 1:nrow(nu_counts)) {
     nu_expanded[, start_ix:end_ix] <- stanfit_samples$nu[, s]
 }
 
-# white log ratios
+# white log relative risk
 posterior_white <- stanfit_samples$alpha1 + stanfit_samples$psi1 + 
   (stanfit_samples$phi * stanfit_samples$delta) + 
   nu_expanded
 
-# black log ratios
+# black log relative risk
 posterior_black <- stanfit_samples$alpha2 + stanfit_samples$psi2 +
             (stanfit_samples$phi / stanfit_samples$delta) +
             nu_expanded
@@ -132,7 +132,22 @@ dim(posterior_white)
 ```
 
 ```{r}
-# posterior median log ratios
+# risk ratios
+posterior_risk_ratio <- exp(posterior_black - posterior_white)
+
+pos_med_rr <- data.frame(
+  risk_ratio = matrixStats::colMedians(posterior_risk_ratio),
+  c_idx = 1:ncol(posterior_risk_ratio)
+)
+
+# which columns (counties) have risk ratios significantly different from 1?
+pos_med_rr$risk_ratio_sig <- (colMeans(posterior_risk_ratio > 1) > 0.8) | (colMeans(posterior_risk_ratio < 1) > 0.8)
+
+```
+
+
+```{r}
+# posterior median log relative risk
 pos_med <- rbind(
   tibble(
     pos_med_y = matrixStats::colMedians(posterior_white), 
@@ -147,8 +162,14 @@ pos_med <- rbind(
 pos_med %>% 
   mutate(race = as.character(race)) %>% 
   ggplot() + 
-  geom_density(aes(x = pos_med_y, color = race), size = 1) + 
+  geom_density(aes(x = pos_med_y, color = race), linewidth = 1) + 
   theme_classic()
+```
+
+```{r}
+# join pos_med and pos_med_rr
+pos_med <- pos_med %>%
+  dplyr::left_join(pos_med_rr, by = c("c_idx"))
 ```
 
 
@@ -188,6 +209,19 @@ shared <- rbind(
     c_idx = 1:ncol(shared_b))
 )
 
+# is exp(phi) (shared, unscaled) for each county significantly different from 1?
+# (this is how significance is defined in figure 2 caption)
+phi_sig <- data.frame(
+    shared_unscaled_sig = 
+      (colMeans(exp(stanfit_samples$phi) > 1) > 0.8) | 
+      (colMeans(exp(stanfit_samples$phi) < 1) > 0.8),
+    c_idx = 1:ncol(stanfit_samples$phi)
+)
+
+# Join sig column
+shared %<>% 
+  dplyr::left_join(phi_sig, by = c("c_idx"))
+
 ## Add in correct fipschar ----
 pos_med %<>% 
   dplyr::left_join(shared, by = c("c_idx", "race"))
@@ -216,6 +250,27 @@ specific <- rbind(
     c_idx = 1:ncol(specific_b))
 )
 
+# is exp(psi) for each county for each race significantly different from 1?
+# (this is how significance is defined in figure 2 caption)
+psi_sig <- rbind(
+  tibble(
+    race = 1,  
+    specific_sig = 
+      (colMeans(exp(specific_w) > 1) > 0.8) | 
+      (colMeans(exp(specific_w) < 1) > 0.8),
+    c_idx = 1:ncol(specific_w)),
+  tibble(
+    race = 2,  
+    specific_sig = 
+      (colMeans(exp(specific_b) > 1) > 0.8) | 
+      (colMeans(exp(specific_b) < 1) > 0.8),
+    c_idx = 1:ncol(specific_b))
+)
+
+# Join sig column
+specific %<>% 
+  dplyr::left_join(psi_sig, by = c("c_idx", "race"))
+
 ## Add in correct fipschar ----
 pos_med %<>% 
   dplyr::left_join(specific, by = c("c_idx", "race"))
@@ -225,6 +280,51 @@ specific %>%
   ggplot() + 
   geom_density(aes(x = specific, color = race), size = 1) + 
   theme_classic()
+```
+
+```{r}
+# report distribution of county-level relative risks (exp(pos_med_y) which is exp(log lambda))
+
+#----- for white people:
+
+lambda_w <- pos_med |>
+  filter(race == 1) |>
+  pull(pos_med_y) |>
+  exp()
+
+# get min, max, median
+min(lambda_w)
+median(lambda_w)
+max(lambda_w)
+
+# get 5th and 95th percentiles
+quantile(lambda_w, c(0.05, 0.95))
+# relative risk at 95th percentile is 3.0 times higher than at 5th percentile
+
+
+#----- for Black people:
+
+lambda_b <- pos_med |>
+  filter(race == 2) |>
+  pull(pos_med_y) |>
+  exp()
+
+# get min, max, median
+min(lambda_b)
+median(lambda_b)
+max(lambda_b)
+
+# get 5th and 95th percentiles
+quantile(lambda_b, c(0.05, 0.95))
+# relative risk at 95th percentile is 3.1 times higher than at 5th percentile
+```
+
+```{r}
+# report distribution of county-level risk ratios
+
+min(pos_med$risk_ratio)
+median(pos_med$risk_ratio)
+max(pos_med$risk_ratio)
 ```
 
 ```{r}
