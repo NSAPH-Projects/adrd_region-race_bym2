@@ -83,7 +83,7 @@ if __name__ == "__main__":
                         choices=["parquet", "feather", "csv"]
                        )           
     parser.add_argument("--output_prefix", 
-                    default = "data/symlinks/temp/hosp_nom"
+                    default = "data/symlinks/scratch/hosp_nom"
                    )
     args = parser.parse_args()
 

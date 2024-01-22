@@ -103,7 +103,7 @@ if __name__ == "__main__":
                         choices=["parquet", "feather", "csv"]
                        )           
     parser.add_argument("--output_prefix", 
-                    default = "data/symlinks/temp/outcomes"
+                    default = "data/symlinks/scratch/outcomes"
                    )
     args = parser.parse_args()
 

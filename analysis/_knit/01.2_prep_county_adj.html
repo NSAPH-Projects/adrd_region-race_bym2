@@ -472,11 +472,11 @@ setdiff(counties_shp_, counties_adj_)</code></pre>
 <pre><code>## numeric(0)</code></pre>
 <pre class="r"><code>setdiff(counties_adj_, counties_shp_)</code></pre>
 <pre><code>## numeric(0)</code></pre>
-<pre class="r"><code>#write_rds(county_sf, &quot;../data/symlinks/temp/county_sf.rds&quot;)</code></pre>
+<pre class="r"><code>#write_rds(county_sf, &quot;../data/symlinks/scratch/county_sf.rds&quot;)</code></pre>
 </div>
 <div id="all-cause-data" class="section level2">
 <h2>All-cause data</h2>
-<pre class="r"><code>hosp_county_df &lt;- read_csv(&quot;../data/symlinks/temp/hosp_rates.csv&quot;) %&gt;% 
+<pre class="r"><code>hosp_county_df &lt;- read_csv(&quot;../data/symlinks/scratch/hosp_rates.csv&quot;) %&gt;% 
   filter(!state %in% c(2, 15, 66, 72, 60, 69, 78))</code></pre>
 <pre><code>## Rows: 696384 Columns: 8
 ## ── Column specification ─────────────────────────────────────────────────────────────────────────────────────────────────────
@@ -622,7 +622,7 @@ length(counties_pollution_)</code></pre>
   )</code></pre>
 <pre><code>## Joining with `by = join_by(county)`
 ## Joining with `by = join_by(county)`</code></pre>
-<pre class="r"><code>write_rds(hosp_county_df, &quot;../data/symlinks/temp/hosp_county_df.rds&quot;)</code></pre>
+<pre class="r"><code>write_rds(hosp_county_df, &quot;../data/symlinks/scratch/hosp_county_df.rds&quot;)</code></pre>
 <pre class="r"><code>lapply(hosp_county_df, summary)</code></pre>
 <pre><code>## $county
 ##    Min. 1st Qu.  Median    Mean 3rd Qu.    Max. 

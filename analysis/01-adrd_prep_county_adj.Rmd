@@ -92,13 +92,13 @@ counties_shp_ = unique(county_sf$county)
 setdiff(counties_shp_, counties_adj_)
 setdiff(counties_adj_, counties_shp_)
 
-write_rds(county_sf, "../data/symlinks/temp/county_sf.rds")
+write_rds(county_sf, "../data/symlinks/scratch/county_sf.rds")
 ```
 
 ## ADRD data
 
 ```{r}
-adrd_county_df <- read_csv("../data/symlinks/temp/adrd_rates.csv") %>% 
+adrd_county_df <- read_csv("../data/symlinks/scratch/adrd_rates.csv") %>% 
   filter(!state %in% c(2, 15, 66, 72, 60, 69, 78))
 
 counties_adrd_ = unique(adrd_county_df$county)
@@ -240,7 +240,7 @@ adrd_county_df %<>%
     pollution_county_df %>% select(county, pm25)
   )
 
-write_rds(adrd_county_df, "../data/symlinks/temp/adrd_county_df.rds")
+write_rds(adrd_county_df, "../data/symlinks/scratch/adrd_county_df.rds")
 ```
 
 ```{r}
@@ -438,6 +438,6 @@ W_n
 ```
 
 ```{r}
-write_rds(county_adj_sparse_list, "../data/symlinks/temp/county_adj_sparse_list.rds")
-write_rds(county_fips_df, "../data/symlinks/temp/county_fips_df.rds")
+write_rds(county_adj_sparse_list, "../data/symlinks/scratch/county_adj_sparse_list.rds")
+write_rds(county_fips_df, "../data/symlinks/scratch/county_fips_df.rds")
 ```
