@@ -1,4 +1,10 @@
 
+```{r setup, include=FALSE}
+## Set working directory as project root
+library(here)
+knitr::opts_knit$set(root.dir = here())
+```
+
 ```{r, message=FALSE, warning=FALSE}
 ## Load libraries ----
 library(tidyverse)
@@ -9,18 +15,18 @@ library(rstan)
 
 ```{r}
 ## Read data ----
-adrd_ratios_df <- read_rds('../data/intermediate/adrd_ratios_df.rds')
+adrd_ratios_df <- read_rds('data/symlinks/temp/adrd_ratios_df.rds')
 adrd_ratios_df
 ```
 
 ```{r}
-county_fips_df <- read_rds("../data/intermediate/county_fips_df.rds")
+county_fips_df <- read_rds("data/symlinks/temp/county_fips_df.rds")
 county_fips_df
 ```
 
 ```{r}
 #slurm job number 1307317 for m0 is labeled model_run_20230311_185502
-stanfit_object <- read_rds("../results/models/model_run_20230311_185502/stanfit_object.rds")
+stanfit_object <- read_rds("results/models/adrd/m0/model_run_20231109_142035/stanfit_object.rds")
 
 class(stanfit_object)
 ```
@@ -222,7 +228,7 @@ specific %>%
 ```
 
 ```{r}
-write_rds(pos_med, "../data/intermediate/m0-pos_med.rds")
-write_rds(stanfit_samples, "../data/intermediate/m0-stanfit_samples.rds")
-write_rds(stanfit_summary, "../data/intermediate/m0-stanfit_summary.rds")
+write_rds(pos_med, "data/intermediate/m0-pos_med.rds")
+write_rds(stanfit_samples, "data/intermediate/m0-stanfit_samples.rds")
+write_rds(stanfit_summary, "data/intermediate/m0-stanfit_summary.rds")
 ```

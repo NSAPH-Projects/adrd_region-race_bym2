@@ -1,4 +1,10 @@
 
+```{r setup, include=FALSE}
+## Set working directory as project root
+library(here)
+knitr::opts_knit$set(root.dir = here())
+```
+
 ```{r, message=FALSE, warning=FALSE}
 ## Load libraries ----
 library(tidyverse)
@@ -9,7 +15,7 @@ library(bayesplot)
 ```{r}
 ## Read data ----
 #slurm job number 1307317 for m0 is labeled model_run_20230311_185502
-stanfit_object <- read_rds("../results/models/model_run_20230311_185502/stanfit_object.rds")
+stanfit_object <- read_rds("results/models/adrd/m0/model_run_20231109_142035/stanfit_object.rds")
 
 class(stanfit_object)
 ```
@@ -26,6 +32,9 @@ mcmc_rhat(rhat_of_draws)
 
 ```{r}
 names(rhat_of_draws)[1:100]
+
+# what % of parameters have R > 1.10?
+length(rhat_of_draws[rhat_of_draws > 1.10]) / length(rhat_of_draws)
 ```
 
 ```{r}

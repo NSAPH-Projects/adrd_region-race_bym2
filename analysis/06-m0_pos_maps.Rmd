@@ -1,4 +1,10 @@
 
+```{r setup, include=FALSE}
+## Set working directory as project root
+library(here)
+knitr::opts_knit$set(root.dir = here())
+```
+
 ```{r, message=FALSE, warning=FALSE}
 ## Load libraries ----
 library(tidyverse)
@@ -7,14 +13,17 @@ library(sf)
 library(cowplot)
 library(viridis)
 library(RColorBrewer)
+library(ggpubr)
 ```
 
 ```{r}
+## Read model results
+stanfit_samples <- read_rds("data/intermediate/m0-stanfit_samples.rds")
+stanfit_summary <- read_rds("data/intermediate/m0-stanfit_summary.rds")
+
 ## Read data ----
-stanfit_samples <- read_rds("../data/intermediate/m0-stanfit_samples.rds")
-stanfit_summary <- read_rds("../data/intermediate/m0-stanfit_summary.rds")
-county_sf <- read_rds("../data/intermediate/county_sf.rds")
-pos_med <- read_rds("../data/intermediate/m0-pos_med.rds")
+county_sf <- read_rds("data/symlinks/temp/county_sf.rds")
+pos_med <- read_rds("data/intermediate/m0-pos_med.rds")
 
 pos_med_sf <- county_sf %>% 
   select(county) %>% 
@@ -26,9 +35,9 @@ colnames(pos_med_sf)
 ```
 
 ```{r}
-county_sf <- read_rds("../data/intermediate/county_sf.rds")
-county_fips_df <- read_rds("../data/intermediate/county_fips_df.rds")
-state_sf <- read_sf("../data/input/local/tl_2015_us_state/tl_2015_us_state.shp")
+county_sf <- read_rds("data/symlinks/temp/county_sf.rds")
+county_fips_df <- read_rds("data/symlinks/temp/county_fips_df.rds")
+state_sf <- read_sf("data/county/tl_2015_us_state/tl_2015_us_state.shp")
 state_sf %<>% 
   left_join(
     county_sf %>% 
