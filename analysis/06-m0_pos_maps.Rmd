@@ -22,7 +22,7 @@ stanfit_samples <- read_rds("data/intermediate/m0-stanfit_samples.rds")
 stanfit_summary <- read_rds("data/intermediate/m0-stanfit_summary.rds")
 
 ## Read data ----
-county_sf <- read_rds("data/symlinks/temp/county_sf.rds")
+county_sf <- read_rds("data/symlinks/scratch/county_sf.rds")
 pos_med <- read_rds("data/intermediate/m0-pos_med.rds")
 
 pos_med_sf <- county_sf %>% 
@@ -35,8 +35,8 @@ colnames(pos_med_sf)
 ```
 
 ```{r}
-county_sf <- read_rds("data/symlinks/temp/county_sf.rds")
-county_fips_df <- read_rds("data/symlinks/temp/county_fips_df.rds")
+county_sf <- read_rds("data/symlinks/scratch/county_sf.rds")
+county_fips_df <- read_rds("data/symlinks/scratch/county_fips_df.rds")
 state_sf <- read_sf("data/county/tl_2015_us_state/tl_2015_us_state.shp")
 state_sf %<>% 
   left_join(
