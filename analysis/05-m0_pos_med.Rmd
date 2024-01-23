@@ -15,7 +15,7 @@ library(rstan)
 
 ```{r}
 ## Read data ----
-adrd_ratios_df <- read_rds('data/symlinks/temp/adrd_ratios_df.rds')
+adrd_ratios_df <- read_rds('data/symlinks/scratch/adrd_ratios_df.rds')
 adrd_ratios_df
 ```
 
