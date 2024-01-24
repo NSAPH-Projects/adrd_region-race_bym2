@@ -157,7 +157,8 @@ census_county_df <- read_csv("data/symlinks/prepped_census/census_county_interpo
 
 census_county_2000_df <- census_county_df %>% 
   filter(year == 2000, 
-         !is.na(median_household_income)) 
+         !is.na(median_household_income),
+         !is.na(median_house_value)) 
 
 counties_census_ = unique(census_county_2000_df$county)
 
@@ -169,6 +170,7 @@ setdiff(counties_adj_, counties_census_) #46113
 ```{r}
 census_county_2000_df$county[census_county_2000_df$county == 46102] <- 46113
 sum(is.na(census_county_2000_df$median_household_income))
+sum(is.na(census_county_2000_df$median_house_value))
 ```
 
 * year 2010
@@ -176,7 +178,8 @@ sum(is.na(census_county_2000_df$median_household_income))
 ```{r}
 census_county_2010_df <- census_county_df %>% 
   filter(year == 2010, 
-         !is.na(median_household_income)) 
+         !is.na(median_household_income),
+         !is.na(median_house_value)) 
 
 counties_census_ = unique(census_county_2010_df$county)
 
@@ -188,19 +191,29 @@ setdiff(counties_adj_, counties_census_) #46113
 ```{r}
 census_county_2010_df$county[census_county_2010_df$county == 46102] <- 46113
 sum(is.na(census_county_2010_df$median_household_income))
+sum(is.na(census_county_2010_df$median_house_value))
 ```
 
 ```{r}
+# get table with 2000, 2010, and mean for median household income and median house value
 median_household_df <- census_county_2000_df %>% 
-  rename(med_house_income_2000 = median_household_income) %>% 
-  select(county, med_house_income_2000) %>% 
+  rename(med_house_income_2000 = median_household_income,
+         med_house_value_2000 = median_house_value) %>% 
+  select(county, med_house_income_2000, med_house_value_2000) %>% 
   left_join(
     census_county_2010_df %>% 
-    rename(med_house_income_2010 = median_household_income) %>% 
-    select(county, med_house_income_2010)
+    rename(med_house_income_2010 = median_household_income,
+           med_house_value_2010 = median_house_value) %>% 
+    select(county, med_house_income_2010, med_house_value_2010)
   ) 
 
-median_household_df$med_house_income <- rowMeans(median_household_df[,-1])
+# get mean of 2000 and 2010, and get housing price to income (HPI) ratio
+median_household_df %<>%
+  mutate(
+    med_house_income = (med_house_income_2000 + med_house_income_2010)/2,
+    med_house_value = (med_house_value_2000 + med_house_value_2010)/2,
+    house_price_income_ratio = med_house_value/med_house_income
+  )
 ```
 
 ## Pollution
@@ -252,3 +265,5 @@ write_rds(hosp_county_df, "data/symlinks/scratch/hosp_county_df.rds")
 ```{r}
 lapply(hosp_county_df, summary)
 ```
+
+
