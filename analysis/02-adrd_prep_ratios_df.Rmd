@@ -302,8 +302,7 @@ adrd_ratios_df %<>%
     observed = sum(observed),
     # HPI and PM2.5 are the same across all years --> just take mean
                      house_price_income_ratio = mean(house_price_income_ratio),
-                     pm25 = mean(pm25)
-    ) %>%
+                     pm25 = mean(pm25)) %>%
   dplyr::ungroup()
 
 adrd_ratios_df %>% 
@@ -446,9 +445,9 @@ sum(is.na(adrd_ratios_df$person_years))
 ```
 
 
-```{r}
-# look at PM2.5 and house-price-to-income ratio
+## Look at PM2.5 and house-price-to-income ratio
 
+```{r}
 # PM2.5 distribution by race (weighted by person-years)
 adrd_ratios_df %>%
   mutate(race = case_when(
@@ -493,8 +492,6 @@ county_sf %>%
   theme(legend.position = "bottom") +
   theme_map()
 ```
-
-
 
 ```{r}
 # # plot % of person-years contributed by black people in each county
