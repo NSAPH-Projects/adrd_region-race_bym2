@@ -78,7 +78,7 @@ lakes_states_gg <- list(
 
 ```{r}
 race_labels <- c(
-  `1` = "Non-Hispanic White",
+  `1` = "White",
   `2` = "Black"
 )
 ```
@@ -809,25 +809,6 @@ pos_med_sf %>%
             keyheight = grid::unit(.5, "lines"),
             label.hjust = 0))
 
-
-```
-
-
-
-
-```{r}
-# plot % of person-years contributed by black people in each county
-
-pos_med_sf %>%
-  group_by(county) %>%
-  summarise(pct_blk = 100 * (person_years[race == 2] / 
-                               (person_years[race == 1] + person_years[race == 2]))) %>%
-  ggplot() +
-  geom_sf(aes(fill = pct_blk), lwd = 0) + 
-  lakes_gg +
-  labs(fill = "% of person-years \ncontributed by Black indivs") +
-  theme_map() +
-  sc
 
 ```
 
