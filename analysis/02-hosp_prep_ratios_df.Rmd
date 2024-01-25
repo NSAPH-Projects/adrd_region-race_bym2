@@ -271,6 +271,7 @@ obs_df <- hosp_county_df %>%
                      n_admissions = sum(n_admissions), 
                      obs_rate = n_admissions / n_enrollees,
                      # HPI and PM2.5 are the same across all years --> just take mean
+                     med_house_income = mean(med_house_income),
                      house_price_income_ratio = mean(house_price_income_ratio),
                      pm25 = mean(pm25))
 
@@ -300,8 +301,9 @@ hosp_ratios_df %<>%
     expected = sum(expected), 
     observed = sum(observed),
     # HPI and PM2.5 are the same across all years --> just take mean
-                     house_price_income_ratio = mean(house_price_income_ratio),
-                     pm25 = mean(pm25)) %>%
+    med_house_income = mean(med_house_income),
+    house_price_income_ratio = mean(house_price_income_ratio),
+    pm25 = mean(pm25)) %>%
   dplyr::ungroup()
 
 hosp_ratios_df %>% 
