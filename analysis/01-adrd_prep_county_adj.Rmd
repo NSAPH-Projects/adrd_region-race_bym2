@@ -254,7 +254,7 @@ pollution_county_df$county[pollution_county_df$county == 46102] <- 46113
 ```{r}
 adrd_county_df %<>%
   left_join(
-    median_household_df %>% select(county, house_price_income_ratio)
+    median_household_df %>% select(county, med_house_income, house_price_income_ratio)
   ) %>% 
   left_join(
     pollution_county_df %>% select(county, pm25)
