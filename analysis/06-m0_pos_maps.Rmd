@@ -86,6 +86,14 @@ race_labels <- c(
 
 ## Observed vs Predicted
 
+```{r}
+# map of observed and map of expected!!!
+
+
+```
+
+
+
 ### log ratios (y)
 # I think these are the SMRs--just mapping y, which is log(observed) - log(expected) or log(observed/expected)
 
