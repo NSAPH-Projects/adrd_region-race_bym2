@@ -46,29 +46,20 @@ a_delta = .995  # default = .8
 t_depth = 35    # max tree depth, default = 10
 
 ## Load data ----
-adrd_ratios_df <- read_rds('data/symlinks/temp/adrd_ratios_df.rds')
-county_adj_sparse_list <- read_rds('data/symlinks/temp/county_adj_sparse_list.rds')
+adrd_ratios_df <- read_rds('data/symlinks/scratch/adrd_ratios_df.rds')
+county_adj_sparse_list <- read_rds('data/symlinks/scratch/county_adj_sparse_list.rds')
 
-#########
-# TEMPORARY -- merge in pm25 (should be done in previous script)
+## Mean center income and change to per $10,000 ----
+# income <- (adrd_ratios_df$med_house_income -
+#              mean(adrd_ratios_df$med_house_income, na.rm = TRUE)) / 10000
 
-adrd_county_df <- read_rds("data/symlinks/temp/adrd_county_df.rds")
-
-# merge back in median household income (eventually use ratio with cost)
-adrd_ratios_df %<>%
-  left_join(adrd_county_df %>%
-              dplyr::select(county, med_house_income, pm25) %>% distinct(),
-            by = "county")
-
-## Mean center income and change to per $10,000
-income <- (adrd_ratios_df$med_house_income -
-             mean(adrd_ratios_df$med_house_income, na.rm = TRUE)) / 10000
+# Mean center (change name here and in model to HPI)
+income <- (adrd_ratios_df$house_price_income_ratio -
+             mean(adrd_ratios_df$house_price_income_ratio, na.rm = TRUE))
 
 ## Mean center pm25
 pm25 <- (adrd_ratios_df$pm25 -
            mean(adrd_ratios_df$pm25, na.rm = TRUE))
-
-#########
 
 
 ## Get the data in order ----

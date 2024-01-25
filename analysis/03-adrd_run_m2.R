@@ -46,25 +46,12 @@ a_delta = .995  # default = .8
 t_depth = 35    # max tree depth, default = 10
 
 ## Load data ----
-adrd_ratios_df <- read_rds('data/symlinks/temp/adrd_ratios_df.rds')
-county_adj_sparse_list <- read_rds('data/symlinks/temp/county_adj_sparse_list.rds')
-
-#########
-# TEMPORARY -- merge in pm25 (should be done in previous script)
-
-adrd_county_df <- read_rds("data/symlinks/temp/adrd_county_df.rds")
-
-# merge back in median household income (eventually use ratio with cost)
-adrd_ratios_df %<>%
-  left_join(adrd_county_df %>%
-              dplyr::select(county, pm25) %>% distinct(),
-            by = "county")
+adrd_ratios_df <- read_rds('data/symlinks/scratch/adrd_ratios_df.rds')
+county_adj_sparse_list <- read_rds('data/symlinks/scratch/county_adj_sparse_list.rds')
 
 ## Mean center pm25
 pm25 <- (adrd_ratios_df$pm25 -
            mean(adrd_ratios_df$pm25, na.rm = TRUE))
-
-#########
 
 
 ## Get the data in order ----
