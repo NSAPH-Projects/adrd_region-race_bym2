@@ -3,6 +3,9 @@ library(tidyverse)
 library(magrittr)
 library(rstan)
 
+# path to store model results
+path_mod <- "results/models/adrd/m3/"
+
 ## functions ----
 mkdir_p <- function(dir_name) {
   dir.create(dir_name, 
@@ -26,11 +29,11 @@ get_random_seed <-
 ## Modeling parameters ----
 ##  Naming
 tstamp <- format(Sys.time(), format = "%Y%m%d_%H%M%S")
-mkdir_p(paste0('results/models/m2/model_run_', tstamp))
+mkdir_p(paste0(path_mod, 'model_run_', tstamp))
 model_name <- 'model'
-stan_file <- 'analysis/m2_pm25.stan'
-random_seed <- get_random_seed(paste0('results/models/m2/model_run_', tstamp,
-                                      '/seed.rds'))
+stan_file <- 'analysis/stan_code/m3_pm35.stan'
+random_seed <- get_random_seed(paste0(path_mod, 'model_run_', tstamp, '/seed.rds'))
+
 
 ##  Run parameters
 n_chains <- 4
@@ -49,9 +52,9 @@ t_depth = 35    # max tree depth, default = 10
 adrd_ratios_df <- read_rds('data/symlinks/scratch/adrd_ratios_df.rds')
 county_adj_sparse_list <- read_rds('data/symlinks/scratch/county_adj_sparse_list.rds')
 
-## Mean center pm25
-pm25 <- (adrd_ratios_df$pm25 -
-           mean(adrd_ratios_df$pm25, na.rm = TRUE))
+## Mean center pm35
+pm35 <- (adrd_ratios_df$pm35 -
+           mean(adrd_ratios_df$pm35, na.rm = TRUE))
 
 
 ## Get the data in order ----
@@ -79,7 +82,7 @@ adrd_stan_list  <-
     d2_idx = adrd_ratios_df$black,
     # {0, 1} vector for dis_2
     
-    pm25 = pm25,
+    pm35 = pm35,
     
     # Use return_sparse_parts(A) for these next ones
     D_sparse = county_adj_sparse_list$D_sparse,
@@ -93,13 +96,13 @@ adrd_stan_list  <-
 
 ## Save the passed data in case we need it later ----
 write_rds(adrd_stan_list,
-          paste0('results/models/m2/model_run_', tstamp, 
-                 '/adrd_stan_list.rds'))
+          paste0(path_mod, 'model_run_', tstamp, '/adrd_stan_list.rds'))
 
 ## copy stan file into model_run ----
-new_stan_file <- paste0('results/models/m2/model_run_', tstamp, '/m_', tstamp, '.stan')
-file.copy(stan_file, 
-          new_stan_file)
+# path for new file
+new_stan_file <- paste0(path_mod, 'model_run_', tstamp, '/temp_file.stan')
+# copy stan file (in analysis folder) into a new file at this path
+file.copy(stan_file, new_stan_file)
 
 ## Stan ----
 ## RStan options
@@ -125,18 +128,16 @@ fit <- stan(
   control = list(adapt_delta = a_delta,
                  max_treedepth = t_depth),
   refresh = n_iter / 100,
-  sample_file = paste0('results/models/m2/model_run_', tstamp,
-                       '/sample_file')
+  sample_file = paste0(path_mod, 'model_run_', tstamp, '/sample_file')
 )
 
 ## Save fit objects ----
-write_rds(fit, 
-          paste0('results/models/m2/model_run_', 
-                 tstamp, 
-                 '/stanfit_object.rds'))
+write_rds(fit, paste0(path_mod, 'model_run_', tstamp, '/stanfit_object.rds'))
+
 
 
 
 ## Remove the compiled stan model ----
-file.remove(paste0('results/models/m2/model_run_', tstamp, '/m_', tstamp, '.rds'))
+# this path will be the same as new_stan_file but ends in .rds instead of .stan
+file.remove(paste0(path_mod, 'model_run_', tstamp, '/temp_file.rds'))
 file.remove(new_stan_file)
