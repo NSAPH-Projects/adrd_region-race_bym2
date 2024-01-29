@@ -1,3 +1,4 @@
+# specific directories
 /results/models/
 /logs/
 
@@ -164,6 +165,7 @@ dmypy.json
 
 # RStudio files
 .Rproj.user/
+*.Rproj
 
 # produced vignettes
 vignettes/*.html

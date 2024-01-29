@@ -1,4 +1,10 @@
 
+```{r setup, include=FALSE}
+## Set working directory as project root
+library(here)
+knitr::opts_knit$set(root.dir = here())
+```
+
 ```{r, message=FALSE, warning=FALSE}
 ## Load libraries ----
 library(tidyverse)
@@ -9,24 +15,25 @@ library(sf)
 #library(cowplot)
 library(RColorBrewer)
 library(viridis)
+library(ggthemes)
 ```
 
 ```{r}
 ## Read data ----
-hosp_county_df <- read_rds("../data/symlinks/scratch/hosp_county_df.rds")
-county_sf <- read_rds("../data/symlinks/scratch/county_sf.rds")
-county_fips_df <- read_rds("../data/symlinks/scratch/county_fips_df.rds")
+adrd_county_df <- read_rds("data/symlinks/scratch/adrd_county_df.rds")
+county_sf <- read_rds("data/symlinks/scratch/county_sf.rds")
+county_fips_df <- read_rds("data/symlinks/scratch/county_fips_df.rds")
 
-length(unique(hosp_county_df$county))
+length(unique(adrd_county_df$county))
 length(unique(county_sf$county))
 length(unique(county_fips_df$county))
 
 counties_shp_ = unique(county_sf$county)
-counties_hosp_ = unique(hosp_county_df$county)
+counties_adrd_ = unique(adrd_county_df$county)
 counties_ = unique(county_fips_df$county)
 
-setdiff(counties_shp_, counties_hosp_)
-setdiff(counties_hosp_, counties_shp_)
+setdiff(counties_shp_, counties_adrd_)
+setdiff(counties_adrd_, counties_shp_)
 setdiff(counties_, counties_shp_)
 setdiff(counties_shp_, counties_)
 ```
@@ -34,26 +41,26 @@ setdiff(counties_shp_, counties_)
 ```{r}
 ## Subset ----
 ##  Subset to population of interest --
-hosp_county_df %<>%
+adrd_county_df %<>%
     filter(age_grp %in% c("[65,75)", "[75,85)", ">85"))
 
 ##  Replace NA with 0 --
-hosp_county_df$n_enrollees[is.na(hosp_county_df$n_enrollees)] <- 0 
-hosp_county_df$n_admissions[is.na(hosp_county_df$n_admissions)] <- 0 
+adrd_county_df$n_enrollees[is.na(adrd_county_df$n_enrollees)] <- 0 
+adrd_county_df$n_admissions[is.na(adrd_county_df$n_admissions)] <- 0 
 
-sum(hosp_county_df$n_enrollees)
-sum(hosp_county_df$n_admissions)
+sum(adrd_county_df$n_enrollees)
+sum(adrd_county_df$n_admissions)
 
 counties_shp_ = unique(county_sf$county)
-counties_hosp_ = unique(hosp_county_df$county)
+counties_adrd_ = unique(adrd_county_df$county)
 
-setdiff(counties_shp_, counties_hosp_)
-setdiff(counties_hosp_, counties_shp_)
+setdiff(counties_shp_, counties_adrd_)
+setdiff(counties_adrd_, counties_shp_)
 ```
 
 ```{r}
 ## Plot number of enrollees across years ----
-hosp_county_df %>% 
+adrd_county_df %>% 
   mutate(race = as.character(race)) %>% 
   group_by(year, race) %>% 
   summarise(n_enrollees = sum(n_enrollees)) %>% 
@@ -62,8 +69,8 @@ hosp_county_df %>%
 ```
 
 ```{r}
-## Plot number of hosp admissions across years ----
-hosp_county_df %>% 
+## Plot number of adrd admissions across years ----
+adrd_county_df %>% 
   mutate(race = as.character(race)) %>% 
   group_by(year, race) %>% 
   summarise(n_admissions = sum(n_admissions)) %>% 
@@ -73,7 +80,7 @@ hosp_county_df %>%
 
 ```{r}
 ## Number of enrollees by county-sex-age_grp split by race group ----
-hosp_county_df %>% 
+adrd_county_df %>% 
   mutate(race = as.character(race)) %>% 
   ggplot() + 
   geom_density(aes(x = n_enrollees, color = race))
@@ -81,7 +88,7 @@ hosp_county_df %>%
 
 ```{r}
 ## Number of enrollees by county-sex-age_grp split by race group ----
-hosp_county_df %>% 
+adrd_county_df %>% 
   filter(n_enrollees < 500) %>% 
   mutate(race = as.character(race)) %>% 
   ggplot() + 
@@ -90,73 +97,73 @@ hosp_county_df %>%
 ```
 
 ```{r}
-## hosp blind-to-counties rates for each race-sex-age_grp----
-hosp_county_df %>% 
+## Adrd blind-to-counties rates for each race-sex-age_grp----
+adrd_county_df %>% 
   group_by(race, sex, age_grp) %>% 
   summarise(n_enrollees = sum(n_enrollees), 
             n_admissions = sum(n_admissions),
-            hosp_rate = n_admissions / n_enrollees * 1e5) %>% 
+            adrd_rate = n_admissions / n_enrollees * 1e5) %>% 
   mutate(race_sex = paste(race, sex, sep = "_")) %>% 
   ggplot() +
-  geom_boxplot(aes(x = age_grp, y = hosp_rate)) + 
-  geom_jitter(aes(x = age_grp, y = hosp_rate, col = race_sex))
+  geom_boxplot(aes(x = age_grp, y = adrd_rate)) + 
+  geom_jitter(aes(x = age_grp, y = adrd_rate, col = race_sex))
 ```
 
 ```{r}
-## hosp county rates for each race-sex-age_grp ----
-hosp_county_df %>% 
+## Adrd county rates for each race-sex-age_grp ----
+adrd_county_df %>% 
   group_by(county, race, sex, age_grp) %>% 
   summarise(n_enrollees = sum(n_enrollees), 
             n_admissions = sum(n_admissions),
-            hosp_rate = n_admissions / n_enrollees * 1e5) %>% 
+            adrd_rate = n_admissions / n_enrollees * 1e5) %>% 
   mutate(race_sex = paste(race, sex, sep = "_")) %>% 
   ggplot() +
-  geom_boxplot(aes(x = age_grp, y = hosp_rate)) + 
-  geom_jitter(aes(x = age_grp, y = hosp_rate, col = race_sex)) + 
+  geom_boxplot(aes(x = age_grp, y = adrd_rate)) + 
+  geom_jitter(aes(x = age_grp, y = adrd_rate, col = race_sex)) + 
   facet_wrap(~race)
 ```
 
 ```{r}
-hosp_county_df %>% 
+adrd_county_df %>% 
   group_by(race, sex, age_grp) %>% 
   summarise(n_enrollees = sum(n_enrollees), 
             n_admissions = sum(n_admissions),
-            hosp_rate = n_admissions / n_enrollees * 100) %>% 
+            adrd_rate = n_admissions / n_enrollees * 100) %>% 
   group_by(sex, age_grp) %>% 
-  summarise(hosp_rate = mean(hosp_rate))
+  summarise(adrd_rate = mean(adrd_rate))
 ```
 
 ```{r}
-xx <- hosp_county_df
+xx <- adrd_county_df
 
-xx$sex[hosp_county_df$sex == 1] = "male"
-xx$sex[hosp_county_df$sex == 2] = "female"
+xx$sex[adrd_county_df$sex == 1] = "male"
+xx$sex[adrd_county_df$sex == 2] = "female"
 
-## Reference hosp rates for each sex/age_grp blind to race ----
+## Reference adrd rates for each sex/age_grp blind to race ----
 xx %>% 
   mutate(race = as.character(race)) %>% 
   group_by(race, sex, age_grp) %>% 
   summarise(n_enrollees = sum(n_enrollees), 
             n_admissions = sum(n_admissions),
-            hosp_rate = n_admissions / n_enrollees * 100) %>% 
+            adrd_rate = n_admissions / n_enrollees * 100) %>% 
   group_by(sex, age_grp) %>% 
-  summarise(hosp_rate = mean(hosp_rate)) %>%  
+  summarise(adrd_rate = mean(adrd_rate)) %>%  
   ggplot() + 
-  geom_point(aes(x = age_grp, y = hosp_rate, color = sex)) + 
-  labs(title = "hosp reference rates", x = "Age group", y = "hosp rate") + 
+  geom_point(aes(x = age_grp, y = adrd_rate, color = sex)) + 
+  labs(title = "ADRD reference rates", x = "Age group", y = "ADRD rate") + 
   theme_bw()
-ggsave("../results/figures/hosp_reference_rates.png")
+ggsave("results/figures/adrd_reference_rates.png")
 ```
 
 ```{r}
 ## look at proportions by race
-prettyNum(prop.table(tapply(hosp_county_df$n_enrollees, hosp_county_df$race, sum)))
+prettyNum(prop.table(tapply(adrd_county_df$n_enrollees, adrd_county_df$race, sum)))
 ```
 
 ```{r}
-xx <- hosp_county_df
+xx <- adrd_county_df
 
-## Observed county-level hosp counts
+## Observed county-level ADRD counts
 xx$race[xx$race == 1] = "white"
 xx$race[xx$race == 2] = "black"
 
@@ -214,7 +221,7 @@ yy  %>%
   geom_sf(aes(fill = n_admissions), alpha = 1, lwd = 0.0) +
   facet_wrap(~race, ncol = 2) + 
   labs(title = "Observed") + 
-  guides(fill = guide_legend(title = "hosp counts")) + 
+  guides(fill = guide_legend(title = "ADRD counts")) + 
   theme_classic() + 
   theme(legend.position = "bottom") + 
   sc
@@ -227,15 +234,16 @@ yy %>%
   geom_sf(aes(fill = n_admissions), alpha = 1, lwd = 0.0) +
   facet_wrap(~race, ncol = 2) + 
   labs(title = "Observed") + 
-  guides(fill = guide_legend(title = "hosp counts")) + 
+  guides(fill = guide_legend(title = "ADRD counts")) + 
   theme_classic() + 
   scale_fill_viridis(name = "n_admissions", option = "D")
 ```
 
-* hosp hospitalizations entangle prevalence and severity, specially in "small" counties 
+* adrd hospitalizations entangle prevalence and severity, specially in "small" counties 
 * biased measurement error? noise systematically affects certain groups
 * even if not affecting certain groups, measurement error decreases the power of the model
 * variance of the inference, will not detect statistical differences in the output
+
 
 ## Observed vs expected
 
@@ -243,7 +251,7 @@ yy %>%
 ## Get the standard rates ----
 ## We just get the standard rate for each sex/age group combination
 ## combining all observations over the time period (over fips).
-exp_df <- hosp_county_df %>%
+exp_df <- adrd_county_df %>%
     dplyr::group_by(race, sex, age_grp) %>% # race, sex, age_grp
     dplyr::summarize(
         n_admissions = sum(n_admissions),
@@ -258,11 +266,15 @@ exp_df
 ```{r}
 ## Aggregate over years ----
 ## Just tally up the number of person years and deaths over all years
-obs_df <- hosp_county_df %>%
+obs_df <- adrd_county_df %>%
     dplyr::group_by(county, race, sex, age_grp) %>% #county, race, sex, age_grp
     dplyr::summarize(n_enrollees = sum(n_enrollees),
                      n_admissions = sum(n_admissions), 
-                     obs_rate = n_admissions / n_enrollees)
+                     obs_rate = n_admissions / n_enrollees,
+                     # HPI and PM2.5 are the same across all years --> just take mean
+                     med_house_income = mean(med_house_income),
+                     house_price_income_ratio = mean(house_price_income_ratio),
+                     pm25 = mean(pm25))
 
 ## fill NAs
 obs_df %>% 
@@ -273,13 +285,13 @@ obs_df$obs_rate[is.na(obs_df$obs_rate)] <- 0
 
 ```{r}
 ## Merge with exp_df ----
-hosp_ratios_df <- obs_df %>%
+adrd_ratios_df <- obs_df %>%
     dplyr::left_join(exp_df %>%
                          dplyr::select(sex, age_grp, exp_rate),
                      by = c("sex", "age_grp"))
 
 ## Now aggregate age ----
-hosp_ratios_df %<>% 
+adrd_ratios_df %<>% 
   mutate(
     expected = n_enrollees * exp_rate, 
     observed = n_admissions
@@ -288,10 +300,14 @@ hosp_ratios_df %<>%
   dplyr::summarize(
     person_years = sum(n_enrollees),
     expected = sum(expected), 
-    observed = sum(observed)) %>%
+    observed = sum(observed),
+    # HPI and PM2.5 are the same across all years --> just take mean
+    med_house_income = mean(med_house_income),
+    house_price_income_ratio = mean(house_price_income_ratio),
+    pm25 = mean(pm25)) %>%
   dplyr::ungroup()
 
-hosp_ratios_df %>% 
+adrd_ratios_df %>% 
   mutate(
     rel_ratio = observed / expected,
     race = as.character(race)
@@ -301,7 +317,7 @@ hosp_ratios_df %>%
 ```
 
 ```{r}
-hosp_ratios_df %>% 
+adrd_ratios_df %>% 
   ggplot() + 
   geom_point(aes(x = observed, y = expected, color = as.factor(race)), alpha = 0.5) + 
   scale_x_sqrt() + 
@@ -309,7 +325,7 @@ hosp_ratios_df %>%
 ```
 
 ```{r}
-hosp_ratios_df %>% 
+adrd_ratios_df %>% 
   mutate(
     log_diff = log(observed) - log(expected),
     race = as.character(race)
@@ -319,7 +335,7 @@ hosp_ratios_df %>%
 ```
 
 ```{r}
-xx <- hosp_ratios_df
+xx <- adrd_ratios_df
 xx$race[xx$race == 1] = "white"
 xx$race[xx$race == 2] = "black"
 
@@ -413,7 +429,7 @@ yy %>%
 
 ```{r}
 ## Prep data ----
-hosp_ratios_df %<>% 
+adrd_ratios_df %<>% 
   mutate(
     black = as.integer(if_else(race == 2, 1, 0)),
     expected = as.integer(ceiling(expected)), 
@@ -423,13 +439,79 @@ hosp_ratios_df %<>%
   ) %>% 
   left_join(county_fips_df)
 
-sum(is.na(hosp_ratios_df$c_idx))
-sum(is.na(hosp_ratios_df$s_idx))
-sum(is.na(hosp_ratios_df$observed))
-sum(is.na(hosp_ratios_df$expected))
-sum(is.na(hosp_ratios_df$person_years))
+sum(is.na(adrd_ratios_df$c_idx))
+sum(is.na(adrd_ratios_df$s_idx))
+sum(is.na(adrd_ratios_df$observed))
+sum(is.na(adrd_ratios_df$expected))
+sum(is.na(adrd_ratios_df$person_years))
+```
+
+
+## Look at PM2.5 and house-price-to-income ratio
+
+```{r}
+# PM2.5 distribution by race (weighted by person-years)
+adrd_ratios_df %>%
+  mutate(race = case_when(
+    race == 1 ~ "White",
+    race == 2 ~ "Black"
+  )) %>%
+  ggplot(aes(pm25, weight = person_years, col = (race))) +
+  geom_density() +
+  labs(x = "PM2.5", y = "Density", col = "")
+
+# HPI ratio distribution by race (weighted by person-years)
+adrd_ratios_df %>%
+mutate(race = case_when(
+    race == 1 ~ "White",
+    race == 2 ~ "Black"
+  )) %>%
+  ggplot(aes(house_price_income_ratio, weight = person_years, col = factor(race))) +
+  geom_density(bw = 0.4) +
+  labs(x = "House-price-income ratio", y = "Density", col = "")
 ```
 
 ```{r}
-write_rds(hosp_ratios_df, "../data/symlinks/scratch/hosp_ratios_df.rds")
+# map PM2.5 and HPI ratio
+
+county_sf %>%
+  select(county) %>%
+  left_join(adrd_ratios_df) %>%
+  ggplot() +
+  geom_sf(aes(fill = pm25), alpha = 1, lwd = 0.0) +
+  labs(fill = "PM2.5") +
+  scale_fill_viridis(option = "D") +
+  theme(legend.position = "bottom") +
+  theme_map()
+  
+county_sf %>%
+  select(county) %>%
+  left_join(adrd_ratios_df) %>%
+  ggplot() +
+  geom_sf(aes(fill = log2(house_price_income_ratio)), alpha = 1, lwd = 0.0) +
+  labs(fill = "log2(HPI ratio)") +
+  scale_fill_viridis(option = "D") +
+  theme(legend.position = "bottom") +
+  theme_map()
+```
+
+```{r}
+# # plot % of person-years contributed by black people in each county
+# #pos_med_sf %>%
+county_sf %>%
+  select(county) %>%
+  left_join(adrd_ratios_df) %>%
+  group_by(county) %>%
+  summarise(pct_blk = 100 * (person_years[race == 2] /
+                               (person_years[race == 1] + person_years[race == 2]))) %>%
+  ggplot() +
+  geom_sf(aes(fill = pct_blk), lwd = 0) +
+  #lakes_gg +
+  labs(fill = "% of person-years \ncontributed by Black indivs") +
+  scale_fill_viridis(option = "D") +
+  theme_map()
+```
+
+```{r}
+write_rds(adrd_ratios_df, "data/symlinks/scratch/adrd_ratios_df.rds")
 ```
