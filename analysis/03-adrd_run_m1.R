@@ -29,7 +29,7 @@ get_random_seed <-
 tstamp <- format(Sys.time(), format = "%Y%m%d_%H%M%S")
 mkdir_p(paste0(path_mod, 'model_run_', tstamp))
 model_name <- 'model'
-stan_file <- 'analysis/stan_code/m1_no_covar_invdelta.stan'
+stan_file <- 'analysis/stan_code/m1_no_covar.stan'
 random_seed <- get_random_seed(paste0(path_mod, 'model_run_', tstamp, '/seed.rds'))
 
 ##  Run parameters

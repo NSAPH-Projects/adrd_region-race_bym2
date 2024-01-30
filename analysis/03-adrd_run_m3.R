@@ -31,14 +31,14 @@ get_random_seed <-
 tstamp <- format(Sys.time(), format = "%Y%m%d_%H%M%S")
 mkdir_p(paste0(path_mod, 'model_run_', tstamp))
 model_name <- 'model'
-stan_file <- 'analysis/stan_code/m3_pm35.stan'
+stan_file <- 'analysis/stan_code/m3_pm25.stan'
 random_seed <- get_random_seed(paste0(path_mod, 'model_run_', tstamp, '/seed.rds'))
 
 
 ##  Run parameters
 n_chains <- 4
 #n_iter <- 1300
-n_iter <- 1000
+n_iter <- 50
 n_burnin <- min(floor(n_iter / 2), 300)
 n_thin <- 10
 verbose_flag <- FALSE
@@ -52,9 +52,9 @@ t_depth = 35    # max tree depth, default = 10
 adrd_ratios_df <- read_rds('data/symlinks/scratch/adrd_ratios_df.rds')
 county_adj_sparse_list <- read_rds('data/symlinks/scratch/county_adj_sparse_list.rds')
 
-## Mean center pm35
-pm35 <- (adrd_ratios_df$pm35 -
-           mean(adrd_ratios_df$pm35, na.rm = TRUE))
+## Mean center pm25
+pm25 <- (adrd_ratios_df$pm25 -
+           mean(adrd_ratios_df$pm25, na.rm = TRUE))
 
 
 ## Get the data in order ----
@@ -82,7 +82,7 @@ adrd_stan_list  <-
     d2_idx = adrd_ratios_df$black,
     # {0, 1} vector for dis_2
     
-    pm35 = pm35,
+    pm25 = pm25,
     
     # Use return_sparse_parts(A) for these next ones
     D_sparse = county_adj_sparse_list$D_sparse,
