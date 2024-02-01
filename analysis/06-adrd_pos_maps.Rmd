@@ -16,14 +16,19 @@ library(RColorBrewer)
 library(ggpubr)
 ```
 
+## Load data
+
 ```{r}
+# choose which model to use
+model <- "m1"
+
 ## Read model results
-stanfit_samples <- read_rds("data/intermediate/m0-stanfit_samples.rds")
-stanfit_summary <- read_rds("data/intermediate/m0-stanfit_summary.rds")
+stanfit_samples <- read_rds(paste0("data/intermediate/adrd-", model, "_stanfit_samples.rds"))
+stanfit_summary <- read_rds(paste0("data/intermediate/adrd-", model, "_stanfit_summary.rds"))
 
 ## Read data ----
 county_sf <- read_rds("data/symlinks/scratch/county_sf.rds")
-pos_med <- read_rds("data/intermediate/m0-pos_med.rds")
+pos_med <- read_rds(paste0("data/intermediate/adrd-", model, "_pos_med.rds"))
 
 pos_med_sf <- county_sf %>% 
   select(county) %>% 
@@ -53,6 +58,9 @@ state_sf %<>%
 pos_med_sf <- st_transform(pos_med_sf, 
                            crs = st_crs("+proj=aea +lat_1=29.5 +lat_2=45.5 +lat_0=37.5
                                         +lon_0=-96 +x_0=0 +y_0=0 +datum=NAD83 +units=m +no_defs"))
+state_sf <- st_transform(state_sf, 
+                           crs = st_crs("+proj=aea +lat_1=29.5 +lat_2=45.5 +lat_0=37.5
+                                        +lon_0=-96 +x_0=0 +y_0=0 +datum=NAD83 +units=m +no_defs"))
 
 ```
 
@@ -73,29 +81,108 @@ states_gg <- geom_sf(data = state_sf, fill = NA, col = "black", lwd = 0.1)
 lakes_states_gg <- list(
   geom_sf(data = state_sf, fill = NA, col = "black", lwd = 0.1),
   geom_sf(data = lakes_sf, fill = "white", col = "black"))
+
+# or this for white state borders:
+lakes_states_light_gg <- list(
+  geom_sf(data = state_sf, fill = NA, col = "white", lwd = 0.1),
+  geom_sf(data = lakes_sf, fill = "white", col = "white"))
 ```
 
-
 ```{r}
+# race labels for plotting
 race_labels <- c(
   `1` = "White",
   `2` = "Black"
 )
 ```
 
-
-## Observed vs Predicted
-
 ```{r}
-# map of observed and map of expected!!!
-
+# # define color palettes
+# 
+# # viridis D (colorblind safe!!)
+# viridis_D <- viridis_pal(option = "D")
 
 ```
 
 
+## Pre-modelling plots
 
-### log ratios (y)
-# I think these are the SMRs--just mapping y, which is log(observed) - log(expected) or log(observed/expected)
+```{r}
+# plot % of person-years contributed by black people in each county
+pos_med_sf %>%
+  group_by(county) %>%
+  summarise(pct_blk = 100 * (person_years[race == 2] /
+                               (person_years[race == 1] + person_years[race == 2]))) %>%
+  ggplot() +
+  geom_sf(aes(fill = pct_blk), lwd = 0) +
+  lakes_states_light_gg +
+  labs(fill = "% of person-years \ncontributed by Black \nindividuals") +
+  scale_fill_viridis(option = "D") +
+  theme_map() +
+  theme(legend.title = element_text(size = 10))
+```
+
+
+```{r}
+# map PM2.5, PIR, median household income
+
+pos_med_sf %>%
+  ggplot() +
+  geom_sf(aes(fill = pm25), alpha = 1, lwd = 0.0) +
+  labs(fill = "PM2.5 (ug/m3)") +
+  scale_fill_viridis(option = "D") +
+  lakes_states_light_gg +
+  theme(legend.position = "bottom") +
+  theme_map()
+  
+pos_med_sf %>%
+  ggplot() +
+  geom_sf(aes(fill = log10(house_price_income_ratio)), alpha = 1, lwd = 0.0) +
+  labs(fill = "log(PIR)") +
+  scale_fill_viridis(option = "D") +
+  lakes_states_light_gg +
+  theme(legend.position = "bottom") +
+  theme_map()
+
+pos_med_sf %>%
+  ggplot() +
+  geom_sf(aes(fill = med_house_income), alpha = 1, lwd = 0.0) +
+  labs(fill = "Median household \nincome") +
+  scale_fill_viridis(option = "D") +
+  lakes_states_light_gg +
+  theme(legend.position = "bottom") +
+  theme_map()
+```
+
+### Observed vs. expected
+
+```{r}
+# map of observed counts
+pos_med_sf %>%
+  ggplot() +
+  geom_sf(aes(fill = observed), lwd = 0.03) +
+  scale_fill_viridis(option = "D") +
+  lakes_states_light_gg +
+  labs(fill = "Observed counts") +
+  facet_grid(~race) +
+  theme(legend.position = "bottom") +
+  theme_map()
+
+# map of expected counts
+pos_med_sf %>%
+  ggplot() +
+  geom_sf(aes(fill = expected), lwd = 0.03) +
+  lakes_states_light_gg +
+  scale_fill_viridis(option = "D") +
+  labs(fill = "Expected counts") +
+  facet_grid(~race) +
+  theme(legend.position = "bottom") +
+  theme_map()
+```
+
+### Observed/expected counts ratio
+
+Note: y is log(observed) - log(expected) or log(observed/expected), so exp(y) is observed/expected. y is analogous to the standardized mortality ratio (SMR) in Kiang et al.
 
 ```{r}
 # look at distribution of these values (exp(y))
@@ -106,60 +193,88 @@ pos_med_sf |>
 
 
 ```{r}
-pos_med_sf %>% 
-  mutate(
-    res = y - pos_med_y,
-    res_is_out = if_else(abs(res) > 2/3, 1, 0) 
-  ) %>% 
-  ggplot() +
-  geom_sf(aes(fill = exp(y), col = as.factor(res_is_out)), lwd = 0.2) +
-  facet_grid(~race) +
-  theme(legend.position = "bottom") + 
-  theme_map()
-```
+# map of y (observed/expected)
 
-# same thing but without color borders --> those are just showing where SMR and lambda are very different
+# note: it's better to plot y than log(y)!
+# if zero hosp are observed and 1 is expected, log(y) = -Inf, but y = 0
+# if zero hosp are expected, then y and log(y) will both be undefined
 
-```{r}
-# exponentiate because y is already the log
-pos_med_sf %>% 
-  ggplot() +
-  geom_sf(aes(fill = exp(y)), lwd = 0.05) +
-  lakes_states_gg +
-  labs(fill = "exp(Observed/Expected Rate)") +
-  scale_fill_viridis(option = "C") + 
-  #scale_fill_gradientn(colors = brewer.pal(9, "OrRd")) +
+# plotting in a slightly tricky/work-around way so outliers don't mess up the color scale
+# note: legend shows up to 3, but max value for exp(y) is 11!
+#pos_med_sf %>% 
+ggplot() +
+  #geom_sf(aes(fill = exp(y)), lwd = 0.00) +
+  # plot normal range values with gradient
+  geom_sf(data = subset(pos_med_sf, exp(y) <= 3), aes(fill = exp(y)), lwd = 0.00) +
+  # plot high outliers in yellow (max of gradient)
+  # geom_sf(data = subset(pos_med_sf, exp(y) > 3), fill = "#feef71", lwd = 0.00) +
+  # plot high outliers in pale yellow
+  geom_sf(data = subset(pos_med_sf, exp(y) > 3), fill = "#FFFCC9", lwd = 0.00) +
+  # plot missing values in gray (must do manually here)
+  geom_sf(data = subset(pos_med_sf, is.na(y)), fill = "gray50", lwd = 0.00) +
+  lakes_states_light_gg +
+  labs(fill = "Observed/Expected") +
+  scale_fill_viridis(option = "D") + 
   facet_grid(~race, labeller = as_labeller(race_labels)) +
   theme_map() +
   theme(legend.position = "bottom",
-        #legend.title = element_text(size = 8)#,
+        legend.title = element_text(size = 10),
         legend.text = element_text(size = 8)
         )
+
+# better idea if I want to do this:
+# change all vals >3 to 3 (obv not in original data, make new df first)
+# make another column that is either ">3" or NA
+# make a border around each county colored by this new column
+#   give outliers borders, otherwise no border
+# honestly I think this is fine, just make a little box with the light yellow that says >3
 ```
 
 
-### posterior median log ratios (pos_med_y)
+```{r}
+# similar map of y (observed/expected)
+# but now highlight where observed/expected and lambda (from model) are very different
+pos_med_sf %>%
+  mutate(
+    res = y - pos_med_y,
+    res_is_out = if_else(abs(res) > 2/3, "different", "similar")
+  ) %>%
+  ggplot() +
+  geom_sf(aes(fill = exp(y), col = as.factor(res_is_out)), lwd = 0.2) +
+  scale_fill_viridis(option = "D") +
+  labs(col = "y & lambda are:") +
+  facet_grid(~race) +
+  theme(legend.position = "bottom") +
+  theme_map()
+```
 
-In this model the "prediction" is a smoothed version of the observed.
+
+## Plot model results
+
+### Relative/standardized risks (posterior medians of lambda = pos_med_y)
+The "predictions" are a smoothed version of the observations.
 
 ```{r}
+# plot lambdas
 pos_med_sf %>% 
+  # exclude counties with zero black person-years
+  mutate(pos_med_y = ifelse(person_years == 0, NA, pos_med_y)) %>%
   ggplot() +
   geom_sf(aes(fill = exp(pos_med_y)), lwd = 0.00) +
-  lakes_states_gg  +
+  lakes_states_light_gg  +
   facet_grid(~race, labeller = as_labeller(race_labels)) +
-  labs(fill = "Relative Risk (lambda)") +
-  scale_fill_viridis(option = "C") + 
+  labs(fill = "Standardized risk (lambda)") +
+  scale_fill_viridis(option = "D", na.value = "gray50") + 
   theme_map() +
   theme(legend.position = "bottom",
         legend.text = element_text(size = 8))
 ```
 
-## Risk decomposition
-
-## state effects
+### State effects
 
 ```{r}
+# plot state intercepts (nu)
+
 param = rownames(stanfit_summary$summary)
 nu = tibble(
   param = param[grep("nu", param)],
@@ -170,12 +285,13 @@ nu = tibble(
 state_sf %>% 
   left_join(nu) %>% 
   ggplot() + 
-  geom_sf(aes(fill = med)) +
-  lakes_states_gg +
+  geom_sf(aes(fill = med), col = "white") +
+  lakes_gg +
+  labs(fill = "State intercept (nu)") +
   theme_map()
 ```
 
-## shared unscaled
+### White-specific, Black-specific, and shared (unscaled) risks (three risk surfaces)
 
 ```{r}
 summary(pos_med$shared_unscaled)
@@ -212,124 +328,6 @@ filter(pos_med_sf, !is.na(shared_unscaled_outliers)) %>%
   select(shared_unscaled, shared_unscaled_inliers, shared_unscaled_outliers)
 ```
 
-# Plot three risk surfaces
-
-```{r}
-myPalette <- colorRampPalette(rev(RColorBrewer::brewer.pal(11, "Spectral")))
-sc <- scale_fill_gradientn(colors = myPalette(100), 
-                           limits = c(-1, 1),
-                           na.value = "gray70")
-
-# psi for white people
-p1 <- pos_med_sf %>% 
-  filter(race == 1) %>% 
-  ggplot() +
-  geom_sf(aes(fill = specific), lwd = 0.0) + 
-  lakes_gg +
-  theme_map() +
-  labs(subtitle = "white specific") + 
-  theme(legend.title = element_blank()) + 
-  sc
-
-# shared unscaled (phi)
-p2 <- pos_med_sf %>% 
-  filter(race == 1) %>% #shared_unscaled is non-race specific
-  ggplot() +
-  geom_sf(aes(fill = shared_unscaled_inliers), lwd = 0.0) + 
-  lakes_gg +
-  geom_sf(data = filter(pos_med_sf, shared_unscaled_outliers == 1), color = "red", lwd = 0.5) + 
-  geom_sf(data = filter(pos_med_sf, shared_unscaled_outliers == -1), color = "blue", lwd = 0.5) + 
-  theme_map() + 
-  labs(subtitle = "shared unscaled") + 
-  sc
-
-# psi for black people
-p3 <- pos_med_sf %>% 
-  filter(race == 2) %>% 
-  ggplot() +
-  geom_sf(aes(fill = specific), lwd = 0.0) + 
-  lakes_gg +
-  theme_map() + 
-  labs(subtitle = "black specific") +
-  sc
-  
-p <- cowplot::plot_grid(
-  p1 + theme(legend.position = "none"), 
-  p2 + theme(legend.position = "none"), 
-  p3  + theme(legend.position = "none"),
-  nrow = 3)
-
-cowplot::plot_grid(
-  p, 
-  cowplot::get_legend(p1), 
-  ncol = 2
-)
-```
-
-## same thing but only significant counties (exponentiate! they did in fig 2)
-
-```{r}
-sc <- scale_fill_gradientn(colors = myPalette(100), 
-                           na.value = "gray70")
-
-# psi for white people
-p1 <- pos_med_sf %>% 
-  filter(race == 1) %>% 
-  mutate(specific = ifelse(specific_sig, specific, NA)) %>%
-  ggplot() +
-  geom_sf(aes(fill = exp(specific)), lwd = 0.0) + 
-  lakes_gg +
-  labs(subtitle = "White-specific (exp(psi1))",
-       fill = "Median posterior estimate") +
-  theme_map() +
-  #theme(legend.title = element_blank()) + 
-  sc
-
-# shared unscaled (phi)
-p2 <- pos_med_sf %>% 
-  mutate(shared_unscaled_inliers = ifelse(shared_unscaled_sig, shared_unscaled_inliers, NA)) %>%
-  filter(race == 1) %>% #shared_unscaled is non-race specific, so choose one
-  ggplot() +
-  geom_sf(aes(fill = exp(shared_unscaled_inliers)), lwd = 0.0) + 
-  lakes_gg +
-  geom_sf(data = filter(pos_med_sf, shared_unscaled_outliers == 1), color = "red", lwd = 0.5) + 
-  geom_sf(data = filter(pos_med_sf, shared_unscaled_outliers == -1), color = "blue", lwd = 0.5) + 
-  labs(subtitle = "Unscaled shared (exp(phi))",
-       fill = "Median posterior estimate") +
-  theme_map() + 
-  sc
-
-# psi for black people
-p3 <- pos_med_sf %>% 
-  filter(race == 2) %>% 
-  mutate(specific = ifelse(specific_sig, specific, NA)) %>%
-  ggplot() +
-  geom_sf(aes(fill = exp(specific)), lwd = 0.0) + 
-  lakes_gg +
-  labs(subtitle = "Black-specific (exp(psi2))",
-       fill = "Median posterior estimate") +
-  theme_map() + 
-  sc
-  
-# p <- cowplot::plot_grid(
-#   p1 + theme(legend.position = "none"), 
-#   p2 + theme(legend.position = "none"), 
-#   p3  + theme(legend.position = "none"),
-#   nrow = 3)
-# 
-# cowplot::plot_grid(
-#   p, 
-#   cowplot::get_legend(p1), 
-#   ncol = 2
-# )
-
-# alternative to cowplot
-ggarrange(p1, p2, p3, 
-          common.legend = TRUE, 
-          legend = "right",
-          ncol = 1)
-```
-
 ```{r}
 # look at counties with zero person-years
 filter(pos_med_sf, person_years == 0) %>% 
@@ -347,25 +345,103 @@ pos_med_sf %<>%
   )
 ```
 
-```{r}
-# now recreate the same plot but without counties with zero person-years
-sc <- scale_fill_gradientn(colors = myPalette(100), 
-                           na.value = "gray70")
 
-# sc <- scale_fill_gradient2(low = "#000080", mid = "white", high = "#ff6600",
-#                          midpoint = 1)
+```{r}
+# plot three risk surfaces
+
+# map 1: don't exponentiate, include non-significant counties
+
+# not sure about this b/c I'm ignoring values <-1 and >1
+
+# set color palette
+myPalette <- colorRampPalette(rev(RColorBrewer::brewer.pal(11, "Spectral")))
+# sc <- scale_fill_gradientn(colors = myPalette(100), 
+#                            limits = c(-1, 1),
+#                            na.value = "gray70")
+sc <- scale_fill_gradient2(low = "#000080", mid = "white", high = "#ff6600",
+                         midpoint = 0)
+
+# psi for white people
+p1 <- pos_med_sf %>% 
+  filter(race == 1) %>% 
+  ggplot() +
+  geom_sf(aes(fill = specific), lwd = 0.0) + 
+  lakes_states_gg +
+  theme_map() +
+  labs(subtitle = "White-specific (psi1)",
+       fill = "Median posterior estimate") +
+  theme(legend.title = element_text(size = 10),
+        legend.text = element_text(size = 8)) +
+  sc
+
+# shared unscaled (phi)
+p2 <- pos_med_sf %>% 
+  filter(race == 1) %>% #shared_unscaled is non-race specific
+  ggplot() +
+  geom_sf(aes(fill = shared_unscaled_inliers), lwd = 0.0) + 
+  lakes_states_gg +
+  geom_sf(data = filter(pos_med_sf, shared_unscaled_outliers == 1), color = "red", lwd = 0.5) + 
+  geom_sf(data = filter(pos_med_sf, shared_unscaled_outliers == -1), color = "blue", lwd = 0.5) + 
+  theme_map() + 
+  labs(subtitle = "Unscaled shared (phi)",
+       fill = "Median posterior estimate") +
+  theme(legend.title = element_text(size = 10),
+        legend.text = element_text(size = 8)) +
+  sc
+
+# psi for black people
+p3 <- pos_med_sf %>% 
+  filter(race == 2) %>% 
+  ggplot() +
+  geom_sf(aes(fill = specific), lwd = 0.0) + 
+  lakes_states_gg +
+  theme_map() + 
+  labs(subtitle = "Black-specific (psi2)",
+       fill = "Median posterior estimate") +
+  theme(legend.title = element_text(size = 10),
+        legend.text = element_text(size = 8)) +
+  sc
+  
+# p <- cowplot::plot_grid(
+#   p1 + theme(legend.position = "none"), 
+#   p2 + theme(legend.position = "none"), 
+#   p3  + theme(legend.position = "none"),
+#   nrow = 3)
+# 
+# cowplot::plot_grid(
+#   p, 
+#   cowplot::get_legend(p1), 
+#   ncol = 2
+# )
+
+# alternative to cowplot
+ggarrange(p1, p2, p3, 
+          common.legend = TRUE, 
+          nrow = 1,
+          legend = "bottom")
+```
+
+```{r}
+# map 2: exponentiate and only include non-significant counties
+
+# new color scale (since I'm exponentiating)
+# sc <- scale_fill_gradientn(colors = myPalette(100), 
+#                            na.value = "gray70")
+sc <- scale_fill_gradient2(low = "#000080", mid = "white", high = "#ff6600",
+                         midpoint = 1)
 
 # psi for white people
 p1 <- pos_med_sf %>% 
   filter(race == 1) %>% 
   mutate(specific = ifelse(specific_sig, specific, NA)) %>%
   ggplot() +
-  geom_sf(aes(fill = exp(specific)), lwd = 0.1) + 
+  geom_sf(aes(fill = exp(specific)), lwd = 0.0) + 
   lakes_states_gg +
   labs(subtitle = "White-specific (exp(psi1))",
        fill = "Median posterior estimate") +
   theme_map() +
-  #theme(legend.title = element_blank()) + 
+  theme(legend.title = element_text(size = 10),
+        legend.text = element_text(size = 8)) +
   sc
 
 # shared unscaled (phi)
@@ -373,13 +449,15 @@ p2 <- pos_med_sf %>%
   mutate(shared_unscaled_inliers = ifelse(shared_unscaled_sig, shared_unscaled_inliers, NA)) %>%
   filter(race == 1) %>% #shared_unscaled is non-race specific, so choose one
   ggplot() +
-  geom_sf(aes(fill = exp(shared_unscaled_inliers)), lwd = 0.1) + 
+  geom_sf(aes(fill = exp(shared_unscaled_inliers)), lwd = 0.0) + 
   lakes_states_gg +
   geom_sf(data = filter(pos_med_sf, shared_unscaled_outliers == 1), color = "red", lwd = 0.5) + 
   geom_sf(data = filter(pos_med_sf, shared_unscaled_outliers == -1), color = "blue", lwd = 0.5) + 
   labs(subtitle = "Unscaled shared (exp(phi))",
        fill = "Median posterior estimate") +
   theme_map() + 
+  theme(legend.title = element_text(size = 10),
+        legend.text = element_text(size = 8)) +
   sc
 
 # psi for black people
@@ -387,103 +465,29 @@ p3 <- pos_med_sf %>%
   filter(race == 2) %>% 
   mutate(specific = ifelse(specific_sig, specific, NA)) %>%
   ggplot() +
-  geom_sf(aes(fill = exp(specific)), lwd = 0.1) + 
+  geom_sf(aes(fill = exp(specific)), lwd = 0.0) + 
   lakes_states_gg +
   labs(subtitle = "Black-specific (exp(psi2))",
        fill = "Median posterior estimate") +
   theme_map() + 
+  theme(legend.title = element_text(size = 10),
+        legend.text = element_text(size = 8)) +
   sc
-  
-# p <- cowplot::plot_grid(
-#   p1 + theme(legend.position = "none"), 
-#   p2 + theme(legend.position = "none"), 
-#   p3  + theme(legend.position = "none"),
-#   nrow = 3)
-# 
-# cowplot::plot_grid(
-#   p, 
-#   cowplot::get_legend(p1), 
-#   ncol = 2
-# )
 
-# alternative to cowplot
+# arrange plots
 ggarrange(p1, p2, p3, 
           common.legend = TRUE, 
-          legend = "right",
-          ncol = 1)
-```
-
-```{r}
-# now don't remove counties that aren't significant
-# but I already did remove them...
-sc <- scale_fill_gradientn(colors = myPalette(100), 
-                           na.value = "gray70")
-
-# psi for white people
-p1 <- pos_med_sf %>% 
-  filter(race == 1) %>% 
-  #mutate(specific = ifelse(specific_sig, specific, NA)) %>%
-  ggplot() +
-  geom_sf(aes(fill = exp(specific)), lwd = 0.0) + 
-  lakes_gg +
-  labs(subtitle = "White-specific (exp(psi1))",
-       fill = "Median posterior estimate") +
-  theme_map() +
-  #theme(legend.title = element_blank()) + 
-  sc
-
-# shared unscaled (phi)
-p2 <- pos_med_sf %>% 
-  #mutate(shared_unscaled_inliers = ifelse(shared_unscaled_sig, shared_unscaled_inliers, NA)) %>%
-  filter(race == 1) %>% #shared_unscaled is non-race specific, so choose one
-  ggplot() +
-  geom_sf(aes(fill = exp(shared_unscaled_inliers)), lwd = 0.0) + 
-  lakes_gg +
-  geom_sf(data = filter(pos_med_sf, shared_unscaled_outliers == 1), color = "red", lwd = 0.5) + 
-  geom_sf(data = filter(pos_med_sf, shared_unscaled_outliers == -1), color = "blue", lwd = 0.5) + 
-  labs(subtitle = "Unscaled shared (exp(phi))",
-       fill = "Median posterior estimate") +
-  theme_map() + 
-  sc
-
-# psi for black people
-p3 <- pos_med_sf %>% 
-  filter(race == 2) %>% 
-  #mutate(specific = ifelse(specific_sig, specific, NA)) %>%
-  ggplot() +
-  geom_sf(aes(fill = exp(specific)), lwd = 0.0) + 
-  lakes_gg +
-  labs(subtitle = "Black-specific (exp(psi2))",
-       fill = "Median posterior estimate") +
-  theme_map() + 
-  sc
-  
-# p <- cowplot::plot_grid(
-#   p1 + theme(legend.position = "none"), 
-#   p2 + theme(legend.position = "none"), 
-#   p3  + theme(legend.position = "none"),
-#   nrow = 3)
-# 
-# cowplot::plot_grid(
-#   p, 
-#   cowplot::get_legend(p1), 
-#   ncol = 2
-# )
-
-# alternative to cowplot
-ggarrange(p1, p2, p3, 
-          common.legend = TRUE, 
-          legend = "right",
-          ncol = 1)
+          nrow = 1,
+          legend = "bottom")
 ```
 
 
-## shared unscaled
+
+### Now split shared risk into two scaled maps
 
 ```{r}
-# now split the middle map into scaled phi for each race
-
 shared_ <- c(pos_med$shared, pos_med$specific)
+
 myPalette <- colorRampPalette(rev(RColorBrewer::brewer.pal(11, "Spectral")))
 sc <- scale_fill_gradientn(colors = myPalette(100), 
                            limits = c(min(shared_), max(shared_)))
@@ -544,6 +548,7 @@ cowplot::plot_grid(
   rel_widths = c(0.8, 0.2)
 )
 ```
+
 
 #############################################################
 #############################################################
@@ -820,3 +825,7 @@ pos_med_sf %>%
 
 ```
 
+this might help with these pink/green plots!!
+
+scale_color_gradientn(colours = c("blue", "blue", "white", "red", "red"),
+                        values = c(0, 0.485, 0.5, 0.515, 1))
