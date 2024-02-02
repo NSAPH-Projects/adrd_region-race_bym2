@@ -12,6 +12,32 @@ library(magrittr)
 library(rstan)
 ```
 
+```{r}
+# choose model
+model <- "m1"
+
+#slurm job number 1307317 for m0 is labeled model_run_20230311_185502
+if(model == "m1"){
+  stanfit_object <- read_rds(paste0(
+    "results/models/adrd/m1/model_run_20231109_142035/stanfit_object.rds"
+    ))
+} else if(model == "m2"){
+  stanfit_object <- read_rds(paste0(
+    "results/models/adrd/m2/model_run_*/stanfit_object.rds"
+    ))
+} else if(model == "m3"){
+  stanfit_object <- read_rds(paste0(
+    "results/models/adrd/m3/model_run_*/stanfit_object.rds"
+    ))
+} else if(model == "m4"){
+  stanfit_object <- read_rds(paste0(
+    "results/models/adrd/m4/model_run_*/stanfit_object.rds"
+    ))
+}
+
+class(stanfit_object)
+```
+
 
 ```{r}
 ## Read data ----
@@ -20,15 +46,8 @@ adrd_ratios_df
 ```
 
 ```{r}
-county_fips_df <- read_rds("data/symlinks/temp/county_fips_df.rds")
+county_fips_df <- read_rds("data/symlinks/scratch/county_fips_df.rds")
 county_fips_df
-```
-
-```{r}
-#slurm job number 1307317 for m0 is labeled model_run_20230311_185502
-stanfit_object <- read_rds("results/models/adrd/m0/model_run_20231109_142035/stanfit_object.rds")
-
-class(stanfit_object)
 ```
 
 ```{r}
@@ -209,6 +228,23 @@ shared <- rbind(
     c_idx = 1:ncol(shared_b))
 )
 
+# is exp(shared) (phi*delta for white, phi/delta for black) for each country for each race sig diff from 1?
+# note: delta is same for white and black in a give county, shared_sig will be the same for white and black in a given county
+phi_delta_sig <- rbind(
+  tibble(
+    race = 1,  
+    shared_sig = 
+      (colMeans(exp(shared_w) > 1) > 0.8) | 
+      (colMeans(exp(shared_w) < 1) > 0.8),
+    c_idx = 1:ncol(shared_w)),
+  tibble(
+    race = 2,  
+    shared_sig = 
+      (colMeans(exp(shared_b) > 1) > 0.8) | 
+      (colMeans(exp(shared_b) < 1) > 0.8),
+    c_idx = 1:ncol(shared_b))
+)
+
 # is exp(phi) (shared, unscaled) for each county significantly different from 1?
 # (this is how significance is defined in figure 2 caption)
 phi_sig <- data.frame(
@@ -218,8 +254,9 @@ phi_sig <- data.frame(
     c_idx = 1:ncol(stanfit_samples$phi)
 )
 
-# Join sig column
+# Join sig columns
 shared %<>% 
+  dplyr::left_join(phi_delta_sig, by = c("c_idx", "race")) %>%
   dplyr::left_join(phi_sig, by = c("c_idx"))
 
 ## Add in correct fipschar ----
@@ -282,6 +319,17 @@ specific %>%
   theme_classic()
 ```
 
+
+## Empirical variance
+
+```{r}
+
+
+
+```
+
+
+
 ```{r}
 # report distribution of county-level relative risks (exp(pos_med_y) which is exp(log lambda))
 
@@ -328,7 +376,7 @@ max(pos_med$risk_ratio)
 ```
 
 ```{r}
-write_rds(pos_med, "data/intermediate/m0-pos_med.rds")
-write_rds(stanfit_samples, "data/intermediate/m0-stanfit_samples.rds")
-write_rds(stanfit_summary, "data/intermediate/m0-stanfit_summary.rds")
+write_rds(pos_med, paste0("data/intermediate/adrd-", model, "_pos_med.rds"))
+write_rds(stanfit_samples, paste0("data/intermediate/adrd-", model, "_stanfit_samples.rds"))
+write_rds(stanfit_summary, paste0("data/intermediate/adrd-", model, "_stanfit_summary.rds"))
 ```
