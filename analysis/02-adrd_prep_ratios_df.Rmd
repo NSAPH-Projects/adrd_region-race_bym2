@@ -471,46 +471,6 @@ mutate(race = case_when(
   labs(x = "House-price-income ratio", y = "Density", col = "")
 ```
 
-```{r}
-# map PM2.5 and HPI ratio
-
-county_sf %>%
-  select(county) %>%
-  left_join(adrd_ratios_df) %>%
-  ggplot() +
-  geom_sf(aes(fill = pm25), alpha = 1, lwd = 0.0) +
-  labs(fill = "PM2.5") +
-  scale_fill_viridis(option = "D") +
-  theme(legend.position = "bottom") +
-  theme_map()
-  
-county_sf %>%
-  select(county) %>%
-  left_join(adrd_ratios_df) %>%
-  ggplot() +
-  geom_sf(aes(fill = log2(house_price_income_ratio)), alpha = 1, lwd = 0.0) +
-  labs(fill = "log2(HPI ratio)") +
-  scale_fill_viridis(option = "D") +
-  theme(legend.position = "bottom") +
-  theme_map()
-```
-
-```{r}
-# # plot % of person-years contributed by black people in each county
-# #pos_med_sf %>%
-county_sf %>%
-  select(county) %>%
-  left_join(adrd_ratios_df) %>%
-  group_by(county) %>%
-  summarise(pct_blk = 100 * (person_years[race == 2] /
-                               (person_years[race == 1] + person_years[race == 2]))) %>%
-  ggplot() +
-  geom_sf(aes(fill = pct_blk), lwd = 0) +
-  #lakes_gg +
-  labs(fill = "% of person-years \ncontributed by Black indivs") +
-  scale_fill_viridis(option = "D") +
-  theme_map()
-```
 
 ```{r}
 write_rds(adrd_ratios_df, "data/symlinks/scratch/adrd_ratios_df.rds")
