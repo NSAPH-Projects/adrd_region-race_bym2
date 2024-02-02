@@ -193,11 +193,11 @@ pos_med_sf |>
 
 
 ```{r}
-# map of y (observed/expected)
+# map of observed/expected = exp(y)
 
 # note: it's better to plot y than log(y)!
 # if zero hosp are observed and 1 is expected, log(y) = -Inf, but y = 0
-# if zero hosp are expected, then y and log(y) will both be undefined
+# (if zero hosp are expected, then y and log(y) will both be undefined)
 
 # plotting in a slightly tricky/work-around way so outliers don't mess up the color scale
 # note: legend shows up to 3, but max value for exp(y) is 11!
@@ -231,24 +231,6 @@ ggplot() +
 ```
 
 
-```{r}
-# similar map of y (observed/expected)
-# but now highlight where observed/expected and lambda (from model) are very different
-pos_med_sf %>%
-  mutate(
-    res = y - pos_med_y,
-    res_is_out = if_else(abs(res) > 2/3, "different", "similar")
-  ) %>%
-  ggplot() +
-  geom_sf(aes(fill = exp(y), col = as.factor(res_is_out)), lwd = 0.2) +
-  scale_fill_viridis(option = "D") +
-  labs(col = "y & lambda are:") +
-  facet_grid(~race) +
-  theme(legend.position = "bottom") +
-  theme_map()
-```
-
-
 ## Plot model results
 
 ### Relative/standardized risks (posterior medians of lambda = pos_med_y)
@@ -269,6 +251,26 @@ pos_med_sf %>%
   theme(legend.position = "bottom",
         legend.text = element_text(size = 8))
 ```
+
+```{r}
+# now compare raw ratios (observed/expected--unsmoothed) to model results (lambda--smoothed)
+pos_med_sf %>%
+  mutate(
+    res = y - pos_med_y,
+    res_is_out = if_else(abs(res) > 2/3, "different", "similar")
+  ) %>%
+  ggplot() +
+  geom_sf(aes(#fill = exp(y), 
+              fill = as.factor(res_is_out)), lwd = 0.1) +
+  lakes_states_gg +
+  #scale_fill_viridis(option = "D") +
+  labs(fill = "Raw ratio & \nlambda are:") +
+  facet_grid(~race, labeller = as_labeller(race_labels)) +
+  theme(legend.position = "bottom") +
+  theme_map()
+# makes sense that they are more different for Black individuals (more to smooth)
+```
+
 
 ### State effects
 
@@ -336,10 +338,11 @@ filter(pos_med_sf, person_years == 0) %>%
 ```
 
 ```{r}
-# if zero person years, make "specific" and "shared" columns NA
+# if zero person years, make "specific" and "shared" (scaled and unscaled) columns NA
 pos_med_sf %<>% 
   mutate(
     specific = if_else(person_years == 0, as.numeric(NA), specific),
+    shared = if_else(person_years == 0, as.numeric(NA), shared),
     shared_unscaled_inliers = if_else(person_years == 0, as.numeric(NA), shared_unscaled_inliers),
     shared_unscaled_outliers = if_else(person_years == 0, as.numeric(NA), shared_unscaled_outliers)
   )
@@ -349,12 +352,12 @@ pos_med_sf %<>%
 ```{r}
 # plot three risk surfaces
 
-# map 1: don't exponentiate, include non-significant counties
-
-# not sure about this b/c I'm ignoring values <-1 and >1
+# map 1: don't exponentiate and include non-significant counties
+# need to decide if I want to exponentiate maps 1 and 2 or not
 
 # set color palette
-myPalette <- colorRampPalette(rev(RColorBrewer::brewer.pal(11, "Spectral")))
+# not sure about this palette b/c it ignores values <-1 and >1 and isn't colorblind safe
+# myPalette <- colorRampPalette(rev(RColorBrewer::brewer.pal(11, "Spectral")))
 # sc <- scale_fill_gradientn(colors = myPalette(100), 
 #                            limits = c(-1, 1),
 #                            na.value = "gray70")
@@ -422,7 +425,7 @@ ggarrange(p1, p2, p3,
 ```
 
 ```{r}
-# map 2: exponentiate and only include non-significant counties
+# map 2: exponentiate and only include significant counties
 
 # new color scale (since I'm exponentiating)
 # sc <- scale_fill_gradientn(colors = myPalette(100), 
@@ -486,51 +489,77 @@ ggarrange(p1, p2, p3,
 ### Now split shared risk into two scaled maps
 
 ```{r}
-shared_ <- c(pos_med$shared, pos_med$specific)
+# split phi map into phi*delta and phi/delta
 
-myPalette <- colorRampPalette(rev(RColorBrewer::brewer.pal(11, "Spectral")))
-sc <- scale_fill_gradientn(colors = myPalette(100), 
-                           limits = c(min(shared_), max(shared_)))
+# not exponentiating here--need to decide if we should
+
+sc <- scale_fill_gradient2(low = "#000080", mid = "white", high = "#ff6600",
+                         midpoint = 0)
+
+# # vector of all shared and specific values
+# shared_ <- c(pos_med$shared, pos_med$specific)
+# myPalette <- colorRampPalette(rev(RColorBrewer::brewer.pal(11, "Spectral")))
+# sc <- scale_fill_gradientn(colors = myPalette(100), 
+#                            limits = c(min(shared_), max(shared_)))
 
 # psi for white people
 p1 <- pos_med_sf %>% 
   filter(race == 1) %>% 
+  mutate(specific = ifelse(specific_sig, specific, NA)) %>%
   ggplot() +
   geom_sf(aes(fill = specific), lwd = 0.00) + 
-  lakes_gg +
+  lakes_states_gg +
   theme_map() +
-  labs(subtitle = "white specific") + 
-  theme(legend.title = element_blank()) + 
+  labs(subtitle = "White-specific (psi1)",
+       fill = "Median posterior \nestimate") +
+  theme(plot.subtitle = element_text(size = 10),
+        legend.title = element_text(size = 10),
+        legend.text = element_text(size = 8)) + 
   sc
 
 # scaled phi for white people
 p2 <- pos_med_sf %>% 
-  filter(race == 1) %>% #shared_unscaled is non-race specific
+  filter(race == 1) %>%
+  mutate(shared = ifelse(shared_sig, shared, NA)) %>%
   ggplot() +
   geom_sf(aes(fill = shared), lwd = 0.00) + 
-  lakes_gg +
+  lakes_states_gg +
   theme_map() + 
-  labs(subtitle = "shared white") + 
+  labs(subtitle = "Scaled shared for White (phi*delta)",
+       fill = "Median posterior \nestimate") +
+  theme(plot.subtitle = element_text(size = 10),
+        legend.title = element_text(size = 10),
+        legend.text = element_text(size = 8)) + 
   sc
 
 # scaled phi for black people
 p3 <- pos_med_sf %>% 
-  filter(race == 2) %>% #shared_unscaled is non-race specific
+  filter(race == 2) %>%
+  mutate(shared = ifelse(shared_sig, shared, NA)) %>%
   ggplot() +
   geom_sf(aes(fill = shared), lwd = 0.00) + 
-  lakes_gg +
+  lakes_states_gg +
   theme_map() + 
-  labs(subtitle = "shared black") + 
+  labs(subtitle = "Scaled shared for Black (phi/delta)",
+       fill = "Median posterior \nestimate") +
+  theme(plot.subtitle = element_text(size = 10),
+        legend.title = element_text(size = 10),
+        legend.text = element_text(size = 8)) + 
   sc
 
 # psi for black people
 p4 <- pos_med_sf %>% 
   filter(race == 2) %>% 
+  mutate(specific = ifelse(specific_sig, specific, NA)) %>%
   ggplot() +
   geom_sf(aes(fill = specific), lwd = 0.00) + 
-  lakes_gg +
+  lakes_states_gg +
   theme_map() + 
-  labs(subtitle = "black specific") +
+  labs(subtitle = "Black-specific (psi2)",
+       fill = "Median posterior \nestimate") +
+  theme(plot.subtitle = element_text(size = 10),
+        legend.title = element_text(size = 10),
+        legend.text = element_text(size = 8)) + 
   sc
   
 p <- cowplot::plot_grid(
@@ -550,23 +579,10 @@ cowplot::plot_grid(
 ```
 
 
-#############################################################
-#############################################################
-#############################################################
-
-## New maps from Lauren!
+### Risk ratios
 
 ```{r}
-# recreate figure 3
-
-# plot distribution of risk ratios
-pos_med_sf %>%
-  ggplot() +
-  geom_density(aes(risk_ratio))
-```
-
-```{r}
-# if zero person years, make "risk_ratio" column NA for BOTH white and black rows
+# if zero black person years, make "risk_ratio" column NA for BOTH white and black rows
 
 # get counties with zero person-years for black people
 county_zero_b <- pos_med_sf %>%
@@ -581,94 +597,36 @@ pos_med_sf %<>%
 ```
 
 ```{r}
-# map of risk ratios
-
-library(paletteer)
-library(ggthemes)
-
-# need to change color scale to show <1 and >1
-# myPalette <- colorRampPalette(rev(RColorBrewer::brewer.pal(11, "Spectral")))
-# sc <- scale_fill_gradientn(colors = myPalette(100), 
-#                            limits = c(min(pos_med_sf$risk_ratio), max(pos_med_sf$risk_ratio)),
-#                            na.value = "gray70")
-
-# trying a discrete diverging color palette (but needs to be centered at 1!)
-# new_sc <- scale_fill_gradientn(colors = rev(paletteer_c("ggthemes::Red-Blue-White Diverging", 20)[c(1:10, 14)]), 
-#                            limits = c(min(pos_med_sf$risk_ratio), max(pos_med_sf$risk_ratio)),
-#                            na.value = "gray70")
-
-# trying a continuous diverging color palette 
-library(colorspace)
-sc2 <- scale_fill_continuous_diverging(palette = "Green", 
-                                           na.value = "gray70",
-                                           mid = 1#,
-                                           #limits = c(0.7, 2.5),
-                                           #breaks = c(seq(0.7, 1, by = 0.1), seq(1.1, 2.5, by = 0.2))
-                                           )
-
-
-sc3 <- scale_fill_gradient2(low = "#710193", mid = "white", high = "darkgreen",
-                         midpoint = 1,
-                         limits = c(0, 2.5), 
-                         trans = "log")
-
-sc4 <- ggplot2::scale_fill_brewer(NULL, palette = "PRGn", direction = -1)
-
-pos_med_sf %>% 
-  mutate(
-    risk_ratio = ifelse(risk_ratio_sig, risk_ratio, as.numeric(NA))
-  ) %>%
-  select(county, geometry, risk_ratio) %>%
-  distinct() %>%
-  ggplot() +
-  geom_sf(aes(fill = risk_ratio), lwd = 0.1) + 
-  #lakes_gg +
-  states_gg +
-  geom_sf(data = lakes_sf, fill = "white", col = "black") +
-  labs(fill = "Risk ratio") +
-  theme_map() +
-  sc2
-```
-
-```{r}
-# map of risk ratios but don't remove non-significant counties
-
-# need to change color scale to show <1 and >1
-myPalette <- colorRampPalette(rev(RColorBrewer::brewer.pal(11, "Spectral")))
-sc <- scale_fill_gradientn(colors = myPalette(100), 
-                           limits = c(min(pos_med_sf$risk_ratio), max(pos_med_sf$risk_ratio)),
-                           na.value = "gray70")
-
-pos_med_sf %>% 
-  # mutate(
-  #   risk_ratio = ifelse(risk_ratio_sig, risk_ratio, as.numeric(NA))
-  # ) %>%
-  select(county, geometry, risk_ratio) %>%
-  distinct() %>%
-  ggplot() +
-  geom_sf(aes(fill = risk_ratio), lwd = 0.00) + 
-  lakes_gg +
-  labs(fill = "Risk ratio") +
-  theme_map() +
-  sc
-```
-
-
-```{r}
-# dichotomize risk ratio
-
-# what % of counties are significantly <1? significantly >1? (slow!!)
+# plot distribution of risk ratios
 pos_med_sf %>%
+  ggplot() +
+  geom_histogram(aes(risk_ratio), col = "white") +
+  geom_vline(xintercept = 1, lty = 2) +
+  labs(x = "Risk ratio", y = "Count") +
+  theme_bw()
+```
+
+```{r}
+# dichotomize risk ratio--where is white vs. black risk higher?
+
+# make a table--what % of counties are significantly <1? significantly >1?
+RR_tab <- pos_med_sf %>%
   #slice_sample(prop = 0.05) %>%
   filter(race == 2) %>% # same risk ratio for white and black rows
   # select(county, geometry, risk_ratio, risk_ratio_sig) %>%
   # distinct() %>%
+  select(-geometry) %>%
+  as.data.frame() %>%
   mutate(
-    risk_ratio = ifelse(risk_ratio_sig, risk_ratio, as.numeric(NA)),
-    risk_ratio = ifelse(risk_ratio < 1, "Risk ratio < 1", "Risk ratio > 1")
+    `Risk Ratio` = ifelse(risk_ratio_sig, risk_ratio, as.numeric(NA)),
+    `Risk Ratio` = ifelse(risk_ratio < 1, "Risk ratio < 1", "Risk ratio > 1")
   ) %>%
-  count(risk_ratio, name = "count")
+  count(`Risk Ratio`, name = "Count")
 
+# print table
+RR_tab |> pander()
+
+# plot 
 pos_med_sf %>% 
   mutate(
     risk_ratio = ifelse(risk_ratio_sig, risk_ratio, NA),
@@ -677,60 +635,70 @@ pos_med_sf %>%
   select(county, geometry, risk_ratio) %>%
   distinct() %>%
   ggplot() +
-  geom_sf(aes(fill = factor(risk_ratio)), lwd = 0.00) + 
-  lakes_gg +
+  geom_sf(aes(fill = factor(risk_ratio)), lwd = 0.06) + 
+  lakes_states_gg +
   labs(fill = "") +
+  scale_fill_manual(values = c("Risk ratio < 1" = "#53ACE6", 
+                               "Risk ratio > 1" = "#FFA836"),
+                    na.value = "white") +
   theme_map()
 ```
 
+
 ```{r}
-# same thing, but keep all the counties that aren't significant
-# seems like they are all the counties with higher risk for black
+# some attempts at continuous color scales (challenging!)
+
+# library(paletteer)
+# library(ggthemes)
+
+# this works, but the blue doesn't get dark enough
+sc <- scale_fill_gradientn(colors = rev(paletteer_c("ggthemes::Red-Blue-White Diverging", 
+                                                    20)[c(1:10, 14)]),
+                           limits = c(min(pos_med_sf$risk_ratio), max(pos_med_sf$risk_ratio)),
+                           na.value = "gray70")
+
+# # this is blue to brown for some reason
+# library(colorspace)
+# sc <- colorspace::scale_fill_continuous_diverging(palette = "Green", 
+#                                            na.value = "gray70",
+#                                            mid = 1#,
+#                                            #limits = c(0.7, 2.5),
+#                                            #breaks = c(seq(0.7, 1, by = 0.1), seq(1.1, 2.5, by = 0.2))
+#                                            )
+
+# # this works, but again, purple doesn't get dark enough
+# sc <- scale_fill_gradient2(low = "#710193", mid = "white", high = "darkgreen",
+#                          midpoint = 1)
+
+# Error: Continuous value supplied to discrete scale
+# sc <- ggplot2::scale_fill_brewer(NULL, palette = "PRGn", direction = -1)
+
+# map of risk ratios
 pos_med_sf %>% 
   mutate(
-    risk_ratio = ifelse(risk_ratio < 1, "Risk ratio < 1", "Risk ratio > 1")
+    risk_ratio = ifelse(risk_ratio_sig, risk_ratio, as.numeric(NA))
   ) %>%
   select(county, geometry, risk_ratio) %>%
   distinct() %>%
   ggplot() +
-  geom_sf(aes(fill = factor(risk_ratio)), lwd = 0.00) + 
-  lakes_gg +
-  labs(fill = "") +
-  theme_map()
+  geom_sf(aes(fill = risk_ratio), lwd = 0.1) + 
+  lakes_states_gg +
+  labs(fill = "Risk ratio") +
+  theme_map() +
+  sc
 ```
-
 
 
 ```{r}
 # try plotting risk ratio with discrete bins (instead of continuous or dichotomous)
 
-# # make a new column for discrete bins
-# pos_med_sf %<>% 
-#   mutate(
-#     risk_ratio = ifelse(risk_ratio_sig, risk_ratio, as.numeric(NA)),
-#     risk_ratio_bins = cut(risk_ratio, 
-#                           breaks = c(0, 1, 1.5, 2, Inf), 
-#                           labels = c("<1", "1-1.5", "1.5-2", ">2")
-#                           )
-#   )
-
-# # get all sig. RR values
-# rr_vals <- pos_med_sf |>
-#   filter(race == 1) |>
-#   filter(!is.na(risk_ratio)) |>
-#   pull(risk_ratio)
-
-# I don't like quantiles!! need a bin for <1
-#rr_11_bins <- quantile(rr_vals, seq(0, 1, 0.1))
-
-
-# make a new column for discrete bins
+# set boundaries for each discrete bin
+# may need to change!! should be consistent across models and include all RR
 bin_breaks <- c(0.6, 0.8, 1, 1.2, 1.4, 1.6, 1.8, 2.2, 3)
 
 # get bin labels from bin breaks (get mean)
 bin_df <- embed(bin_breaks, 2) |> as.data.frame()
-bin_means <- rowMeans(bin_df) |>
-  format(nsmall = 1)
+bin_means <- rowMeans(bin_df) |> format(nsmall = 1)
 
 # new column for risk ratio
 pos_med_sf %<>% 
@@ -740,11 +708,12 @@ pos_med_sf %<>%
                           breaks = bin_breaks,
                           labels = bin_means
                           ))
-# choose hex codes
+# choose hex codes manually from PiYG palette
 # brewer.pal(n = 11, name = "PiYG")
 # cols <- c("#8E0152", "#C51B7D", "#DE77AE", "#F1B6DA", "#FDE0EF", "#F7F7F7",
 #           "#E6F5D0", "#B8E186", "#7FBC41", "#4D9221", "#276419")
 
+# plot
 pos_med_sf %>% 
   select(county, geometry, risk_ratio_bins) %>%
   distinct() %>%
@@ -773,21 +742,8 @@ pos_med_sf %>%
                     #na.translate = F      # makes NA white
                     ) #+
   #guides(fill = guide_legend(nrow = 1))
-  
-#scale_fill_manual(values = c("#492050FF", "#7C4586FF", "#E1C5E8FF", "#4D9221",
-#                              "#B6D7B6FF", "#81B981FF", "#3F9640FF", "#226823FF", "#023903FF"))
-    #values = myPalette(5), 
-                    #values = rev(c("brown2", "darkorange", "gold", "darkgreen")),
-                    #values = c("#88CFA4", "#FFFFBF", "#FFA500", "#BF0A30"),
-                    #na.value = "gray50")
 
-
-```
-
-
-```{r}
-# change plot to be more like Matt's with legend on bottom 
-
+# or change legend to be along the bottom like Matt's
 pos_med_sf %>% 
   select(county, geometry, risk_ratio_bins) %>%
   distinct() %>%
@@ -822,10 +778,5 @@ pos_med_sf %>%
             keyheight = grid::unit(.5, "lines"),
             label.hjust = 0))
 
-
 ```
 
-this might help with these pink/green plots!!
-
-scale_color_gradientn(colours = c("blue", "blue", "white", "red", "red"),
-                        values = c(0, 0.485, 0.5, 0.515, 1))
