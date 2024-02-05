@@ -10,15 +10,29 @@ knitr::opts_knit$set(root.dir = here())
 library(tidyverse)
 library(magrittr)
 library(bayesplot)
+library(rstan)
 ```
 
 ```{r}
 ## Read data ----
 #slurm job number 1307317 for m0 is labeled model_run_20230311_185502
-stanfit_object <- read_rds("results/models/adrd/m0/model_run_20231109_142035/stanfit_object.rds")
+# stanfit_object <- read_rds("results/models/adrd/m1/model_run_20231109_142035/stanfit_object.rds")
+
+stanfit_object1 <- read_rds("results/models/adrd/m1/model_run_20240123_162901/stanfit_object.rds")
+
+stanfit_object2 <- read_rds("results/models/adrd/m1/model_run_20240123_161610/stanfit_object.rds")
 
 class(stanfit_object)
 ```
+
+```{r}
+# Create a list of the four model fit objects
+fit_list <- list(stanfit_object1, stanfit_object2)
+
+# Convert the list of model fits to a stan fit object
+combined_fit <- sflist2stanfit(fit_list)
+```
+
 
 ```{r}
 list_of_draws <- rstan::extract(stanfit_object)
