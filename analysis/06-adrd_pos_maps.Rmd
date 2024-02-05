@@ -14,6 +14,7 @@ library(cowplot)
 library(viridis)
 library(RColorBrewer)
 library(ggpubr)
+library(pander)
 ```
 
 ## Load data
@@ -619,7 +620,7 @@ RR_tab <- pos_med_sf %>%
   as.data.frame() %>%
   mutate(
     `Risk Ratio` = ifelse(risk_ratio_sig, risk_ratio, as.numeric(NA)),
-    `Risk Ratio` = ifelse(risk_ratio < 1, "Risk ratio < 1", "Risk ratio > 1")
+    `Risk Ratio` = ifelse(`Risk Ratio` < 1, "Risk ratio < 1", "Risk ratio > 1")
   ) %>%
   count(`Risk Ratio`, name = "Count")
 
@@ -743,40 +744,40 @@ pos_med_sf %>%
                     ) #+
   #guides(fill = guide_legend(nrow = 1))
 
-# or change legend to be along the bottom like Matt's
-pos_med_sf %>% 
-  select(county, geometry, risk_ratio_bins) %>%
-  distinct() %>%
-  ggplot() +
-  geom_sf(aes(fill = risk_ratio_bins), lwd = 0.03) + 
-  #lakes_gg +
-  states_gg +
-  geom_sf(data = lakes_sf, fill = "white", col = "black") +
-  labs(fill = "Risk Ratio (Black/White)") +
-  theme_map() +
-  theme(legend.position = "bottom", 
-        #legend.justification = "right", 
-        #legend.direction = "vertical",
-        legend.title = element_text(size = 10),
-        legend.text = element_text(size = 8)) +
-  scale_fill_manual(values = c("#07da63", 
-                               "#7ffbb5",
-                               "#FDE0EF", 
-                               "#fbc8e3", 
-                               #"#fab0d6", 
-                               "#DE77AE", 
-                               "#C51B7D", 
-                               "#8E0152", 
-                               "#400023"),
-                    na.value = "gray50",
-                    breaks = levels(unique(pos_med_sf$risk_ratio_bins))) +
-  guides(fill = guide_legend(
-    title.position = "top",        
-    nrow = 1,
-            label.position = "bottom",
-            keywidth = grid::unit(3.5, "lines"),
-            keyheight = grid::unit(.5, "lines"),
-            label.hjust = 0))
+# # or change legend to be along the bottom like Matt's
+# pos_med_sf %>% 
+#   select(county, geometry, risk_ratio_bins) %>%
+#   distinct() %>%
+#   ggplot() +
+#   geom_sf(aes(fill = risk_ratio_bins), lwd = 0.03) + 
+#   #lakes_gg +
+#   states_gg +
+#   geom_sf(data = lakes_sf, fill = "white", col = "black") +
+#   labs(fill = "Risk Ratio (Black/White)") +
+#   theme_map() +
+#   theme(legend.position = "bottom", 
+#         #legend.justification = "right", 
+#         #legend.direction = "vertical",
+#         legend.title = element_text(size = 10),
+#         legend.text = element_text(size = 8)) +
+#   scale_fill_manual(values = c("#07da63", 
+#                                "#7ffbb5",
+#                                "#FDE0EF", 
+#                                "#fbc8e3", 
+#                                #"#fab0d6", 
+#                                "#DE77AE", 
+#                                "#C51B7D", 
+#                                "#8E0152", 
+#                                "#400023"),
+#                     na.value = "gray50",
+#                     breaks = levels(unique(pos_med_sf$risk_ratio_bins))) +
+#   guides(fill = guide_legend(
+#     title.position = "top",        
+#     nrow = 1,
+#             label.position = "bottom",
+#             keywidth = grid::unit(3.5, "lines"),
+#             keyheight = grid::unit(.5, "lines"),
+#             label.hjust = 0))
 
 ```
 
