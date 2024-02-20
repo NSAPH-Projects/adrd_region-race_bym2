@@ -22,10 +22,11 @@ library(pander)
 ```{r}
 # choose which model to use
 model <- "m1"
+#model <- "m2"
 
 ## Read model results
 stanfit_samples <- read_rds(paste0("data/intermediate/adrd-", model, "_stanfit_samples.rds"))
-stanfit_summary <- read_rds(paste0("data/intermediate/adrd-", model, "_stanfit_summary.rds"))
+# stanfit_summary <- read_rds(paste0("data/intermediate/adrd-", model, "_stanfit_summary.rds"))
 
 ## Read data ----
 county_sf <- read_rds("data/symlinks/scratch/county_sf.rds")
@@ -103,6 +104,76 @@ race_labels <- c(
 # # viridis D (colorblind safe!!)
 # viridis_D <- viridis_pal(option = "D")
 
+```
+
+## First, a basic table
+
+## Report distributions of parameters
+see code below for a few parameters
+
+```{r}
+# function to get summary statistics
+summarize_column <- function(df, 
+                             column_name, 
+                             param_name, 
+                             exp_transform = FALSE,
+                             group_race = TRUE) {
+  result <- df %>%
+    st_drop_geometry() %>% 
+    # if(group_race){
+       group_by(race)
+    # } %>%
+    summarize(
+      min = ifelse(exp_transform,
+                   min(exp({{ column_name }}), na.rm = TRUE),
+                   min({{ column_name }}, na.rm = TRUE)),
+      p250 = ifelse(exp_transform,
+                    stats::quantile(exp({{ column_name }}), .250, na.rm = TRUE),
+                    stats::quantile({{ column_name }}, .250, na.rm = TRUE)),
+      p500 = ifelse(exp_transform,
+                    stats::median(exp({{ column_name }}), na.rm = TRUE),
+                    stats::median({{ column_name }}, na.rm = TRUE)),
+      p750 = ifelse(exp_transform,
+                    stats::quantile(exp({{ column_name }}), .750, na.rm = TRUE),
+                    stats::quantile({{ column_name }}, .750, na.rm = TRUE)),
+      max = ifelse(exp_transform,
+                   max(exp({{ column_name }}), na.rm = TRUE),
+                   max({{ column_name }}, na.rm = TRUE))
+    ) %>%
+    mutate(param = param_name) #%>%
+    # if(group_race){
+    #   mutate(race = "both")
+    # }
+  return(result)
+}
+
+# apply function to get summary stats table
+# note: I don't think the first two can come off of FASSE because they show small counts
+summary_stats <- rbind(
+  # summarize_column(pos_med_sf, column_name = person_years, 
+  #                  param_name = "person years"),
+  # summarize_column(pos_med_sf, column_name = observed, 
+  #                  param_name = "observed"),
+  summarize_column(df = pos_med_sf, 
+                   column_name = y, 
+                   param_name = "observed/expected", 
+                   exp_transform = TRUE),
+  summarize_column(df = pos_med_sf, 
+                   column_name = pos_med_y, 
+                   param_name = "lambda", 
+                   exp_transform = TRUE),
+  summarize_column(df = pos_med_sf, 
+                   column_name = risk_ratio, 
+                   param_name = "risk ratio",
+                   group_race = FALSE)
+  )
+
+summary_stats %<>%
+  mutate(race = ifelse(race == 1, "White", "Black")) %>%
+  select(c(param, everything()))
+
+# save table
+write_rds(summary_stats, file = paste0("results/tables/summary_stats_", model, ".rds"))
 ```
 
 
