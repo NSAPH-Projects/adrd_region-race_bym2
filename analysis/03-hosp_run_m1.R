@@ -124,7 +124,8 @@ fit <- stan(
 ## Save fit objects ----
 write_rds(fit, paste0(path_mod, 'model_run_', tstamp, '/stanfit_object.rds'))
 
-
+# print tstamp (so sbatch output can be linked to model results)
+paste0("Model time stamp: ", tstamp)
 
 ## Remove the compiled stan model ----
 # this path will be the same as new_stan_file but ends in .rds instead of .stan

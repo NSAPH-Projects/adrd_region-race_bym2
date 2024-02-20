@@ -37,9 +37,10 @@ random_seed <- get_random_seed(paste0(path_mod, 'model_run_', tstamp, '/seed.rds
 
 ##  Run parameters
 n_chains <- 4
-#n_iter <- 1300
-n_iter <- 200
-n_burnin <- min(floor(n_iter / 2), 300)
+n_iter <- 2000
+#n_iter <- 50
+#n_burnin <- min(floor(n_iter / 2), 300)
+n_burnin <- 900
 n_thin <- 10
 verbose_flag <- FALSE
 dont_save_pars = c("v_unstr", "u_str_unscaled", "u_str")
@@ -143,7 +144,8 @@ fit <- stan(
 ## Save fit objects ----
 write_rds(fit, paste0(path_mod, 'model_run_', tstamp, '/stanfit_object.rds'))
 
-
+# print tstamp (so sbatch output can be linked to model results)
+paste0("Model time stamp: ", tstamp)
 
 ## Remove the compiled stan model ----
 # this path will be the same as new_stan_file but ends in .rds instead of .stan
