@@ -1,0 +1,155 @@
+
+```{r setup, include=FALSE}
+## Set working directory as project root
+library(here)
+knitr::opts_knit$set(root.dir = here())
+```
+
+```{r, message=FALSE, warning=FALSE}
+## Load libraries ----
+library(tidyverse)
+library(sf)
+library(magrittr)
+library(viridis)
+library(cowplot)
+```
+
+# what % of hosp is hosp with ADRD??
+
+```{r}
+# ADRD and hosp ratios
+adrd_ratios_df <- read_rds('data/symlinks/scratch/adrd_ratios_df.rds')
+hosp_ratios_df <- read_rds('data/symlinks/scratch/hosp_ratios_df.rds')
+
+# rename important columns and join hosp and ADRD
+adrd_ratios_df %<>%
+  rename(adrd_expected = expected,
+         adrd_log_expected = log_expected,
+         adrd_observed = observed)
+hosp_ratios_df %<>%
+  rename(hosp_expected = expected,
+         hosp_log_expected = log_expected,
+         hosp_observed = observed)
+ratios_df <- merge(adrd_ratios_df, hosp_ratios_df, all = TRUE)
+```
+
+```{r}
+# all the geomety stuff
+
+# county info
+county_sf <- read_rds("data/symlinks/scratch/county_sf.rds")
+county_fips_df <- read_rds("data/symlinks/scratch/county_fips_df.rds")
+state_sf <- read_sf("data/county/tl_2015_us_state/tl_2015_us_state.shp")
+state_sf %<>% 
+  left_join(
+    county_sf %>% 
+      left_join(county_fips_df) %>% 
+      st_drop_geometry() %>% 
+      distinct(STATEFP, s_idx, st_abbr)
+  ) %>% 
+  filter(!is.na(s_idx))
+
+# change projection to Albers Equal Area Conic (good for maps of US)
+county_sf <- st_transform(county_sf, 
+                           crs = st_crs("+proj=aea +lat_1=29.5 +lat_2=45.5 +lat_0=37.5
+                                        +lon_0=-96 +x_0=0 +y_0=0 +datum=NAD83 +units=m +no_defs"))
+state_sf <- st_transform(state_sf, 
+                           crs = st_crs("+proj=aea +lat_1=29.5 +lat_2=45.5 +lat_0=37.5
+                                        +lon_0=-96 +x_0=0 +y_0=0 +datum=NAD83 +units=m +no_defs"))
+
+
+# read in Great Lakes shapefile
+# https://www.naturalearthdata.com/downloads/110m-physical-vectors/110mlakes-reservoirs/
+lakes_sf <- read_sf("data/county/ne_110m_lakes/ne_110m_lakes.shp") |>
+  filter(name_alt == "Great Lakes")
+
+# to exclude Great Lakes from maps, include the following layer:
+lakes_gg <- geom_sf(data = lakes_sf, fill = "white", col = NA) 
+
+# to draw state borders, include the following layer:
+states_gg <- geom_sf(data = state_sf, fill = NA, col = "black", lwd = 0.1)
+
+# to exclude lakes and draw state borders, include the following layer:
+lakes_states_gg <- list(
+  geom_sf(data = state_sf, fill = NA, col = "black", lwd = 0.1),
+  geom_sf(data = lakes_sf, fill = "white", col = "black"))
+
+# or this for white state borders:
+lakes_states_light_gg <- list(
+  geom_sf(data = state_sf, fill = NA, col = "white", lwd = 0.1),
+  geom_sf(data = lakes_sf, fill = "white", col = "white"))
+
+# merge geometry with ratios
+ratios_sf <- merge(county_sf, ratios_df)
+
+```
+
+```{r}
+# now compare ADRD and all-cause hosp
+
+# get a new column for observed ADRD / observed hosp %
+ratios_sf %<>%
+  mutate(adrd_pct = (adrd_observed / hosp_observed) * 100)
+
+# look at distribution of this variable for white vs. black
+ratios_sf |>
+  mutate(race = factor(ifelse(race == 1, "White", "Black"),
+                       levels = c("White", "Black"))) %>% 
+  ggplot() +
+  geom_density(aes(adrd_pct, col = as.factor(race))) +
+  labs(x = "% of all hospitalizations with ADRD code",
+       y = "Density",
+       col = "") +
+  theme_bw()
+
+```
+
+```{r}
+# now map this variable!
+
+# race labels for plotting
+race_labels <- c(
+  `1` = "White",
+  `2` = "Black"
+)
+
+ratios_sf |>
+  # cap at 20%
+  mutate(adrd_pct = ifelse(adrd_pct > 20, 20, adrd_pct)) |>
+  ggplot() +
+  geom_sf(aes(fill = adrd_pct), lwd = 0.00) +
+  lakes_states_light_gg +
+  labs(fill = "% of hosp. w/ ADRD code") +
+  scale_fill_viridis(option = "D") + 
+  facet_grid(~race, labeller = as_labeller(race_labels)) +
+  theme_map() +
+  theme(legend.position = "bottom",
+        legend.title = element_text(size = 10),
+        legend.text = element_text(size = 8)
+        )
+
+# also try white only (more stable) ==> could combine white + black
+ratios_sf |>
+  # # limit to rows with at least 25 person-years
+  # mutate(adrd_pct = ifelse(person_years < 25, NA, adrd_pct)) |>
+  ggplot() +
+  geom_sf(aes(fill = adrd_pct), lwd = 0.00) +
+  lakes_states_light_gg +
+  labs(fill = "% of hosp. w/ ADRD code (White only)") +
+  scale_fill_viridis(option = "D") + 
+  theme_map() +
+  theme(legend.position = "bottom",
+        legend.title = element_text(size = 10),
+        legend.text = element_text(size = 8)
+        )
+
+```
+
+
+
+# compare results across models
+
+plot density of risk ratios by model
+
+
+
