@@ -34,7 +34,7 @@ random_seed <- get_random_seed(paste0(path_mod, 'model_run_', tstamp, '/seed.rds
 
 ##  Run parameters
 n_chains <- 4
-n_iter <- 1300
+n_iter <- 1000
 #n_iter <- 50
 n_burnin <- min(floor(n_iter / 2), 300)
 n_thin <- 10
