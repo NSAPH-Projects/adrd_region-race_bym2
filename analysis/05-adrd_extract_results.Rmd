@@ -14,8 +14,8 @@ library(rstan)
 
 ```{r}
 # choose model
-model <- "m1"
-#model <- "m2"
+#model <- "m1"
+model <- "m2"
 
 
 #slurm job number 1307317 for m0 is labeled model_run_20230311_185502
@@ -25,9 +25,8 @@ if(model == "m1"){
     #"results/models/adrd/m1/model_run_20240131_215726/stanfit_object.rds"
     ))
 } else if(model == "m2"){
-  ### REMOVE "OLD" FROM PATH
   stanfit_object <- read_rds(paste0(
-    "results/models/adrd/m2/old/model_run_20240208_213829/stanfit_object3.rds"
+    "results/models/adrd/m2/model_run_20240216_1406/stanfit_object.rds"
     ))
 } else if(model == "m3"){
   stanfit_object <- read_rds(paste0(
@@ -191,12 +190,15 @@ pos_med <- rbind(
     c_idx = 1:ncol(posterior_black))
 )
 
-# plot lambdas
-pos_med %>% 
-  mutate(race = as.character(race)) %>% 
-  ggplot() + 
-  geom_density(aes(x = pos_med_y, color = race), linewidth = 1) + 
-  theme_classic()
+# # plot lambdas
+# pos_med %>% 
+#   mutate(race = ifelse(race == 1, "White", "Black")) %>% 
+#   ggplot() + 
+#   geom_density(aes(x = exp(pos_med_y), color = race), linewidth = 1) + 
+#   labs(x = "Smoothed standardized risk (lambda)", 
+#        y = "Density",
+#        col = "") +
+#   theme_classic()
 ```
 
 ```{r}
@@ -342,8 +344,7 @@ quick_summarize <- function(x) {
     new_df <- x %>%
         dplyr::as_data_frame() %>%
         dplyr::summarize(
-            p500 = stats::median(value),
-            mean = mean(value),
+            median = stats::median(value),
             p025 = stats::quantile(value, .025),
             p975 = stats::quantile(value, .975)
         )
@@ -360,7 +361,7 @@ empiric_var_risks <- rbind(
     )  %>%
         quick_summarize() %>%
         dplyr::mutate(model_name = model,
-                      race = "white"),
+                      race = "White"),
     matrixStats::rowVars(
         stanfit_samples$alpha2 + stanfit_samples$psi2 +
             (stanfit_samples$phi / stanfit_samples$delta) +
@@ -368,7 +369,7 @@ empiric_var_risks <- rbind(
     ) %>%
         quick_summarize() %>%
         dplyr::mutate(model_name = model,
-                      race = "black")
+                      race = "Black")
 ) %>%
     dplyr::mutate(param = "total risk")
 
@@ -378,11 +379,11 @@ empiric_shared_risk <- rbind(
     matrixStats::rowVars(stanfit_samples$phi * stanfit_samples$delta)  %>%
         quick_summarize() %>%
         dplyr::mutate(model_name = model,
-                      race = "white"),
+                      race = "White"),
     matrixStats::rowVars(stanfit_samples$phi / stanfit_samples$delta)  %>%
         quick_summarize() %>%
         dplyr::mutate(model_name = model,
-                      race = "black")
+                      race = "Black")
 ) %>%
     dplyr::mutate(param = "shared risk")
 
@@ -392,11 +393,11 @@ empiric_specific_risks <- rbind(
     matrixStats::rowVars(stanfit_samples$psi1)  %>%
         quick_summarize() %>%
         dplyr::mutate(model_name = model,
-                      race = "white"),
+                      race = "White"),
     matrixStats::rowVars(stanfit_samples$psi2)  %>%
         quick_summarize() %>%
         dplyr::mutate(model_name = model,
-                      race = "black")
+                      race = "Black")
 ) %>%
     dplyr::mutate(param = "specific risk")
 
@@ -410,7 +411,7 @@ empiric_shared_var_frac <- rbind(
             )
     ) %>%
         dplyr::mutate(model_name = model,
-                      race = "white"),
+                      race = "White"),
     quick_summarize(
         matrixStats::rowVars(stanfit_samples$phi / stanfit_samples$delta) /
             (
@@ -419,7 +420,7 @@ empiric_shared_var_frac <- rbind(
             )
     ) %>%
         dplyr::mutate(model_name = model,
-                      race = "black")
+                      race = "Black")
 ) %>%
     dplyr::mutate(param = "fraction shared risk")
 
@@ -457,7 +458,7 @@ empiric_vars <- rbind(
         ),
         race = factor(
             race,
-            levels = c("white", "black", "both"),
+            levels = c("White", "Black", "both"),
             ordered = TRUE
         )
     )
@@ -466,6 +467,17 @@ empiric_vars <- rbind(
 empiric_vars <- empiric_vars %>%
     dplyr::arrange(param, model_name, race)
 
+# new column formatted with posterior median and 95% CI
+empiric_vars$median_ci <- paste0(round(empiric_vars$median, 2), " (", 
+                                 round(empiric_vars$p025, 2), ", ",
+                                 round(empiric_vars$p975, 2), ")")
+
+# rename columns
+empiric_vars <- empiric_vars |>
+  select(-c(median, p025, p975)) |>
+  rename(Parameter = param,
+            Race = race,
+         Estimate = median_ci)
 
 # save table
 write_rds(empiric_vars, file = paste0("results/tables/empirical_variance_", model, ".rds"))
