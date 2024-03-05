@@ -53,24 +53,53 @@ stanfit_object <- sflist2stanfit(stanfit_list)
 save(stanfit_object, file = paste0(folder_path, "stanfit_object.rds"))
 
 
-#------- 8 chains (5 done so far)
+#------- 8 chains
 # folder with results
 folder_path <- "results/models/adrd/m2/model_run_20240216_1406/"
 # Create a list of the four model fit objects
 stanfit_list <- list(
+  read_rds(paste0(folder_path, "stanfit_object_1.rds")),
   read_rds(paste0(folder_path, "stanfit_object_2.rds")),
   read_rds(paste0(folder_path, "stanfit_object_3.rds")),
   read_rds(paste0(folder_path, "stanfit_object_4.rds")),
   read_rds(paste0(folder_path, "stanfit_object_5.rds")),
-  read_rds(paste0(folder_path, "stanfit_object_7.rds"))
+  read_rds(paste0(folder_path, "stanfit_object_6.rds")),
+  read_rds(paste0(folder_path, "stanfit_object_7.rds")),
+  read_rds(paste0(folder_path, "stanfit_object_8.rds"))
 )
 
 # Convert the list of model fits to a stan fit object
 stanfit_object <- sflist2stanfit(stanfit_list)
 # save for scripts 5 and 6
-save(stanfit_object, file = paste0(folder_path, "stanfit_object.rds"))
+write_rds(stanfit_object, file = paste0(folder_path, "stanfit_object.rds"))
 
 
+#------- weak prior
+# folder with results
+folder_path <- "results/models/adrd/m2/model_run_20240220_2054/"
+# Create a list of the four model fit objects
+stanfit_list <- list(
+  read_rds(paste0(folder_path, "stanfit_object_2.rds")),
+  read_rds(paste0(folder_path, "stanfit_object_3.rds")),
+  read_rds(paste0(folder_path, "stanfit_object_5.rds"))
+)
+
+
+
+#------ first attempt at all-cause hosp!
+# folder with results
+folder_path <- "results/models/hosp/m2/"
+# Create a list of the four model fit objects
+stanfit_list <- list(
+  read_rds(paste0(folder_path, "model_run_20240229_1532/stanfit_object_1.rds"))
+)
+
+
+
+# Convert the list of model fits to a stan fit object
+stanfit_object <- sflist2stanfit(stanfit_list)
+# save for scripts 5 and 6
+write_rds(stanfit_object, file = paste0(folder_path, "stanfit_object.rds"))
 ```
 
 ```{r}
@@ -182,12 +211,13 @@ mcmc_trace(stanfit_object, pars = "tau_v[2]")
 
 
 ```{r}
-library(rstan)
-
 # Get summary information, including effective sample size
 summary_info <- summary(stanfit_object)
 
-# Extract the effective sample size for each parameter
+# Extract the effective sample size for each parameter 
 ess <- summary_info$summary[, "n_eff"]
+hist(ess)
+
+# aim for min to be around 1,000
 ```
 
