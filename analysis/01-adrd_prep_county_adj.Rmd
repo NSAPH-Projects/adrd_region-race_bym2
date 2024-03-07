@@ -468,6 +468,27 @@ W_n
 ```
 
 ```{r}
+# confirm that county adjacency makes sense
+
+# get the number of borders for each county
+n_borders <- county_adj_df %>%
+  group_by(county) %>%
+  summarise(n_borders = n()) %>%
+  mutate(n_borders = factor(n_borders, levels = c(seq(1, 20))))
+
+# merge with geometry
+check_adj <- merge(county_sf, n_borders, by = "county")
+
+# plot number of borders
+check_adj %>%
+  ggplot() +
+  geom_sf(aes(fill = n_borders), lwd = 0.1) +
+  labs(fill = "Number of borders") +
+  theme_map()
+```
+
+
+```{r}
 write_rds(county_adj_sparse_list, "data/symlinks/scratch/county_adj_sparse_list.rds")
 write_rds(county_fips_df, "data/symlinks/scratch/county_fips_df.rds")
 ```
