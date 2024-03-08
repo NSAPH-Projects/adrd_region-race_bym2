@@ -26,8 +26,8 @@ get_random_seed <-
 
 ## Modeling parameters ----
 ##  Naming
-tstamp <- format(Sys.time(), format = "%Y%m%d_%H%M%S")
-tstamp <- format(Sys.time(), format = "%Y%m%d_%H%M")
+#tstamp <- format(Sys.time(), format = "%Y%m%d_%H%M%S")
+tstamp <- format(Sys.time(), format = "%Y%m%d")
 
 mkdir_p(paste0(path_mod, 'model_run_', tstamp))
 model_name <- 'model'
