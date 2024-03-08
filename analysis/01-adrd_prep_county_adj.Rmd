@@ -14,83 +14,97 @@ library(sf)
 
 In this notebook we make sure that the counties match in all objects: the adjacency matrix, geometry, adrd rates, sociodemographic and pollution data.
 
-## Adjacency matrix
-
-```{r}
-####
-# Download adjacency
-####
-
-## Import data ----
-county_adj_df <- readr::read_delim(
-    'data/county/county_adjacency.txt',
-    delim = "\t",
-    escape_double = FALSE,
-    col_names = c("name_i", "fips_i",
-                  "name_j", "fips_j"),
-    trim_ws = TRUE
-)
-
-county_adj_df
-```
-
-```{r}
-## Forward fill ----
-county_adj_df <- zoo::na.locf(county_adj_df)
-
-## Remove self loops and add state fips ----
-county_adj_df <- county_adj_df %>%
-    dplyr::filter(fips_i != fips_j) %>%
-    dplyr::mutate(state_i = substr(fips_i, 1, 2),
-                  state_j = substr(fips_j, 1, 2))
-
-## Fix FIPS ----
-## Bedford City got lumped together with Bedford county in CMF data
-county_adj_df <- county_adj_df %>%
-    dplyr::filter(fips_i != "51515",
-                  fips_j != "51515")
-
-## Now remove states/territories we won't use ----
-county_adj_df <- dplyr::filter(county_adj_df,
-                                  !state_i %in% c("02","15", "66", "72", "60", "69", "78"),
-                                  !state_j %in% c("02","15", "66", "72", "60", "69", "78"))
-
-county_adj_df %<>% 
-  mutate(county = as.numeric(fips_i))
-
-county_adj_df
-```
 
 ## Shapefiles
 
 ```{r}
 ## read county shp files
-county_sf <- read_sf("data/county/tl_2015_us_county/tl_2015_us_county.shp") %>%
+county_sf <- read_sf("data/county/cb_2015_us_county/cb_2015_us_county_20m.shp") %>%
   filter(!STATEFP %in% c("02","15", "66", "72", "60", "69", "78")) %>% 
   mutate(county = as.numeric(GEOID))
+
+#Oglala Lakota County, SD. Shannon County, SD (FIPS code = 46113) was renamed Oglala Lakota County and assigned anew FIPS code (46102) effective in 2014
+county_sf$county[county_sf$county == 46102] <- 46113 
+
+# get adjacent counties from shapefile
+county_adj_list <-  st_touches(x = county_sf, y = county_sf, sparse = TRUE)
+names(county_adj_list) <- county_sf$county
+
+# format as dataframe
+county_adj_df <- do.call(rbind, lapply(names(county_adj_list), function(name) {
+  data.frame(
+    fips_i = rep(name, length(county_adj_list[[name]])),
+    fips_j = names(county_adj_list)[county_adj_list[[name]]]
+  )
+}))
+
+# any counties without borders?
+zero_borders <- names(which(lengths(county_adj_list) == 0))
+zero_borders
+```
+
+```{r}
+# inspect counties without borders
+county_sf |> 
+  filter(county %in% c("53055", "25019")) # two island counties
+
+fips_sanjuan <- zero_borders[1]
+fips_nantucket <- zero_borders[2]
+```
+
+```{r}
+# manually add borders between these counties and the closest county
+
+# San Juan, WA --> add border with Skagit county
+fips_skagit <- county_sf |> filter(NAME == "Skagit") |>
+  pull(county) |>
+  as.character()
+
+# Nantucket, MA --> add border with Dukes county
+# get the fips for this county
+fips_dukes <- county_sf |> filter(NAME == "Dukes") |>
+  pull(county) |>
+  as.character()
+
+# make a new df with the new borders
+# two rows for each border--one with county A in fips_i and county B in fips_j, one with county B in fips_i and county A in fips_j
+new_borders <- data.frame(fips_i = c(fips_sanjuan, fips_skagit, 
+                                     fips_nantucket, fips_dukes),
+                          fips_j = c(fips_skagit, fips_sanjuan, 
+                                     fips_dukes, fips_nantucket))
+
+# bind these rows to adjacency
+county_adj_df <- rbind(county_adj_df, new_borders)
+```
+
+```{r}
+# add new columns to adjacency
+
+# new county column
+county_adj_df %<>%
+  mutate(county = as.numeric(fips_i))
+
+# df to link state and county
+fips_to_state <- county_sf %>% 
+  st_drop_geometry %>%
+  select(county, STATEFP) %>%
+  mutate(fips = as.character(county)) %>%
+  select(-county)
+
+# new state columns
+county_adj_df %<>%
+  merge(fips_to_state, 
+        by.x = "fips_i", by.y = "fips") %>%
+  rename(state_i = STATEFP) %>%
+  merge(fips_to_state,
+        by.x = "fips_j", by.y = "fips") %>%
+  rename(state_j = STATEFP)
+
 
 dim(county_sf)
 length(unique(county_adj_df$fips_i))
 length(unique(county_adj_df$fips_j))
 length(unique(county_adj_df$county))
-
-counties_adj_ = unique(county_adj_df$county)
-counties_shp_ = unique(county_sf$county)
-
-setdiff(counties_shp_, counties_adj_) #46102
-setdiff(counties_adj_, counties_shp_) #46113
-```
-
-```{r}
-county_sf %>%
-  st_simplify() %>%
-  ggplot() +
-  geom_sf() + 
-  geom_sf(data = county_sf[!county_sf$county %in% counties_adj_, ], fill="blue")
-```
-
-```{r}
-county_sf$county[county_sf$county == 46102] <- 46113 #Oglala Lakota County, SD. Shannon County, SD (FIPS code = 46113) was renamed Oglala Lakota County and assigned anew FIPS code (46102) effective in 2014
 
 counties_adj_ = unique(county_adj_df$county)
 counties_shp_ = unique(county_sf$county)
@@ -356,17 +370,13 @@ county_adj_df
 ## Save a unique mapping of FIPS to state and county dummy codes ----
 county_fips_df <- county_adj_df %>%
     dplyr::select(
-        county_name = name_i,
         county = county, 
         fipschar = fips_i,
         fips_st = state_i,
         c_idx = dummy_i,
         s_idx = dummy_state_i
     ) %>%
-    dplyr::distinct() %>%
-    dplyr::mutate(st_abbr = unlist(lapply(strsplit(county_name, split = ", "),
-                                          function(x)
-                                              x[[2]])))
+    dplyr::distinct()
 county_fips_df
 ```
 
@@ -456,6 +466,27 @@ dim(W_sparse)
 length(lambda)
 W_n
 ```
+
+```{r}
+# confirm that county adjacency makes sense
+
+# get the number of borders for each county
+n_borders <- county_adj_df %>%
+  group_by(county) %>%
+  summarise(n_borders = n()) %>%
+  mutate(n_borders = factor(n_borders, levels = c(seq(1, 20))))
+
+# merge with geometry
+check_adj <- merge(county_sf, n_borders, by = "county")
+
+# plot number of borders
+check_adj %>%
+  ggplot() +
+  geom_sf(aes(fill = n_borders), lwd = 0.1) +
+  labs(fill = "Number of borders") +
+  theme_map()
+```
+
 
 ```{r}
 write_rds(county_adj_sparse_list, "data/symlinks/scratch/county_adj_sparse_list.rds")

@@ -27,13 +27,11 @@ functions {
       vector[n] ldet_terms;
       
       phit_D = (phi .* D_sparse)';
-        phit_W = rep_row_vector(0, n);
-        for (i in 1:W_n) {
-            phit_W[W_sparse[i, 1]] = phit_W[W_sparse[i, 1]] + 
-                                            phi[W_sparse[i, 2]];
-            phit_W[W_sparse[i, 2]] = phit_W[W_sparse[i, 2]] + 
-                                            phi[W_sparse[i, 1]];
-        }
+      phit_W = rep_row_vector(0, n);
+      for (i in 1:W_n) {
+        phit_W[W_sparse[i, 1]] += phi[W_sparse[i, 2]];
+        phit_W[W_sparse[i, 2]] += phi[W_sparse[i, 1]];
+      }
     return 0.5 * ((n - 1) * log(tau) - tau * (phit_D * phi - (phit_W * phi)));
     }
 }
@@ -116,7 +114,8 @@ model {
     // real log_mu[m];
     
     // No prior on alphas indicates improper flat. (Must use flat on BYM).
-    beta ~ normal(0, 10);
+    // beta ~ normal(0, 10);
+    beta ~ normal(0, 3);
     
     // Spatial priors -- u for CAR, v for iid.
     for (i in 1:3) {
@@ -161,7 +160,7 @@ model {
                     d2_idx[i] * (phi[c_idx[i]] / delta + psi[2][c_idx[i]]) + 
                     nu[s_idx[i]];
                 
-         y ~ poisson_log(log_mu);
+         y[i] ~ poisson_log(log_mu);
         }
     }
     

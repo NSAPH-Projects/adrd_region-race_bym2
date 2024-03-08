@@ -39,6 +39,28 @@ setdiff(counties_shp_, counties_)
 ```
 
 ```{r}
+# subtract ADRD from number of hosp admissions
+
+# read in ADRD data
+adrd_county_df <- read_rds("data/symlinks/scratch/adrd_county_df.rds") %>%
+  select(-c("n_enrollees", "state", "med_house_income", "house_price_income_ratio", "pm25")) %>%
+  rename("n_admissions_adrd" = "n_admissions")
+
+# rename n_admissions for clarity
+hosp_county_df %<>%
+  rename("n_admissions_hosp" = "n_admissions")
+
+# merge with all-cause hosp data
+hosp_county_df <- merge(hosp_county_df, adrd_county_df, 
+                   by = c("county", "year", "race", "sex", "age_grp"))
+
+# subtract out # of ADRD admissions to get new n_admissions for all-cause hosp minus ADRD
+hosp_county_df %<>%
+  mutate(n_admissions = n_admissions_hosp - n_admissions_adrd)
+```
+
+
+```{r}
 ## Subset ----
 ##  Subset to population of interest --
 hosp_county_df %<>%
@@ -156,7 +178,7 @@ ggsave("results/figures/hosp_reference_rates.png")
 ```
 
 ```{r}
-## look at proportions by race
+## look at proportions of enrollees by race
 prettyNum(prop.table(tapply(hosp_county_df$n_enrollees, hosp_county_df$race, sum)))
 ```
 
@@ -443,72 +465,6 @@ sum(is.na(hosp_ratios_df$s_idx))
 sum(is.na(hosp_ratios_df$observed))
 sum(is.na(hosp_ratios_df$expected))
 sum(is.na(hosp_ratios_df$person_years))
-```
-
-
-## Look at PM2.5 and house-price-to-income ratio
-
-```{r}
-# PM2.5 distribution by race (weighted by person-years)
-hosp_ratios_df %>%
-  mutate(race = case_when(
-    race == 1 ~ "White",
-    race == 2 ~ "Black"
-  )) %>%
-  ggplot(aes(pm25, weight = person_years, col = (race))) +
-  geom_density() +
-  labs(x = "PM2.5", y = "Density", col = "")
-
-# HPI ratio distribution by race (weighted by person-years)
-hosp_ratios_df %>%
-mutate(race = case_when(
-    race == 1 ~ "White",
-    race == 2 ~ "Black"
-  )) %>%
-  ggplot(aes(house_price_income_ratio, weight = person_years, col = factor(race))) +
-  geom_density(bw = 0.4) +
-  labs(x = "House-price-income ratio", y = "Density", col = "")
-```
-
-```{r}
-# map PM2.5 and HPI ratio
-
-county_sf %>%
-  select(county) %>%
-  left_join(hosp_ratios_df) %>%
-  ggplot() +
-  geom_sf(aes(fill = pm25), alpha = 1, lwd = 0.0) +
-  labs(fill = "PM2.5") +
-  scale_fill_viridis(option = "D") +
-  theme(legend.position = "bottom") +
-  theme_map()
-  
-county_sf %>%
-  select(county) %>%
-  left_join(hosp_ratios_df) %>%
-  ggplot() +
-  geom_sf(aes(fill = log2(house_price_income_ratio)), alpha = 1, lwd = 0.0) +
-  labs(fill = "log2(HPI ratio)") +
-  scale_fill_viridis(option = "D") +
-  theme(legend.position = "bottom") +
-  theme_map()
-```
-
-```{r}
-# # plot % of person-years contributed by black people in each county
-# #pos_med_sf %>%
-county_sf %>%
-  select(county) %>%
-  left_join(hosp_ratios_df) %>%
-  group_by(county) %>%
-  summarise(pct_blk = 100 * (person_years[race == 2] /
-                               (person_years[race == 1] + person_years[race == 2]))) %>%
-  ggplot() +
-  geom_sf(aes(fill = pct_blk), lwd = 0) +
-  #lakes_gg +
-  labs(fill = "% of person-years \ncontributed by Black indivs") +
-  scale_fill_viridis(option = "D") +
-  theme_map()
 ```
 
 

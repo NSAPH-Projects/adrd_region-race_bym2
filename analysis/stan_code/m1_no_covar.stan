@@ -28,12 +28,10 @@ functions {
         
         phit_D = (phi .* D_sparse)';
         phit_W = rep_row_vector(0, n);
-        for (i in 1:W_n) {
-            phit_W[W_sparse[i, 1]] = phit_W[W_sparse[i, 1]] + 
-                                            phi[W_sparse[i, 2]];
-            phit_W[W_sparse[i, 2]] = phit_W[W_sparse[i, 2]] + 
-                                            phi[W_sparse[i, 1]];
-        }
+      for (i in 1:W_n) {
+        phit_W[W_sparse[i, 1]] += phi[W_sparse[i, 2]];
+        phit_W[W_sparse[i, 2]] += phi[W_sparse[i, 1]];
+      }
     return 0.5 * ((n - 1) * log(tau) - tau * (phit_D * phi - (phit_W * phi)));
     }
 }

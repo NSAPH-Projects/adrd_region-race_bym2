@@ -4,7 +4,7 @@ library(magrittr)
 library(rstan)
 
 # path to store model results
-path_mod <- "results/models/adrd/m0/"
+path_mod <- "results/models/adrd/m1/"
 
 ## functions ----
 mkdir_p <- function(dir_name) {
@@ -26,18 +26,22 @@ get_random_seed <-
 
 ## Modeling parameters ----
 ##  Naming
-tstamp <- format(Sys.time(), format = "%Y%m%d_%H%M%S")
+#tstamp <- format(Sys.time(), format = "%Y%m%d_%H%M%S")
+tstamp <- format(Sys.time(), format = "%Y%m%d")
+
 mkdir_p(paste0(path_mod, 'model_run_', tstamp))
 model_name <- 'model'
-stan_file <- 'analysis/m0_no_covar_invdelta.stan'
+stan_file <- 'analysis/stan_code/m1_no_covar.stan'
 random_seed <- get_random_seed(paste0(path_mod, 'model_run_', tstamp, '/seed.rds'))
 
+# print tstamp (so sbatch output can be linked to model results)
+paste0("Model time stamp: ", tstamp)
+
 ##  Run parameters
-n_chains <- 4
-#n_iter <- 1300
-n_iter <- 50
-n_burnin <- min(floor(n_iter / 2), 300)
-n_thin <- 10
+#n_chains <- 4
+n_iter <- 10000
+n_burnin <- floor(n_iter / 2)
+n_thin <- 40
 verbose_flag <- FALSE
 dont_save_pars = c("v_unstr", "u_str_unscaled", "u_str")
 
@@ -102,32 +106,34 @@ file.copy(stan_file, new_stan_file)
 rstan_options(auto_write = TRUE)
 options(mc.cores = parallel::detectCores())
 
+# get command line arguments and save in a list
+args = commandArgs(trailingOnly=TRUE)
+
+#--- fit a single chain (args[1] will use a different chain ID each time)
 fit <- stan(
-    file = new_stan_file,
-    model_name = model_name,
-    data = adrd_stan_list,
-    thin = n_thin,
-    iter = n_iter,
-    warmup = n_burnin,
-    chains = n_chains,
-    verbose = verbose_flag,
-    pars = dont_save_pars,
-    include = FALSE,
-    save_dso = TRUE,
-    seed = random_seed,
-    control = list(adapt_delta = a_delta,
-                   max_treedepth = t_depth),
-    refresh = n_iter / 100,
-    sample_file = paste0(path_mod, 'model_run_', tstamp, '/sample_file')
+  file = new_stan_file,
+  data = adrd_stan_list, 
+  thin = n_thin,
+  iter = n_iter,
+  warmup = n_burnin,
+  chains = 1, 
+  verbose = verbose_flag,
+  pars = dont_save_pars,
+  include = FALSE,
+  save_dso = TRUE,
+  seed = 1, 
+  chain_id = args[1],
+  control = list(adapt_delta = a_delta,
+                 max_treedepth = t_depth),
+  refresh = n_iter / 100,
+  sample_file = paste0(path_mod, 'model_run_', tstamp,
+                       '/sample_file_', args[1])
 )
 
-## Save fit objects ----
-write_rds(fit, 
-          paste0(path_mod, 'model_run_', tstamp, '/stanfit_object.rds'))
+## Save fit objects
+write_rds(fit, paste0(path_mod, 'model_run_', tstamp, '/stanfit_object_', args[1], '.rds'))
 
-
-
-## Remove the compiled stan model ----
-# this path will be the same as new_stan_file but ends in .rds instead of .stan
-file.remove(paste0(path_mod, 'model_run_', tstamp, '/temp_file.rds'))
-file.remove(new_stan_file)
+# ## Remove the compiled stan model ----
+# # this path will be the same as new_stan_file but ends in dot rds instead of dot stan
+# file.remove(paste0(path_mod, 'model_run_', tstamp, '/temp_file.rds'))
+# file.remove(new_stan_file)
