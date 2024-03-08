@@ -114,7 +114,8 @@ model {
     // real log_mu[m];
     
     // No prior on alphas indicates improper flat. (Must use flat on BYM).
-    beta ~ normal(0, 10);
+    // beta ~ normal(0, 10);
+    beta ~ normal(0, 3);
     
     // Spatial priors -- u for CAR, v for iid.
     for (i in 1:3) {
