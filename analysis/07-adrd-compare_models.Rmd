@@ -14,142 +14,71 @@ library(viridis)
 library(cowplot)
 ```
 
-# what % of hosp is hosp with ADRD??
-
 ```{r}
-# ADRD and hosp ratios
-adrd_ratios_df <- read_rds('data/symlinks/scratch/adrd_ratios_df.rds')
-hosp_ratios_df <- read_rds('data/symlinks/scratch/hosp_ratios_df.rds')
+# load results from all adrd models
+pos_med_m1 <- read_rds(paste0("data/intermediate/adrd-m1_pos_med.rds"))
+pos_med_m2 <- read_rds(paste0("data/intermediate/adrd-m2_pos_med.rds"))
+pos_med_m3 <- read_rds(paste0("data/intermediate/adrd-m3_pos_med.rds"))
 
-# rename important columns and join hosp and ADRD
-adrd_ratios_df %<>%
-  rename(adrd_expected = expected,
-         adrd_log_expected = log_expected,
-         adrd_observed = observed)
-hosp_ratios_df %<>%
-  rename(hosp_expected = expected,
-         hosp_log_expected = log_expected,
-         hosp_observed = observed)
-ratios_df <- merge(adrd_ratios_df, hosp_ratios_df, all = TRUE)
+#--- select columns of interest and change column names to identify model
+
+# columns of interest
+cols_to_keep <- c("county", "risk_ratio")
+
+pos_med_m1 %<>% 
+  select(all_of(cols_to_keep)) %>%
+  rename(risk_ratio_m1 = risk_ratio) %>%
+  distinct()
+
+pos_med_m2 %<>% 
+  select(all_of(cols_to_keep)) %>%
+  rename(risk_ratio_m2 = risk_ratio) %>%
+  distinct()
+
+pos_med_m3 %<>% 
+  select(all_of(cols_to_keep)) %>%
+  rename(risk_ratio_m3 = risk_ratio) %>%
+  distinct()
+
+# pos_med_m4 %<>% 
+#   select(all_of(cols_to_keep)) %>%
+#   rename(risk_ratio_m4 = risk_ratio,
+#          risk_ratio_sig_m4 = risk_ratio_sig)
+
+
+#--- merge for comparison
+pos_med <- 
+  merge(pos_med_m1, pos_med_m2,
+        by = c("county")) %>%
+  merge(pos_med_m3,
+        by = c("county")) # %>%
+  # merge(pos_med_m4,
+  #       by = c("county", "race"))
+
+
+#--- gather risk ratio columns
+pos_med %<>%
+  gather(key = "model", "risk_ratio", 
+         paste0("risk_ratio_m", c(1:3)))
 ```
 
-```{r}
-# all the geomety stuff
-
-# county info
-county_sf <- read_rds("data/symlinks/scratch/county_sf.rds")
-county_fips_df <- read_rds("data/symlinks/scratch/county_fips_df.rds")
-state_sf <- read_sf("data/county/tl_2015_us_state/tl_2015_us_state.shp")
-state_sf %<>% 
-  left_join(
-    county_sf %>% 
-      left_join(county_fips_df) %>% 
-      st_drop_geometry() %>% 
-      distinct(STATEFP, s_idx, st_abbr)
-  ) %>% 
-  filter(!is.na(s_idx))
-
-# change projection to Albers Equal Area Conic (good for maps of US)
-county_sf <- st_transform(county_sf, 
-                           crs = st_crs("+proj=aea +lat_1=29.5 +lat_2=45.5 +lat_0=37.5
-                                        +lon_0=-96 +x_0=0 +y_0=0 +datum=NAD83 +units=m +no_defs"))
-state_sf <- st_transform(state_sf, 
-                           crs = st_crs("+proj=aea +lat_1=29.5 +lat_2=45.5 +lat_0=37.5
-                                        +lon_0=-96 +x_0=0 +y_0=0 +datum=NAD83 +units=m +no_defs"))
-
-
-# read in Great Lakes shapefile
-# https://www.naturalearthdata.com/downloads/110m-physical-vectors/110mlakes-reservoirs/
-lakes_sf <- read_sf("data/county/ne_110m_lakes/ne_110m_lakes.shp") |>
-  filter(name_alt == "Great Lakes")
-
-# to exclude Great Lakes from maps, include the following layer:
-lakes_gg <- geom_sf(data = lakes_sf, fill = "white", col = NA) 
-
-# to draw state borders, include the following layer:
-states_gg <- geom_sf(data = state_sf, fill = NA, col = "black", lwd = 0.1)
-
-# to exclude lakes and draw state borders, include the following layer:
-lakes_states_gg <- list(
-  geom_sf(data = state_sf, fill = NA, col = "black", lwd = 0.1),
-  geom_sf(data = lakes_sf, fill = "white", col = "black"))
-
-# or this for white state borders:
-lakes_states_light_gg <- list(
-  geom_sf(data = state_sf, fill = NA, col = "white", lwd = 0.1),
-  geom_sf(data = lakes_sf, fill = "white", col = "white"))
-
-# merge geometry with ratios
-ratios_sf <- merge(county_sf, ratios_df)
-
-```
 
 ```{r}
-# now compare ADRD and all-cause hosp
-
-# get a new column for observed ADRD / observed hosp %
-ratios_sf %<>%
-  mutate(adrd_pct = (adrd_observed / hosp_observed) * 100)
-
-# look at distribution of this variable for white vs. black
-ratios_sf |>
-  mutate(race = factor(ifelse(race == 1, "White", "Black"),
-                       levels = c("White", "Black"))) %>% 
+# plot distributions of risk ratios
+pos_med %>% 
+  mutate(model = ifelse(model == "risk_ratio_m1", "Unadjusted", model),
+         model = ifelse(model == "risk_ratio_m2", "Adjusted for PIR", model),
+         model = ifelse(model == "risk_ratio_m3", "Adjusted for PM2.5", model)) %>%
+  mutate(model = factor(model, levels = c("Unadjusted", "Adjusted for PIR", "Adjusted for PM2.5"))) %>%
   ggplot() +
-  geom_density(aes(adrd_pct, col = as.factor(race))) +
-  labs(x = "% of all hospitalizations with ADRD code",
+  geom_density(aes(x = risk_ratio, col = model)) +
+  geom_vline(xintercept = 1, lty = 2) +
+  labs(x = "Risk Ratio (Black/White)",
        y = "Density",
        col = "") +
-  theme_bw()
-
+  theme_light() +
+  theme(axis.text.y = element_blank(),
+        axis.ticks.y = element_blank(),
+        panel.grid = element_blank())
 ```
-
-```{r}
-# now map this variable!
-
-# race labels for plotting
-race_labels <- c(
-  `1` = "White",
-  `2` = "Black"
-)
-
-ratios_sf |>
-  # cap at 20%
-  mutate(adrd_pct = ifelse(adrd_pct > 20, 20, adrd_pct)) |>
-  ggplot() +
-  geom_sf(aes(fill = adrd_pct), lwd = 0.00) +
-  lakes_states_light_gg +
-  labs(fill = "% of hosp. w/ ADRD code") +
-  scale_fill_viridis(option = "D") + 
-  facet_grid(~race, labeller = as_labeller(race_labels)) +
-  theme_map() +
-  theme(legend.position = "bottom",
-        legend.title = element_text(size = 10),
-        legend.text = element_text(size = 8)
-        )
-
-# also try white only (more stable) ==> could combine white + black
-ratios_sf |>
-  # # limit to rows with at least 25 person-years
-  # mutate(adrd_pct = ifelse(person_years < 25, NA, adrd_pct)) |>
-  ggplot() +
-  geom_sf(aes(fill = adrd_pct), lwd = 0.00) +
-  lakes_states_light_gg +
-  labs(fill = "% of hosp. w/ ADRD code (White only)") +
-  scale_fill_viridis(option = "D") + 
-  theme_map() +
-  theme(legend.position = "bottom",
-        legend.title = element_text(size = 10),
-        legend.text = element_text(size = 8)
-        )
-
-```
-
-
-
-# compare results across models
-
-plot density of risk ratios by model
-
-
 
