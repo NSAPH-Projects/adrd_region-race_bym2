@@ -1,0 +1,278 @@
+
+```{r setup, include=FALSE}
+## Set working directory as project root
+library(here)
+knitr::opts_knit$set(root.dir = here())
+```
+
+```{r, message=FALSE, warning=FALSE}
+## Load libraries ----
+library(tidyverse)
+library(sf)
+library(magrittr)
+library(viridis)
+library(cowplot)
+```
+
+## Load data for adrd and hosp
+
+```{r}
+# choose which model to use
+#model <- "m1"
+model <- "m2"
+#model <- "m3"
+
+## Read data ----
+county_sf <- read_rds("data/symlinks/scratch/county_sf.rds")
+pos_med_adrd <- read_rds(paste0("data/intermediate/adrd-", model, "_pos_med.rds"))
+pos_med_hosp <- read_rds(paste0("data/intermediate/hosp-", model, "_pos_med.rds"))
+
+# join adrd and hosp
+pos_med <- merge(pos_med_adrd, pos_med_hosp, all = TRUE, 
+                 by = c("county", "race", "person_years", "med_house_income", 
+                        "house_price_income_ratio", "pm25", "black", "fipschar", 
+                        "fips_st", "c_idx", "s_idx"),
+                 suffixes = c("_adrd", "_hosp"))
+rm(pos_med_adrd, pos_med_hosp)
+
+pos_med_sf <- county_sf %>% 
+  select(county) %>% 
+  right_join(pos_med)
+
+colnames(pos_med_sf)
+
+# load state data
+county_fips_df <- read_rds("data/symlinks/scratch/county_fips_df.rds")
+state_sf <- read_sf("data/county/cb_2015_us_state/cb_2015_us_state_20m.shp")
+state_sf %<>% 
+  left_join(
+    county_sf %>% 
+      left_join(county_fips_df) %>% 
+      st_drop_geometry() %>% 
+      distinct(STATEFP, s_idx)
+  ) %>% 
+  filter(!is.na(s_idx))
+```
+
+```{r}
+# change projection to Albers Equal Area Conic (good for maps of US)
+pos_med_sf <- st_transform(pos_med_sf, 
+                           crs = st_crs("+proj=aea +lat_1=29.5 +lat_2=45.5 +lat_0=37.5
+                                        +lon_0=-96 +x_0=0 +y_0=0 +datum=NAD83 +units=m +no_defs"))
+state_sf <- st_transform(state_sf, 
+                           crs = st_crs("+proj=aea +lat_1=29.5 +lat_2=45.5 +lat_0=37.5
+                                        +lon_0=-96 +x_0=0 +y_0=0 +datum=NAD83 +units=m +no_defs"))
+```
+
+```{r}
+# race labels for plotting
+race_labels <- c(
+  `1` = "White",
+  `2` = "Black"
+)
+```
+
+```{r}
+# make new columns for rate of hospitalization (observed/person-years)
+# and expected rate of hospitalization (expected/person-years)
+pos_med_sf %<>% 
+  mutate(rate_obs_adrd = observed_adrd/person_years,
+         rate_exp_adrd = expected_adrd/person_years,
+         rate_obs_hosp = observed_hosp/person_years,
+         rate_exp_hosp = expected_hosp/person_years)
+```
+
+
+## Pre-modeling
+
+```{r}
+# what % of all hosp have ADRD code?
+
+# get a new column for observed ADRD / observed hosp %
+pos_med_sf %<>%
+  mutate(adrd_pct = (observed_adrd / (observed_adrd + observed_hosp)) * 100)
+
+# look at distribution of this variable for white vs. black
+pos_med_sf |>
+  mutate(race = factor(ifelse(race == 1, "White", "Black"),
+                       levels = c("White", "Black"))) %>% 
+  ggplot() +
+  geom_density(aes(adrd_pct, col = as.factor(race))) +
+  labs(x = "% of all hospitalizations with ADRD code",
+       y = "Density",
+       col = "") +
+  theme_bw() +
+  theme(axis.text.y = element_blank(),
+        axis.ticks.y = element_blank(),
+        panel.grid = element_blank())
+
+# now map this variable!
+
+pos_med_sf |>
+  # cap at 20%
+  mutate(adrd_pct = ifelse(adrd_pct > 30, 30, adrd_pct)) |>
+  ggplot() +
+  geom_sf(aes(fill = adrd_pct), lwd = 0.1) +
+  geom_sf(data = state_sf, fill = NA, col = "black", lwd = 0.1) +
+  labs(fill = "% of hosp. w/ ADRD code") +
+  scale_fill_viridis(option = "D") + 
+  facet_grid(~race, labeller = as_labeller(race_labels)) +
+  theme_map() +
+  theme(legend.position = "bottom",
+        legend.title = element_text(size = 10),
+        legend.text = element_text(size = 8)
+        )
+
+# also try white only (more stable) ==> could combine white + black
+pos_med_sf |>
+  # # limit to rows with at least 25 person-years
+  #mutate(adrd_pct = ifelse(person_years < 50, NA, adrd_pct)) |>
+  mutate(adrd_pct = ifelse(adrd_pct > 20, 20, adrd_pct)) |>
+  filter(race == 1) %>%
+  ggplot() +
+  geom_sf(aes(fill = adrd_pct), lwd = 0.0) +
+  geom_sf(data = state_sf, fill = NA, col = "white", lwd = 0.1) +
+  labs(fill = "% of hosp. w/ ADRD code (white only)") +
+  scale_fill_viridis(option = "D") + 
+  theme_map() +
+  theme(legend.position = "bottom",
+        legend.title = element_text(size = 10),
+        legend.text = element_text(size = 8)
+        )
+
+```
+
+## Model results
+
+```{r}
+# compare distributions of risk ratios
+pos_med_sf %>%
+  st_drop_geometry() %>%
+  filter(race == 1) %>% # choose one race for risk ratios
+  gather(key = "outcome", "risk_ratio", risk_ratio_adrd, risk_ratio_hosp) %>%
+  mutate(outcome = ifelse(outcome == "risk_ratio_adrd", 
+                          "ADRD", "All other hosp.")) %>%
+  ggplot() +
+  geom_density(aes(x = risk_ratio, col = outcome)) +
+  geom_vline(xintercept = 1, lty = 2) +
+  labs(x = "Risk ratio",
+       y = "Density",
+       col = "Outcome") +
+  theme_bw() +
+  theme(axis.text.y = element_blank(),
+        axis.ticks.y = element_blank(),
+        panel.grid = element_blank())
+```
+
+```{r}
+# get ratios of risk ratios and map
+
+pos_med_sf %<>%
+  mutate(ratio_of_risk_ratios = risk_ratio_adrd / risk_ratio_hosp)
+
+sc <- scale_fill_gradient2(high = "orange", mid = "white", low = "blue", na.value = "gray50",
+                         midpoint = 1)
+
+pos_med_sf |>
+  #mutate(adrd_pct = ifelse(adrd_pct > 20, 20, adrd_pct)) |>
+  filter(race == 1) %>%
+  ggplot() +
+  geom_sf(aes(fill = ratio_of_risk_ratios), lwd = 0.1) +
+  geom_sf(data = state_sf, fill = NA, lwd = 0.1) +
+  labs(fill = "Ratio of risk ratios \n(ADRD/other hosp)") +
+  theme_map() +
+  theme(legend.position = "bottom",
+        legend.title = element_text(size = 10),
+        legend.text = element_text(size = 8)
+        ) +
+  sc
+
+# how do we decide which ones are statistically significantly different from 1?
+
+# wait, something is weird here.
+
+# imagine a county where black risk is higher for ADRD and all-cause hosp
+# if the disparity is stronger for ADRD, ratio of ratios will be > 1
+# if the disparity is stronger for all-cause hosp, ratio of ratios will be < 1
+# ratio of ratios > 1 indicates that "racism" for black people is worse for ADRD
+
+# now imagine a county where white risk is higher for ADRD and all-cause hosp
+# if the disparity is stronger for ADRD (i.e. risk ratio is smaller, farther from 1), then ratio of ratios will be < 1
+# if the disparity is stronger for all-cause hosp, ratio of ratios will be > 1
+# ratio of ratios > 1 indicates that "racism" for white people is worse for all-cause
+
+# example
+
+# county A:
+# RR for ADRD = 1.1
+# RR for all-cause = 2.2
+# ratio of ratios = 0.5
+# disparities are stronger for all-cause hosp and worse for Black people
+
+# county B:
+# RR for ADRD = 0.4
+# RR for all-cause = 0.8
+# ratio of ratios = 0.5
+# disparities are stronger for ADRD and worse for white people
+
+# county C:
+# RR for ADRD = 0.6
+# RR for all-cause = 1.2
+# ratio of ratios = 0.5
+# disparities are in different directions (ADRD worse for white, all-cause hosp worse for black)
+
+# ratio of risk ratios = 0.5 just tells us that RR is greater for ADRD than for all-cause hosp, but we don't know if this means the risk ratio for ADRD is closer to or farther from the null than the risk ratio for all-cause hosp
+# we really want to know which one is farther from the null, not which one is strictly greater
+
+
+```
+
+```{r}
+# okay, thinking about alternatives
+
+# what about lambdas for each race?
+
+pos_med_sf %<>%
+  mutate(ratio_of_pos_med_y = pos_med_y_adrd / pos_med_y_hosp)
+
+pos_med_sf |>
+  mutate(ratio_of_pos_med_y = ifelse(ratio_of_pos_med_y < -5, -5, ratio_of_pos_med_y),
+         ratio_of_pos_med_y = ifelse(ratio_of_pos_med_y > 5, 5, ratio_of_pos_med_y)) |>
+  ggplot() +
+  geom_sf(aes(fill = ratio_of_pos_med_y), lwd = 0.1) +
+  geom_sf(data = state_sf, fill = NA, col = "black", lwd = 0.1) +
+  labs(fill = "lambda ADRD/lambda hosp") +
+  facet_grid(~race, labeller = as_labeller(race_labels)) +
+  theme_map() +
+  theme(legend.position = "bottom",
+        legend.title = element_text(size = 10),
+        legend.text = element_text(size = 8)
+        ) +
+  sc
+
+```
+
+```{r}
+# in counties where black people were significantly worse off (RR > 1) for both ADRD and hosp, which one was stronger?
+# plot ADRD RR / hosp RR
+
+pos_med_sf |>
+  #mutate(adrd_pct = ifelse(adrd_pct > 20, 20, adrd_pct)) |>
+  filter(race == 1) %>%
+  mutate(ratio_of_risk_ratios = ifelse(
+    risk_ratio_adrd > 1 & risk_ratio_sig_adrd & risk_ratio_hosp > 1 & risk_ratio_sig_hosp,
+    ratio_of_risk_ratios, NA)) %>%
+  ggplot() +
+  geom_sf(aes(fill = ratio_of_risk_ratios), lwd = 0.1) +
+  geom_sf(data = state_sf, fill = NA, col = "white", lwd = 0.1) +
+  labs(fill = "Ratio of risk ratios \n(ADRD/other hosp)") +
+  theme_map() +
+  theme(legend.position = "bottom",
+        legend.title = element_text(size = 10),
+        legend.text = element_text(size = 8)
+        ) +
+  sc
+
+```
+
+
