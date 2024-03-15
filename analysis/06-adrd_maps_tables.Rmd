@@ -3,6 +3,7 @@
 ## Set working directory as project root
 library(here)
 knitr::opts_knit$set(root.dir = here())
+knitr::opts_chunk$set(echo = FALSE, warning = FALSE, message = FALSE)
 ```
 
 ```{r, message=FALSE, warning=FALSE}
@@ -22,11 +23,12 @@ library(data.table)
 
 ```{r}
 # choose which model to use
-model <- "m1"
-#model <- "m2"
+#model <- "m1"
+model <- "m2"
+#model <- "m3"
 
 ## Read model results
-stanfit_samples <- read_rds(paste0("data/intermediate/adrd-", model, "_stanfit_samples.rds"))
+#stanfit_samples <- read_rds(paste0("data/intermediate/adrd-", model, "_stanfit_samples.rds"))
 stanfit_summary <- read_rds(paste0("data/intermediate/adrd-", model, "_stanfit_summary.rds"))
 
 ## Read data ----
@@ -37,13 +39,12 @@ pos_med_sf <- county_sf %>%
   select(county) %>% 
   right_join(pos_med)
 
-dim(county_sf)
-dim(pos_med_sf)
+# dim(county_sf)
+# dim(pos_med_sf)
 colnames(pos_med_sf)
 ```
 
 ```{r}
-county_sf <- read_rds("data/symlinks/scratch/county_sf.rds")
 county_fips_df <- read_rds("data/symlinks/scratch/county_fips_df.rds")
 state_sf <- read_sf("data/county/cb_2015_us_state/cb_2015_us_state_20m.shp")
 state_sf %<>% 
@@ -66,30 +67,6 @@ state_sf <- st_transform(state_sf,
                                         +lon_0=-96 +x_0=0 +y_0=0 +datum=NAD83 +units=m +no_defs"))
 ```
 
-
-```{r}
-# # read in Great Lakes shapefile
-# # https://www.naturalearthdata.com/downloads/110m-physical-vectors/110mlakes-reservoirs/
-# lakes_sf <- read_sf("data/county/ne_110m_lakes/ne_110m_lakes.shp") |>
-#   filter(name_alt == "Great Lakes")
-# 
-# # to exclude Great Lakes from maps, include the following layer:
-# lakes_gg <- geom_sf(data = lakes_sf, fill = "white", col = NA) 
-# 
-# # to draw state borders, include the following layer:
-# states_gg <- geom_sf(data = state_sf, fill = NA, col = "black", lwd = 0.1)
-# 
-# # to exclude lakes and draw state borders, include the following layer:
-# lakes_states_gg <- list(
-#   geom_sf(data = state_sf, fill = NA, col = "black", lwd = 0.1),
-#   geom_sf(data = lakes_sf, fill = "white", col = "black"))
-# 
-# # or this for white state borders:
-# lakes_states_light_gg <- list(
-#   geom_sf(data = state_sf, fill = NA, col = "white", lwd = 0.1),
-#   geom_sf(data = lakes_sf, fill = "white", col = "white"))
-```
-
 ```{r}
 # race labels for plotting
 race_labels <- c(
@@ -101,23 +78,29 @@ race_labels <- c(
 ```{r}
 # make a new column for rate of hospitalization (observed/person-years)
 pos_med_sf %<>% 
-  mutate(adrd_rate = observed/person_years)
+  mutate(adrd_rate_obs = observed/person_years)
+
+# and a new column for expected rate of hospitalization (expected/person-years)
+pos_med_sf %<>% 
+  mutate(adrd_rate_exp = expected/person_years)
 ```
 
 
-## Look at counties with zero person-years
+## Look at counties with zero person-years and counties with zero expected hospitalizations
 
 ```{r}
-# look at counties with zero person-years
+# counties with zero person-years
 filter(pos_med_sf, person_years == 0) %>% 
   st_drop_geometry() %>% 
-  select(county, race, person_years, expected)
+  select(county, race, person_years, expected) %>%
+  nrow()
 # 71 counties with zero Black person-years
 
 # get # of counties with zero expected hospitalizations with ADRD
 filter(pos_med_sf, expected == 0) %>% 
   st_drop_geometry() %>% 
-  select(county, race, person_years, expected) %>% nrow()
+  select(county, race, person_years, expected) %>% 
+  nrow()
 # the only counties with zero expected hospitalizations have zero person-years
 
 ```
@@ -229,51 +212,91 @@ summary_stats <- summary_stats |>
             `50th percentile` = p500,
             `75th percentile` = p750,
             Maximum = max)
+summary_stats |> pander()
 
 # save table
 write_rds(summary_stats, file = paste0("results/tables/summary_stats_", model, ".rds"))
 ```
 
-```{r}
-# alternative to table: plot densities or histograms
 
-# not sure about NA values
+### Alternatively, plot densities of these distributions
+
+```{r}
+# excluding lambda because that comes after modeling
+# maybe compare all the lambdas across models separately
 
 # I want to facet by parameter, so I need to gather the columns of interest
 param_dist <- pos_med_sf |>
+  st_drop_geometry() |>
   mutate(exp_y = exp(y),
          exp_pos_med_y = exp(pos_med_y)) |>
   gather(key = "parameter", value = "value", 
          c(person_years, 
            observed, 
-           adrd_rate,
-           exp_y, 
-           exp_pos_med_y)) |>
-  select(county, geometry, race, parameter, value)
+           expected,
+           adrd_rate_obs,
+           adrd_rate_exp,
+           exp_y)) |>
+  select(county, race, parameter, value)
 
+# look at NA values
+# NA values are for ADRD rate the 71 
+# param_dist |>
+#   group_by(parameter) |>
+#   summarise(num_NA = sum(is.na(value))) %>%
+#   nrow()
+# these are just the 71 counties with 0 black person-years, so I can ignore them
+
+# I want to plot on log scale, so change any 0s to 0.000001
+param_dist %<>%
+  mutate(value = ifelse(value == 0, 0.000001, value))
+
+# set order of plots
+param_dist$parameter <- factor(param_dist$parameter,
+                               levels = c("person_years", "observed", "expected", "exp_y", 
+                                          "adrd_rate_obs", "adrd_rate_exp"))
 
 # plot
 param_dist |>
+  filter(!is.na(value)) |>
   mutate(race = factor(ifelse(race == 1, "White", "Black"),
                        levels = c("White", "Black"))) %>% 
   ggplot() +
   geom_density(aes(value, col = as.factor(race))) +
-  labs(col = "") +
+  labs(x = "",
+       y = "Density",
+       col = "") +
   scale_x_log10(labels = scales::comma) +
   facet_wrap(~parameter, scales = "free", 
-             labeller = as_labeller(c(adrd_rate = "ADRD rate",
-                                      exp_pos_med_y = "lambda",
-                                      exp_y = "observed/expected",
-                                      observed = "observed",
-                                      person_years = "person years")
+             labeller = as_labeller(c(adrd_rate_obs = "Observed ADRD rate",
+                                      adrd_rate_exp = "Expected ADRD rate",
+                                      #exp_pos_med_y = "Lambda",
+                                      exp_y = "Observed hosp./expected hosp.",
+                                      observed = "Observed hosp.",
+                                      expected = "Expected hosp.",
+                                      person_years = "Person years")
   )) +
   theme_bw() +
-  theme(strip.background = element_rect(fill = "white"))
+  theme(strip.background = element_rect(fill = "white"),
+        axis.text.y = element_blank(),
+        axis.ticks.y = element_blank(),
+        panel.grid = element_blank(),
+        legend.position = "bottom")
 
 # plotting x-axis on log scale!!
 
 ```
 
+
+## Empirical variances
+
+```{r}
+readRDS(paste0("results/tables/empirical_variance_", model, ".rds")) |> pander()
+```
+
+
+
+## Understand the data/covariates
 
 ```{r}
 # plot % of person-years contributed by black people in each county
@@ -306,7 +329,7 @@ pos_med_sf %>%
 pos_med_sf %>%
   ggplot() +
   geom_sf(aes(fill = log10(house_price_income_ratio)), alpha = 1, lwd = 0.0) +
-  labs(fill = "log(PIR)") +
+  labs(fill = "log(house price-to- \nincome ratio)") +
   scale_fill_viridis(option = "D") +
   geom_sf(data = state_sf, fill = NA, col = "white", lwd = 0.1) +
   theme(legend.position = "bottom") +
@@ -323,26 +346,17 @@ pos_med_sf %>%
 ```
 
 
+## Pre-modeling visualizations of observed and expected
+
 ### Observed rate of hospitalization with ADRD (observed/person-years)
 
 ```{r}
-
-# observed/person_years
-pos_med_sf %>%
-  ggplot() +
-  geom_sf(aes(fill = adrd_rate), alpha = 1, lwd = 0.0) +
-  labs(fill = "ADRD rate") +
-  scale_fill_viridis(option = "D") +
-  geom_sf(data = state_sf, fill = NA, col = "white", lwd = 0.1) +
-  theme(legend.position = "bottom") +
-  theme_map()
-
-# now try capping at 50%--otherwise we're just seeing really small counties
+# try capping at 50%--otherwise we're just seeing really small counties
 # alternatively, could restrict this to counties with a certain number of person-years observed
 pos_med_sf %>%
-  mutate(adrd_rate = ifelse(adrd_rate > 0.10, 0.10, adrd_rate)) |>
+  mutate(adrd_rate_obs = ifelse(adrd_rate_obs > 0.12, 0.12, adrd_rate_obs)) |>
   ggplot() +
-  geom_sf(aes(fill = adrd_rate * 100), alpha = 1, lwd = 0.0) +
+  geom_sf(aes(fill = adrd_rate_obs * 100), alpha = 1, lwd = 0.0) +
   labs(fill = "Rate of hosp. \nwith ADRD (%)") +
   scale_fill_viridis(option = "D") +
   geom_sf(data = state_sf, fill = NA, col = "white", lwd = 0.1) +
@@ -354,6 +368,24 @@ pos_med_sf %>%
 ```
 
 
+### Expected rate of hospitalization with ADRD (expected/person-years)
+
+```{r}
+# try capping at 50%--otherwise we're just seeing really small counties
+# alternatively, could restrict this to counties with a certain number of person-years
+pos_med_sf %>%
+  mutate(adrd_rate_exp = ifelse(adrd_rate_exp > 0.10, 0.10, adrd_rate_exp)) |>
+  ggplot() +
+  geom_sf(aes(fill = adrd_rate_exp * 100), alpha = 1, lwd = 0.0) +
+  labs(fill = "Expected rate of \nhosp. with ADRD (%)") +
+  scale_fill_viridis(option = "D") +
+  geom_sf(data = state_sf, fill = NA, col = "white", lwd = 0.1) +
+  facet_grid(~race, labeller = as_labeller(race_labels)) +
+  theme(legend.position = "bottom") +
+  theme_map()
+
+# could also try lumping together white and black (this just tells us where there are more ADRD hospitalizations)
+```
 
 ### Observed vs. expected
 
@@ -407,7 +439,7 @@ ggplot() +
   # plot missing values in gray (must do manually here)
   geom_sf(data = subset(pos_med_sf, is.na(y)), fill = "gray60", lwd = 0.00) +
   geom_sf(data = state_sf, fill = NA, col = "white", lwd = 0.1) +
-  labs(fill = "Observed count/expected count") +
+  labs(fill = "Observed/expected") +
   scale_fill_viridis(option = "D") + 
   facet_grid(~race, labeller = as_labeller(race_labels)) +
   theme_map() +
@@ -429,7 +461,7 @@ ggplot() +
 
 
 
-## Plot model results
+## Model results
 
 ### Relative/standardized risks (posterior medians of lambda = pos_med_y)
 The "predictions" are a smoothed version of the observations.
@@ -506,38 +538,39 @@ state_sf %>%
 ### White-specific, Black-specific, and shared (unscaled) risks (three risk surfaces)
 
 ```{r}
-summary(pos_med$shared_unscaled)
-hist(pos_med$shared_unscaled)
+# summary(pos_med$shared_unscaled)
+# hist(pos_med$shared_unscaled)
 ```
 
 ```{r}
-summary(pos_med$specific)
-hist(pos_med$specific)
-hist(exp(pos_med$specific))
+# summary(pos_med$specific)
+# hist(pos_med$specific)
+# hist(exp(pos_med$specific))
 ```
 
 ```{r}
-# find outliers for phi
-pos_med_sf %<>% 
-  mutate(
-    shared_unscaled_inliers = if_else(shared_unscaled > -1 & shared_unscaled < 1, 
-                                      shared_unscaled, as.numeric(NA)),
-    shared_unscaled_outliers = if_else(shared_unscaled <= -1 | shared_unscaled >= 1, 
-                                       shared_unscaled, as.numeric(NA)),
-    shared_unscaled_outliers = if_else(shared_unscaled_outliers <= -1, -1, shared_unscaled_outliers),
-    shared_unscaled_outliers = if_else(shared_unscaled_outliers >= 1, 1, shared_unscaled_outliers)
-  ) 
+# # find outliers for phi
+# pos_med_sf %<>% 
+#   mutate(
+#     shared_unscaled_inliers = if_else(shared_unscaled > -1 & shared_unscaled < 1, 
+#                                       shared_unscaled, as.numeric(NA)),
+#     shared_unscaled_outliers = if_else(shared_unscaled <= -1 | shared_unscaled >= 1, 
+#                                        shared_unscaled, as.numeric(NA)),
+#     shared_unscaled_outliers = if_else(shared_unscaled_outliers <= -1, -1, shared_unscaled_outliers),
+#     shared_unscaled_outliers = if_else(shared_unscaled_outliers >= 1, 1, shared_unscaled_outliers)
+#   ) 
 
-pos_med_sf %>% 
-  st_drop_geometry() %>% 
-  select(shared_unscaled, shared_unscaled_inliers, shared_unscaled_outliers)
+# pos_med_sf %>% 
+#   st_drop_geometry() %>% 
+#   select(shared_unscaled, shared_unscaled_inliers, shared_unscaled_outliers)
 ```
 
 ```{r}
-# look at outliers
-filter(pos_med_sf, !is.na(shared_unscaled_outliers)) %>% 
-  st_drop_geometry() %>% 
-  select(shared_unscaled, shared_unscaled_inliers, shared_unscaled_outliers)
+# # look at outliers
+# filter(pos_med_sf, !is.na(shared_unscaled_outliers)) %>% 
+#   st_drop_geometry() %>% 
+#   select(shared_unscaled, shared_unscaled_inliers, shared_unscaled_outliers) %>%
+#   nrow()
 ```
 
 
@@ -571,10 +604,10 @@ p1 <- pos_med_sf %>%
 p2 <- pos_med_sf %>% 
   filter(race == 1) %>% #shared_unscaled is non-race specific
   ggplot() +
-  geom_sf(aes(fill = shared_unscaled_inliers), lwd = 0.03) + 
+  geom_sf(aes(fill = shared_unscaled), lwd = 0.03) + 
   geom_sf(data = state_sf, fill = NA, col = "black", lwd = 0.1) +
-  geom_sf(data = filter(pos_med_sf, shared_unscaled_outliers == 1), color = "red", lwd = 0.5) + 
-  geom_sf(data = filter(pos_med_sf, shared_unscaled_outliers == -1), color = "blue", lwd = 0.5) + 
+  # geom_sf(data = filter(pos_med_sf, shared_unscaled_outliers == 1), color = "red", lwd = 0.5) + 
+  # geom_sf(data = filter(pos_med_sf, shared_unscaled_outliers == -1), color = "blue", lwd = 0.5) + 
   theme_map() + 
   labs(subtitle = expression('Unscaled shared (\u03A6)'),
        fill = "Median posterior estimate") +
@@ -614,10 +647,9 @@ ggarrange(p1, p2, p3,
           legend = "bottom")
 ```
 
+### Now exclude non-significant counties
 
 ```{r}
-# same thing but exclude non-significant counties
-
 # new color scale (since I'm exponentiating)
 # sc <- scale_fill_gradientn(colors = myPalette(100), 
 #                            na.value = "gray70")
@@ -642,13 +674,13 @@ p1 <- pos_med_sf %>%
 
 # shared unscaled (phi)
 p2 <- pos_med_sf %>% 
-  mutate(shared_unscaled_inliers = ifelse(shared_unscaled_sig, shared_unscaled_inliers, NA)) %>%
+  mutate(shared_unscaled = ifelse(shared_unscaled_sig, shared_unscaled, NA)) %>%
   filter(race == 1) %>% #shared_unscaled is non-race specific, so choose one
   ggplot() +
-  geom_sf(aes(fill = shared_unscaled_inliers), lwd = 0.03) + 
+  geom_sf(aes(fill = shared_unscaled), lwd = 0.03) + 
   geom_sf(data = state_sf, fill = NA, col = "black", lwd = 0.1) +
-  geom_sf(data = filter(pos_med_sf, shared_unscaled_outliers == 1), color = "red", lwd = 0.5) + 
-  geom_sf(data = filter(pos_med_sf, shared_unscaled_outliers == -1), color = "blue", lwd = 0.5) + 
+  # geom_sf(data = filter(pos_med_sf, shared_unscaled_outliers == 1), color = "red", lwd = 0.5) + 
+  # geom_sf(data = filter(pos_med_sf, shared_unscaled_outliers == -1), color = "blue", lwd = 0.5) + 
   labs(subtitle = expression('Unscaled shared (\u03A6)'),
        fill = "Median posterior estimate") +
   theme_map() + 
@@ -773,7 +805,6 @@ cowplot::plot_grid(
 
 
 ### Risk ratios
-
 
 ```{r}
 # plot distribution of risk ratios
