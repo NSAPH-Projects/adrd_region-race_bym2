@@ -55,6 +55,7 @@ random_seed <- get_random_seed(paste0(path_mod, 'model_run_', tstamp, '/seed.rds
 
 # print tstamp (so sbatch output can be linked to model results)
 paste0("Model time stamp: ", tstamp)
+paste0("Model: ADRD, m2")
 
 ##  Run parameters
 #n_chains <- 4
