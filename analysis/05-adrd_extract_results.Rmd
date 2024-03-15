@@ -13,30 +13,36 @@ library(rstan)
 ```
 
 ```{r}
-# choose model
-#model <- "m1"
+###--- choose model
+# model <- "m1"
 model <- "m2"
+#model <- "m3"
+# model <- "m4"
 
 
 #slurm job number 1307317 for m0 is labeled model_run_20230311_185502
 if(model == "m1"){
   stanfit_object <- read_rds(paste0(
-    "results/models/adrd/m1/model_run_20231109_142035/stanfit_object.rds"
+    #"results/models/adrd/m1/model_run_20231109_142035/stanfit_object.rds"
     #"results/models/adrd/m1/model_run_20240131_215726/stanfit_object.rds"
-    ))
+    "results/models/adrd/m1/model_run_20240307/stanfit_object.rds"
+  ))
 } else if(model == "m2"){
   stanfit_object <- read_rds(paste0(
-    "results/models/adrd/m2/model_run_20240216_1406/stanfit_object.rds"
+    #"results/models/adrd/m2/model_run_20240216_1406/stanfit_object.rds"
+    "results/models/adrd/m2/model_run_20240307/stanfit_object.rds"
     ))
 } else if(model == "m3"){
   stanfit_object <- read_rds(paste0(
-    "results/models/adrd/m3/model_run_*/stanfit_object.rds"
+    "results/models/adrd/m3/model_run_20240308/stanfit_object.rds"
     ))
 } else if(model == "m4"){
   stanfit_object <- read_rds(paste0(
     "results/models/adrd/m4/model_run_*/stanfit_object.rds"
     ))
 }
+
+
 
 class(stanfit_object)
 ```
@@ -475,7 +481,8 @@ empiric_vars$median_ci <- paste0(round(empiric_vars$median, 2), " (",
 # rename columns
 empiric_vars <- empiric_vars |>
   select(-c(median, p025, p975)) |>
-  rename(Parameter = param,
+  rename(Model = model_name,
+         Parameter = param,
             Race = race,
          Estimate = median_ci)
 
