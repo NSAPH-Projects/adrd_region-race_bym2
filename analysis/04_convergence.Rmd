@@ -11,137 +11,72 @@ library(tidyverse)
 library(magrittr)
 library(bayesplot)
 library(rstan)
+library(ggplot2)
 ```
 
 ```{r}
-# path with model results
-# results_path <- "adrd/m1/model_run_20240307"
-#results_path <- "adrd/m2/model_run_20240307"
-#results_path <- "adrd/m3/model_run_20240308"
-results_path <- "hosp/m2/model_run_20240315"
-
-
-# load stan object
-stanfit_object <- read_rds(paste0("results/models/", results_path, "/stanfit_object.rds"))
-
-# ## Read data ----
-# #slurm job number 1307317 for m0 is labeled model_run_20230311_185502
-# # stanfit_object <- read_rds("results/models/adrd/m1/model_run_20231109_142035/stanfit_object.rds")
+# # load all models in working model directory
+# stanfit_list <- lapply(paste0("results/models/working/", 
+#                             list.files("results/models/working/")), read_rds) 
 # 
-# # stanfit_object1 <- read_rds("results/models/adrd/m1/model_run_20240123_162901/stanfit_object.rds")
-# # 
-# # stanfit_object2 <- read_rds("results/models/adrd/m1/model_run_20240123_161610/stanfit_object.rds")
-# 
-# # this is the one with 10,000 iterations
-# stanfit_object <- read_rds("results/models/adrd/m1/model_run_20240131_220929/stanfit_object.rds")
-# 
-# # just looking at another model
-# stanfit_object <- read_rds("results/models/adrd/m1/model_run_20240131_215726/stanfit_object.rds")
-# # convergence is way better even with fewer iterations!! check parameters
-# 
-# # try the only m4 that finished running
-# stanfit_object <- read_rds("results/models/adrd/m4/model_run_20240130_162455/stanfit_object.rds")
-# 
-# # try single chain from m2 that finished running with array
-# stanfit_object <- read_rds("results/models/adrd/m2/old/model_run_20240209_15/stanfit_object_3.rds")
-# 
-# 
-# #------- all four chains actually finished running for m2!!
-# # folder with results
-# folder_path <- "results/models/adrd/m2/model_run_20240212_2204/"
-# # Create a list of the four model fit objects
-# stanfit_list <- list(
-#   read_rds(paste0(folder_path, "stanfit_object_1.rds")),
-#   read_rds(paste0(folder_path, "stanfit_object_2.rds")),
-#   read_rds(paste0(folder_path, "stanfit_object_3.rds")),
-#   read_rds(paste0(folder_path, "stanfit_object_4.rds"))
-# )
-# 
-# # Convert the list of model fits to a stan fit object
-# stanfit_object <- sflist2stanfit(stanfit_list)
-# # save for scripts 5 and 6
-# save(stanfit_object, file = paste0(folder_path, "stanfit_object.rds"))
-# 
-# 
-# #------- 8 chains
-# # folder with results
-# folder_path <- "results/models/adrd/m2/model_run_20240216_1406/"
-# # Create a list of the four model fit objects
-# stanfit_list <- list(
-#   read_rds(paste0(folder_path, "stanfit_object_1.rds")),
-#   read_rds(paste0(folder_path, "stanfit_object_2.rds")),
-#   read_rds(paste0(folder_path, "stanfit_object_3.rds")),
-#   read_rds(paste0(folder_path, "stanfit_object_4.rds")),
-#   read_rds(paste0(folder_path, "stanfit_object_5.rds")),
-#   read_rds(paste0(folder_path, "stanfit_object_6.rds")),
-#   read_rds(paste0(folder_path, "stanfit_object_7.rds")),
-#   read_rds(paste0(folder_path, "stanfit_object_8.rds"))
-# )
-# 
-# # Convert the list of model fits to a stan fit object
-# stanfit_object <- sflist2stanfit(stanfit_list)
-# # save for scripts 5 and 6
-# write_rds(stanfit_object, file = paste0(folder_path, "stanfit_object.rds"))
-# 
-# 
-# #------- weak prior
-# # folder with results
-# folder_path <- "results/models/adrd/m2/model_run_20240220_2054/"
-# # Create a list of the four model fit objects
-# stanfit_list <- list(
-#   read_rds(paste0(folder_path, "stanfit_object_2.rds")),
-#   read_rds(paste0(folder_path, "stanfit_object_3.rds")),
-#   read_rds(paste0(folder_path, "stanfit_object_5.rds"))
-# )
-# 
-# 
-# 
-# #------ first attempt at all-cause hosp!
-# # folder with results
-# folder_path <- "results/models/hosp/m2/"
-# # Create a list of the four model fit objects
-# stanfit_list <- list(
-#   read_rds(paste0(folder_path, "model_run_20240229_1532/stanfit_object_1.rds"))
-# )
-# 
-# 
-# 
-# # Convert the list of model fits to a stan fit object
-# stanfit_object <- sflist2stanfit(stanfit_list)
-# # save for scripts 5 and 6
-# write_rds(stanfit_object, file = paste0(folder_path, "stanfit_object.rds"))
+# # name list elements
+# names(stanfit_list) <- str_remove_all(list.files("results/models/working/"), "stanfit_object_|\\.rds")
 ```
 
 ```{r}
-list_of_draws <- rstan::extract(stanfit_object)
-print(names(list_of_draws))
+# for a specific file!
+# stanfit_list <- list(read_rds("results/models/adrd/m1/stage1/model_run_20240404/stanfit_object_NA.rds"))
+stanfit_list <- list(read_rds("results/models/adrd/m1/stage1/model_run_20240405-18/stanfit_object.rds"))
 ```
 
 ```{r}
-rhat_of_draws <- rhat(stanfit_object)
-mcmc_rhat(rhat_of_draws)
+# get r hat values (takes a minute)
+rhat_of_draws <- lapply(stanfit_list, rhat)
 ```
 
-```{r}
-names(rhat_of_draws)[1:100]
 
-# what % of parameters have R < 1.10?
-length(rhat_of_draws[rhat_of_draws < 1.10]) / length(rhat_of_draws)
+## Plot R hat values for all parameters
+
+```{r}
+# plot r hat values for each model
+rhat_plots <- lapply(rhat_of_draws, mcmc_rhat)
+
+# loop through plots
+for (i in seq_along(rhat_plots)) {
+  
+  # get % of parameters with R < 1.10
+  pct_good <- length(rhat_of_draws[[i]][rhat_of_draws[[i]] < 1.10]) / length(rhat_of_draws[[i]]) * 100
+
+  # get plot title
+  plot_title <- paste0(names(stanfit_list)[i], ": ", round(pct_good), 
+                       "% of parameters have R hat < 1.1")
+  
+  rhat_plots[[i]] <- rhat_plots[[i]] + ggplot2::labs(title = plot_title)
+}
+
+# print
+rhat_plots
 ```
 
+## Now look at R hat values for specific parameters
+
 ```{r}
-rhat_of_draws[c('alpha[1]', # white surface intercept
+lapply(rhat_of_draws, function(x) {
+  mcmc_rhat(x[c('alpha[1]', # white surface intercept
                 'alpha[2]', # black surface intercept
                 'beta[1]',
                 'beta[2]',
                 'delta', # shared surface scaling factor
                 'nu[1]', # state random effect
-                'lp__') # Stan's lp__ variable
-              ] 
+                'lp__' # Stan's lp__ variable
+                ) 
+              ] )
+  })
 ```
 
 ```{r}
-rhat_of_draws[c('sigma_u[1]', # SD of CAR part
+lapply(rhat_of_draws, function(x) {
+  mcmc_rhat(x[c('sigma_u[1]', # SD of CAR part
                 'sigma_u[2]', # SD of CAR part
                 'sigma_u[3]', # SD of CAR part
                 'sigma_v[1]', # SD of iid spatial part
@@ -155,66 +90,95 @@ rhat_of_draws[c('sigma_u[1]', # SD of CAR part
                 'tau_v[2]', # precision of iid spatial part
                 'tau_v[3]' # precision of iid spatial part
                 )
-              ]
+              ])
+  })
 ```
 
 ```{r}
 # phi
-mcmc_rhat(rhat_of_draws[grep('phi', names(rhat_of_draws))])
+lapply(rhat_of_draws, function(x) {
+  mcmc_rhat(x[grep('phi', names(x))])
+  })
 ```
 
 ```{r}
-# psi
-mcmc_rhat(rhat_of_draws[grep('psi\\[1', names(rhat_of_draws))])
+# psi (white)
+lapply(rhat_of_draws, function(x) {
+  mcmc_rhat(x[grep('psi\\[1', names(x))])
+  })
 ```
 
 ```{r}
-# psi
-mcmc_rhat(rhat_of_draws[grep('psi\\[2', names(rhat_of_draws))])
+# psi (black)
+lapply(rhat_of_draws, function(x) {
+  mcmc_rhat(x[grep('psi\\[2', names(x))])
+  })
 ```
 
 ```{r}
 # nu
-mcmc_rhat(rhat_of_draws[grep('nu', names(rhat_of_draws))])
+lapply(rhat_of_draws, function(x) {
+  mcmc_rhat(x[grep('nu', names(x))])
+  })
 ```
 
 ```{r}
 # beta
-mcmc_rhat(rhat_of_draws[grep('beta', names(rhat_of_draws))])
+lapply(rhat_of_draws, function(x) {
+  # only for models that contain beta
+  if(any(grepl("beta", names(x)))) {
+    mcmc_rhat(x[grep('beta', names(x))])
+  }
+  })
 ```
 
 
-
-#### Lauren experimenting
-
-```{r}
-# try some trace plots
-mcmc_trace(stanfit_object, pars = "alpha[1]")
-mcmc_trace(stanfit_object, pars = "delta")
-mcmc_trace(stanfit_object, pars = "psi[1,62]")
-
-# now try trace plots specifically for variables with high Rhat values
-
-# get high rhat vars
-high_rhat <- rhat_of_draws[order(desc(rhat_of_draws))[1:50]]
-
-mcmc_trace(stanfit_object, pars = "sigma_v[3]")
-mcmc_trace(stanfit_object, pars = "sigma_v[2]")
-mcmc_trace(stanfit_object, pars = "lp__")
-mcmc_trace(stanfit_object, pars = "tau_v[2]")
-
-
-```
-
+## Look at effective sample size
 
 ```{r}
-# Get summary information, including effective sample size
-summary_info <- summary(stanfit_object)
+# get summary information, including effective sample size
+summary_info <- lapply(stanfit_list, summary)
 
-# Extract the effective sample size for each parameter 
-ess <- summary_info$summary[, "n_eff"]
-hist(ess)
+# extract the effective sample size for each parameter 
+ess_list <- lapply(summary_info, function(x) {
+  x$summary[, "n_eff"]
+})
+
+# get into df for plotting
+ess_df <- data.frame(ess = unlist(ess_list), 
+                     model = rep(names(stanfit_list), times = sapply(ess_list, length)))
+
+# plot histogram of each ESS values for each model
+ess_df |>
+  ggplot() + 
+  geom_histogram(aes(ess)) +
+  labs(x = "Effective sample size",
+       y = "Count") +
+  facet_wrap(~ model) +
+  theme_bw() +
+  theme(strip.background = element_rect(fill = "white"))
+
 
 # aim for min to be around 1,000
 ```
+
+
+## Trace plots
+
+```{r}
+# get parameters with highest R hat values from each model
+high_rhat <- lapply(rhat_of_draws, function(x){
+  sorted <- sort(x, decreasing = TRUE)
+  names(sorted[1:10])
+})
+
+# trace plots
+trace_list <- list()
+for (i in seq_along(stanfit_list)){
+  trace_list[[i]] <- mcmc_trace(stanfit_list[[i]], pars = high_rhat[[i]])
+}
+
+trace_list
+```
+
 
