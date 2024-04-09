@@ -13,64 +13,70 @@ library(rstan)
 ```
 
 ```{r}
+# Load data
+
+# load all models in working model directory
+stanfit_list <- lapply(paste0("results/models/working/", 
+                            list.files("results/models/working/", pattern = "hosp")), read_rds) 
+
+# name list elements
+names(stanfit_list) <- str_remove_all(list.files("results/models/working/", pattern = "hosp"), "stanfit_object_|\\.rds")
+
+# load hosp ratios and county fips data
+hosp_ratios_df <- read_rds('data/symlinks/scratch/hosp_ratios_df.rds')
+county_fips_df <- read_rds("data/symlinks/scratch/county_fips_df.rds")
+```
+
+
+
+```{r}
 ###--- choose model
-# model <- "m1"
-model <- "m2"
+#model <- "m1"
+#model <- "m2"
 #model <- "m3"
 # model <- "m4"
 
 
-#slurm job number 1307317 for m0 is labeled model_run_20230311_185502
-if(model == "m1"){
-  stanfit_object <- read_rds(paste0(
-    #"results/models/hosp/m1/model_run_20231109_142035/stanfit_object.rds"
-    #"results/models/hosp/m1/model_run_20240131_215726/stanfit_object.rds"
-    "results/models/hosp/m1/model_run_20240307/stanfit_object.rds"
-  ))
-} else if(model == "m2"){
-  stanfit_object <- read_rds(paste0(
-    "results/models/hosp/m2/model_run_20240315/stanfit_object.rds"
-    ))
-} else if(model == "m3"){
-  stanfit_object <- read_rds(paste0(
-    "results/models/hosp/m3/model_run_20240308/stanfit_object.rds"
-    ))
-} else if(model == "m4"){
-  stanfit_object <- read_rds(paste0(
-    "results/models/hosp/m4/model_run_*/stanfit_object.rds"
-    ))
-}
-
-
-
-class(stanfit_object)
-```
-
-
-```{r}
-## Read data ----
-hosp_ratios_df <- read_rds('data/symlinks/scratch/hosp_ratios_df.rds')
-hosp_ratios_df
+# #slurm job number 1307317 for m0 is labeled model_run_20230311_185502
+# if(model == "m1"){
+#   stanfit_object <- read_rds(paste0(
+#     #"results/models/hosp/m1/model_run_20231109_142035/stanfit_object.rds"
+#     #"results/models/hosp/m1/model_run_20240131_215726/stanfit_object.rds"
+#     "results/models/hosp/m1/model_run_20240307/stanfit_object.rds"
+#   ))
+# } else if(model == "m2"){
+#   stanfit_object <- read_rds(paste0(
+#     #"results/models/hosp/m2/model_run_20240216_1406/stanfit_object.rds"
+#     "results/models/hosp/m2/model_run_20240307/stanfit_object.rds"
+#     ))
+# } else if(model == "m3"){
+#   stanfit_object <- read_rds(paste0(
+#     "results/models/hosp/m3/model_run_20240308/stanfit_object.rds"
+#     ))
+# } else if(model == "m4"){
+#   stanfit_object <- read_rds(paste0(
+#     "results/models/hosp/m4/model_run_*/stanfit_object.rds"
+#     ))
+# }
+# 
+# 
+# 
+# class(stanfit_object)
 ```
 
 ```{r}
-county_fips_df <- read_rds("data/symlinks/scratch/county_fips_df.rds")
-county_fips_df
-```
-
-```{r}
-stanfit_summary <- summary(stanfit_object)
-## summary stats of fixed effects ----
-
-
-if(model == "m1"){
-  stanfit_summary$summary[c('alpha[1]', 'alpha[2]', 'delta'), ]
-}else if(model == "m2" | model == "m3"){
-  stanfit_summary$summary[c('alpha[1]', 'alpha[2]', 'delta', 'beta[1]', 'beta[2]'), ]
-}else if(model == "m4"){
-  stanfit_summary$summary[c('alpha[1]', 'alpha[2]', 'delta', 
-                            'beta[1]', 'beta[2]', 'beta[3]', 'beta[4]', 'beta[5]', 'beta[6]'), ]
-}
+# stanfit_summary <- summary(stanfit_object)
+# ## summary stats of fixed effects ----
+# 
+# 
+# if(model == "m1"){
+#   stanfit_summary$summary[c('alpha[1]', 'alpha[2]', 'delta'), ]
+# }else if(model == "m2" | model == "m3"){
+#   stanfit_summary$summary[c('alpha[1]', 'alpha[2]', 'delta', 'beta[1]', 'beta[2]'), ]
+# }else if(model == "m4"){
+#   stanfit_summary$summary[c('alpha[1]', 'alpha[2]', 'delta', 
+#                             'beta[1]', 'beta[2]', 'beta[3]', 'beta[4]', 'beta[5]', 'beta[6]'), ]
+# }
 ```
 
 ```{r}
@@ -119,13 +125,13 @@ extract_samples <- function(stanfit) {
 ```
 
 ```{r}
-## organize samples from stanfit_object ----
-stanfit_samples <- extract_samples(stanfit_object)
+# run function to extract samples
+stanfit_samples <- lapply(stanfit_list, extract_samples)
 
-names(stanfit_samples)
-length(stanfit_samples$alpha1)
-dim(stanfit_samples$phi)
-dim(stanfit_samples$nu)
+names(stanfit_samples[[1]])
+length(stanfit_samples[[1]]$alpha1)
+dim(stanfit_samples[[1]]$phi)
+dim(stanfit_samples[[1]]$nu)
 ```
 
 # log relative risk
@@ -140,86 +146,115 @@ nu_counts <- county_fips_df %>%
     dplyr::summarize(count = dplyr::n()) %>%
     dplyr::mutate(c_sum = cumsum(count))
 
-## Initialize a holder
-nu_expanded <- matrix(NA,
-                      nrow = nrow(stanfit_samples$psi1),
-                      ncol = max(nu_counts$c_sum))
+# initialize lists for posterior_white and posterior_black
+posterior_white <- list()
+posterior_black <- list()
+nu_expanded <- list()
 
-for (s in 1:nrow(nu_counts)) {
+# loop through models
+for (i in seq_along(stanfit_samples)){
+
+  ## Initialize a holder for each model
+  nu_expanded[[i]] <- matrix(NA,
+                      nrow = nrow(stanfit_samples[[i]]$psi1),
+                      ncol = max(nu_counts$c_sum))
+  
+  for (s in 1:nrow(nu_counts)) {
     start_ix <- ifelse(length(nu_counts$c_sum[s - 1]) > 0,
                        nu_counts$c_sum[s - 1], 0) + 1
     end_ix <- nu_counts$c_sum[s]
     
-    nu_expanded[, start_ix:end_ix] <- stanfit_samples$nu[, s]
+    nu_expanded[[i]][, start_ix:end_ix] <- stanfit_samples[[i]]$nu[, s]
+  }
+  
+  # white log relative risk
+  posterior_white[[i]] <- stanfit_samples[[i]]$alpha1 + stanfit_samples[[i]]$psi1 + 
+    (stanfit_samples[[i]]$phi * stanfit_samples[[i]]$delta) + 
+    nu_expanded[[i]]
+
+  # black log relative risk
+  posterior_black[[i]] <- stanfit_samples[[i]]$alpha2 + stanfit_samples[[i]]$psi2 +
+    (stanfit_samples[[i]]$phi / stanfit_samples[[i]]$delta) +
+    nu_expanded[[i]]
+
 }
 
-# white log relative risk
-posterior_white <- stanfit_samples$alpha1 + stanfit_samples$psi1 + 
-  (stanfit_samples$phi * stanfit_samples$delta) + 
-  nu_expanded
 
-# black log relative risk
-posterior_black <- stanfit_samples$alpha2 + stanfit_samples$psi2 +
-            (stanfit_samples$phi / stanfit_samples$delta) +
-            nu_expanded
-
-dim(posterior_white)
-dim(posterior_white)
+dim(posterior_white[[1]])
+dim(posterior_black[[1]])
 ```
 
 ```{r}
 # risk ratios
-posterior_risk_ratio <- exp(posterior_black - posterior_white)
 
-pos_med_rr <- data.frame(
-  risk_ratio = matrixStats::colMedians(posterior_risk_ratio),
-  c_idx = 1:ncol(posterior_risk_ratio)
-)
+# initialize list for risk ratios
+pos_med_rr <- list()
 
-# which columns (counties) have risk ratios significantly different from 1?
-pos_med_rr$risk_ratio_sig <- (colMeans(posterior_risk_ratio > 1) > 0.8) | (colMeans(posterior_risk_ratio < 1) > 0.8)
+# loop through models
+for (i in seq_along(stanfit_samples)) {
+  
+  # calculate risk ratios
+  posterior_risk_ratio <- exp(posterior_black[[i]] - posterior_white[[i]])
+  
+  pos_med_rr[[i]] <- data.frame(
+    risk_ratio = matrixStats::colMedians(posterior_risk_ratio),
+    c_idx = 1:ncol(posterior_risk_ratio)
+  )
 
+  # which columns (counties) have risk ratios significantly different from 1?
+  pos_med_rr[[i]]$risk_ratio_sig <- (colMeans(posterior_risk_ratio > 1) > 0.8) |
+    (colMeans(posterior_risk_ratio < 1) > 0.8)
+
+}
 ```
 
 
 ```{r}
 # posterior median log relative risk
-pos_med <- rbind(
-  tibble(
-    pos_med_y = matrixStats::colMedians(posterior_white), 
-    race = 1, 
-    c_idx = 1:ncol(posterior_white)), 
-  tibble(
-    pos_med_y = matrixStats::colMedians(posterior_black), 
-    race = 2, 
-    c_idx = 1:ncol(posterior_black))
-)
 
-# # plot lambdas
-# pos_med %>% 
-#   mutate(race = ifelse(race == 1, "White", "Black")) %>% 
-#   ggplot() + 
-#   geom_density(aes(x = exp(pos_med_y), color = race), linewidth = 1) + 
-#   labs(x = "Smoothed standardized risk (lambda)", 
-#        y = "Density",
-#        col = "") +
-#   theme_classic()
+# initialize list for log relative risks
+pos_med <- list()
+
+# loop through models
+for (i in seq_along(stanfit_samples)){
+  
+  pos_med[[i]] <- rbind(
+  tibble(
+    pos_med_y = matrixStats::colMedians(posterior_white[[i]]), 
+    race = 1, 
+    c_idx = 1:ncol(posterior_white[[i]])), 
+  tibble(
+    pos_med_y = matrixStats::colMedians(posterior_black[[i]]), 
+    race = 2, 
+    c_idx = 1:ncol(posterior_black[[i]]))
+  )
+}
 ```
 
 ```{r}
 # join pos_med and pos_med_rr
-pos_med <- pos_med %>%
-  dplyr::left_join(pos_med_rr, by = c("c_idx"))
+
+# loop through models
+for(i in seq_along(stanfit_samples)){
+  pos_med[[i]] <- pos_med[[i]] %>%
+  dplyr::left_join(pos_med_rr[[i]], by = c("c_idx"))
+}
 ```
 
 
 ```{r}
-## Add in correct fipschar ----
-pos_med <- hosp_ratios_df %>%
-  mutate(y = log(observed) - log(expected)) %>% 
-  dplyr::left_join(pos_med, by = c("c_idx", "race"))
+## Add in correct fipschar, new column for y ----
 
-pos_med %>% 
+# loop through models
+for (i in seq_along(stanfit_samples)){
+  
+  pos_med[[i]] <- hosp_ratios_df %>%
+    mutate(y = log(observed) - log(expected)) %>% 
+    dplyr::left_join(pos_med[[i]], by = c("c_idx", "race"))
+}
+
+
+pos_med[[1]] %>%
   ggplot() +
   geom_point(aes(x = y, y = pos_med_y, col = as.factor(race)))
 ```
@@ -227,64 +262,78 @@ pos_med %>%
 ## Decompose log ratios
 
 ```{r}
-summary(stanfit_samples$delta)
+# look at delta
+lapply(stanfit_samples, function(x){
+  summary(x$delta)
+})
 ```
 
 
 ```{r}
-shared_w <- (stanfit_samples$phi * stanfit_samples$delta)
-shared_b <- (stanfit_samples$phi / stanfit_samples$delta)
+# initialize list
+shared <- list()
 
-# posterior median
-shared <- rbind(
-  tibble(
-    shared = matrixStats::colMedians(shared_w), 
-    shared_unscaled = matrixStats::colMedians(stanfit_samples$phi), 
-    race = 1, 
-    c_idx = 1:ncol(shared_w)), 
-  tibble(
-    shared = matrixStats::colMedians(shared_b), 
-    shared_unscaled = matrixStats::colMedians(stanfit_samples$phi), 
-    race = 2, 
-    c_idx = 1:ncol(shared_b))
-)
-
-# is exp(shared) (phi*delta for white, phi/delta for black) for each country for each race sig diff from 1?
-# note: delta is same for white and black in a give county, shared_sig will be the same for white and black in a given county
-phi_delta_sig <- rbind(
-  tibble(
-    race = 1,  
-    shared_sig = 
-      (colMeans(exp(shared_w) > 1) > 0.8) | 
-      (colMeans(exp(shared_w) < 1) > 0.8),
-    c_idx = 1:ncol(shared_w)),
-  tibble(
-    race = 2,  
-    shared_sig = 
-      (colMeans(exp(shared_b) > 1) > 0.8) | 
-      (colMeans(exp(shared_b) < 1) > 0.8),
-    c_idx = 1:ncol(shared_b))
-)
-
-# is exp(phi) (shared, unscaled) for each county significantly different from 1?
-# (this is how significance is defined in figure 2 caption)
-phi_sig <- data.frame(
-    shared_unscaled_sig = 
-      (colMeans(exp(stanfit_samples$phi) > 1) > 0.8) | 
-      (colMeans(exp(stanfit_samples$phi) < 1) > 0.8),
-    c_idx = 1:ncol(stanfit_samples$phi)
-)
-
-# Join sig columns
-shared %<>% 
+# loop through models
+for(i in seq_along(stanfit_samples)){
+  
+  shared_w <- (stanfit_samples[[i]]$phi * stanfit_samples[[i]]$delta)
+  shared_b <- (stanfit_samples[[i]]$phi / stanfit_samples[[i]]$delta)
+  
+  # posterior median
+  shared[[i]] <- rbind(
+    tibble(
+      shared = matrixStats::colMedians(shared_w), 
+      shared_unscaled = matrixStats::colMedians(stanfit_samples[[i]]$phi), 
+      race = 1, 
+      c_idx = 1:ncol(shared_w)), 
+    tibble(
+      shared = matrixStats::colMedians(shared_b), 
+      shared_unscaled = matrixStats::colMedians(stanfit_samples[[i]]$phi), 
+      race = 2, 
+      c_idx = 1:ncol(shared_b))
+  )
+  
+  # is exp(shared) (phi*delta for white, phi/delta for black) for each country for each race 
+  # sig diff from 1?
+  # note: delta is same for white and black in a give county, shared_sig will be the same 
+  # for white and black in a given county
+  phi_delta_sig <- rbind(
+    tibble(
+      race = 1,  
+      shared_sig = 
+        (colMeans(exp(shared_w) > 1) > 0.8) | 
+        (colMeans(exp(shared_w) < 1) > 0.8),
+      c_idx = 1:ncol(shared_w)),
+    tibble(
+      race = 2,  
+      shared_sig = 
+        (colMeans(exp(shared_b) > 1) > 0.8) | 
+        (colMeans(exp(shared_b) < 1) > 0.8),
+      c_idx = 1:ncol(shared_b))
+  )
+  
+  # is exp(phi) (shared, unscaled) for each county significantly different from 1?
+  # (this is how significance is defined in figure 2 caption)
+  phi_sig <- data.frame(
+      shared_unscaled_sig = 
+        (colMeans(exp(stanfit_samples[[i]]$phi) > 1) > 0.8) | 
+        (colMeans(exp(stanfit_samples[[i]]$phi) < 1) > 0.8),
+      c_idx = 1:ncol(stanfit_samples[[i]]$phi)
+  )
+  
+  # Join sig columns
+  shared[[i]] %<>% 
   dplyr::left_join(phi_delta_sig, by = c("c_idx", "race")) %>%
   dplyr::left_join(phi_sig, by = c("c_idx"))
+  
+  ## Add in correct fipschar ----
+  pos_med[[i]] %<>% 
+  dplyr::left_join(shared[[i]], by = c("c_idx", "race"))
+  
+}
 
-## Add in correct fipschar ----
-pos_med %<>% 
-  dplyr::left_join(shared, by = c("c_idx", "race"))
 
-shared %>% 
+shared[[1]] %>% 
   mutate(race = as.character(race)) %>% 
   ggplot() + 
   geom_density(aes(x = shared_unscaled), linewidth = 1) + 
@@ -293,50 +342,57 @@ shared %>%
 ```
 
 ```{r}
-specific_w <- stanfit_samples$psi1
-specific_b <- stanfit_samples$psi2
+# initialize list
+specific <- list()
 
-# posterior median
-specific <- rbind(
-  tibble(
-    specific = matrixStats::colMedians(specific_w), 
-    race = 1, 
-    c_idx = 1:ncol(specific_w)), 
-  tibble(
-    specific = matrixStats::colMedians(specific_b), 
-    race = 2, 
-    c_idx = 1:ncol(specific_b))
-)
+# loop through models
+for (i in seq_along(stanfit_list)) {
+  
+  specific_w <- stanfit_samples[[i]]$psi1
+  specific_b <- stanfit_samples[[i]]$psi2
+  
+  # posterior median
+  specific[[i]] <- rbind(
+    tibble(
+      specific = matrixStats::colMedians(specific_w), 
+      race = 1, 
+      c_idx = 1:ncol(specific_w)), 
+    tibble(
+      specific = matrixStats::colMedians(specific_b), 
+      race = 2, 
+      c_idx = 1:ncol(specific_b))
+    )
+  
+  # is exp(psi) for each county for each race significantly different from 1?
+  # (this is how significance is defined in figure 2 caption)
+  psi_sig <- rbind(
+    tibble(
+      race = 1,  
+      specific_sig = 
+        (colMeans(exp(specific_w) > 1) > 0.8) | 
+        (colMeans(exp(specific_w) < 1) > 0.8),
+      c_idx = 1:ncol(specific_w)),
+    tibble(
+      race = 2,  
+      specific_sig = 
+        (colMeans(exp(specific_b) > 1) > 0.8) | 
+        (colMeans(exp(specific_b) < 1) > 0.8),
+      c_idx = 1:ncol(specific_b))
+  )
 
-# is exp(psi) for each county for each race significantly different from 1?
-# (this is how significance is defined in figure 2 caption)
-psi_sig <- rbind(
-  tibble(
-    race = 1,  
-    specific_sig = 
-      (colMeans(exp(specific_w) > 1) > 0.8) | 
-      (colMeans(exp(specific_w) < 1) > 0.8),
-    c_idx = 1:ncol(specific_w)),
-  tibble(
-    race = 2,  
-    specific_sig = 
-      (colMeans(exp(specific_b) > 1) > 0.8) | 
-      (colMeans(exp(specific_b) < 1) > 0.8),
-    c_idx = 1:ncol(specific_b))
-)
+  # Join sig column
+  specific[[i]] %<>% 
+    dplyr::left_join(psi_sig, by = c("c_idx", "race"))
 
-# Join sig column
-specific %<>% 
-  dplyr::left_join(psi_sig, by = c("c_idx", "race"))
+  ## Add in correct fipschar ----
+  pos_med[[i]] %<>% 
+    dplyr::left_join(specific[[i]], by = c("c_idx", "race"))
+}
 
-## Add in correct fipschar ----
-pos_med %<>% 
-  dplyr::left_join(specific, by = c("c_idx", "race"))
-
-specific %>% 
+specific[[1]] %>% 
   mutate(race = as.character(race)) %>% 
   ggplot() + 
-  geom_density(aes(x = specific, color = race), size = 1) + 
+  geom_density(aes(x = specific, color = race), linewidth = 1) + 
   theme_classic()
 ```
 
@@ -355,143 +411,146 @@ quick_summarize <- function(x) {
         )
     return(new_df)
 }
-
-
-# mini table for total risk
-empiric_var_risks <- rbind(
-    matrixStats::rowVars(
-        stanfit_samples$alpha1 + stanfit_samples$psi1 +
-            (stanfit_samples$phi * stanfit_samples$delta) +
-            nu_expanded
-    )  %>%
-        quick_summarize() %>%
-        dplyr::mutate(model_name = model,
-                      race = "White"),
-    matrixStats::rowVars(
-        stanfit_samples$alpha2 + stanfit_samples$psi2 +
-            (stanfit_samples$phi / stanfit_samples$delta) +
-            nu_expanded
-    ) %>%
-        quick_summarize() %>%
-        dplyr::mutate(model_name = model,
-                      race = "Black")
-) %>%
-    dplyr::mutate(param = "total risk")
-
-
-# mini table for shared risk
-empiric_shared_risk <- rbind(
-    matrixStats::rowVars(stanfit_samples$phi * stanfit_samples$delta)  %>%
-        quick_summarize() %>%
-        dplyr::mutate(model_name = model,
-                      race = "White"),
-    matrixStats::rowVars(stanfit_samples$phi / stanfit_samples$delta)  %>%
-        quick_summarize() %>%
-        dplyr::mutate(model_name = model,
-                      race = "Black")
-) %>%
-    dplyr::mutate(param = "shared risk")
-
-
-# mini table for specific risk
-empiric_specific_risks <- rbind(
-    matrixStats::rowVars(stanfit_samples$psi1)  %>%
-        quick_summarize() %>%
-        dplyr::mutate(model_name = model,
-                      race = "White"),
-    matrixStats::rowVars(stanfit_samples$psi2)  %>%
-        quick_summarize() %>%
-        dplyr::mutate(model_name = model,
-                      race = "Black")
-) %>%
-    dplyr::mutate(param = "specific risk")
-
-# mini table for fraction shared risk
-empiric_shared_var_frac <- rbind(
-    quick_summarize(
-        matrixStats::rowVars(stanfit_samples$phi * stanfit_samples$delta) /
-            (
-                matrixStats::rowVars(stanfit_samples$phi * stanfit_samples$delta) +
-                    matrixStats::rowVars(stanfit_samples$psi1)
-            )
-    ) %>%
-        dplyr::mutate(model_name = model,
-                      race = "White"),
-    quick_summarize(
-        matrixStats::rowVars(stanfit_samples$phi / stanfit_samples$delta) /
-            (
-                matrixStats::rowVars(stanfit_samples$phi / stanfit_samples$delta) +
-                    matrixStats::rowVars(stanfit_samples$psi2)
-            )
-    ) %>%
-        dplyr::mutate(model_name = model,
-                      race = "Black")
-) %>%
-    dplyr::mutate(param = "fraction shared risk")
-
-
-# mini table for state risk
-state_vars <- rbind(
-    quick_summarize(stanfit_samples$sigma_s ^ 2) %>%
-        dplyr::mutate(
-            model_name = model,
-            race = "both",
-            param = "state variance"
-        )
-)
-
-# bind all mini tables together
-empiric_vars <- rbind(
-    empiric_var_risks,
-    state_vars,
-    empiric_shared_risk,
-    empiric_specific_risks,
-    empiric_shared_var_frac
-) %>%
-    dplyr::select(model_name, race, param, dplyr::everything()) %>%
-    dplyr::mutate(
-        param = factor(
-            param,
-            levels =  c(
-                "total risk",
-                "shared risk",
-                "specific risk",
-                "fraction shared risk",
-                "state variance"
-            ),
-            ordered = TRUE
-        ),
-        race = factor(
-            race,
-            levels = c("White", "Black", "both"),
-            ordered = TRUE
-        )
-    )
-
-# sort table
-empiric_vars <- empiric_vars %>%
-    dplyr::arrange(param, model_name, race)
-
-# new column formatted with posterior median and 95% CI
-empiric_vars$median_ci <- paste0(round(empiric_vars$median, 2), " (", 
-                                 round(empiric_vars$p025, 2), ", ",
-                                 round(empiric_vars$p975, 2), ")")
-
-# rename columns
-empiric_vars <- empiric_vars |>
-  select(-c(median, p025, p975)) |>
-  rename(Model = model_name,
-         Parameter = param,
-            Race = race,
-         Estimate = median_ci)
-
-# save table
-write_rds(empiric_vars, file = paste0("results/tables/empirical_variance_", model, ".rds"))
 ```
 
+```{r}
+# initialize list
+empiric_vars <- list()
+
+# loop through models
+for (i in seq_along(stanfit_list)){
+  
+  # mini table for total risk
+  empiric_var_risks <- rbind(
+      matrixStats::rowVars(
+          stanfit_samples[[i]]$alpha1 + stanfit_samples[[i]]$psi1 +
+              (stanfit_samples[[i]]$phi * stanfit_samples[[i]]$delta) +
+              nu_expanded[[i]]
+      )  %>%
+          quick_summarize() %>%
+          dplyr::mutate(race = "White"),
+      matrixStats::rowVars(
+          stanfit_samples[[i]]$alpha2 + stanfit_samples[[i]]$psi2 +
+              (stanfit_samples[[i]]$phi / stanfit_samples[[i]]$delta) +
+              nu_expanded[[i]]
+      ) %>%
+          quick_summarize() %>%
+          dplyr::mutate(race = "Black")
+  ) %>%
+      dplyr::mutate(param = "total risk")
+  
+  
+  # mini table for shared risk
+  empiric_shared_risk <- rbind(
+      matrixStats::rowVars(stanfit_samples[[i]]$phi * stanfit_samples[[i]]$delta)  %>%
+          quick_summarize() %>%
+          dplyr::mutate(race = "White"),
+      matrixStats::rowVars(stanfit_samples[[i]]$phi / stanfit_samples[[i]]$delta)  %>%
+          quick_summarize() %>%
+          dplyr::mutate(race = "Black")
+  ) %>%
+      dplyr::mutate(param = "shared risk")
+  
+  
+  # mini table for specific risk
+  empiric_specific_risks <- rbind(
+      matrixStats::rowVars(stanfit_samples[[i]]$psi1)  %>%
+          quick_summarize() %>%
+          dplyr::mutate(race = "White"),
+      matrixStats::rowVars(stanfit_samples[[i]]$psi2)  %>%
+          quick_summarize() %>%
+          dplyr::mutate(race = "Black")
+  ) %>%
+      dplyr::mutate(param = "specific risk")
+  
+  # mini table for fraction shared risk
+  empiric_shared_var_frac <- rbind(
+      quick_summarize(
+          matrixStats::rowVars(stanfit_samples[[i]]$phi * stanfit_samples[[i]]$delta) /
+              (
+                  matrixStats::rowVars(stanfit_samples[[i]]$phi * stanfit_samples[[i]]$delta) +
+                      matrixStats::rowVars(stanfit_samples[[i]]$psi1)
+              )
+      ) %>%
+          dplyr::mutate(race = "White"),
+      quick_summarize(
+          matrixStats::rowVars(stanfit_samples[[i]]$phi / stanfit_samples[[i]]$delta) /
+              (
+                  matrixStats::rowVars(stanfit_samples[[i]]$phi / stanfit_samples[[i]]$delta) +
+                      matrixStats::rowVars(stanfit_samples[[i]]$psi2)
+              )
+      ) %>%
+          dplyr::mutate(race = "Black")
+  ) %>%
+      dplyr::mutate(param = "fraction shared risk")
+  
+  
+  # mini table for state risk
+  state_vars <- rbind(
+      quick_summarize(stanfit_samples[[i]]$sigma_s ^ 2) %>%
+          dplyr::mutate(
+              race = "both",
+              param = "state variance"
+          )
+  )
+  
+  # bind all mini tables together
+  empiric_vars[[i]] <- rbind(
+      empiric_var_risks,
+      state_vars,
+      empiric_shared_risk,
+      empiric_specific_risks,
+      empiric_shared_var_frac
+  ) %>%
+      dplyr::select(race, param, dplyr::everything()) %>%
+      dplyr::mutate(
+          param = factor(
+              param,
+              levels =  c(
+                  "total risk",
+                  "shared risk",
+                  "specific risk",
+                  "fraction shared risk",
+                  "state variance"
+              ),
+              ordered = TRUE
+          ),
+          race = factor(
+              race,
+              levels = c("White", "Black", "both"),
+              ordered = TRUE
+          )
+      )
+  
+  # sort table
+  empiric_vars[[i]] <- empiric_vars[[i]] %>%
+      dplyr::arrange(param, race)
+  
+  # new column formatted with posterior median and 95% CI
+  empiric_vars[[i]]$median_ci <- paste0(round(empiric_vars[[i]]$median, 2), " (", 
+                                   round(empiric_vars[[i]]$p025, 2), ", ",
+                                   round(empiric_vars[[i]]$p975, 2), ")")
+  
+  # rename columns
+  empiric_vars[[i]] <- empiric_vars[[i]] |>
+    select(-c(median, p025, p975)) |>
+    rename(Parameter = param,
+              Race = race,
+           Estimate = median_ci)
+}
+```
 
 ```{r}
-write_rds(pos_med, paste0("data/intermediate/hosp-", model, "_pos_med.rds"))
-write_rds(stanfit_samples, paste0("data/intermediate/hosp-", model, "_stanfit_samples.rds"))
-write_rds(stanfit_summary, paste0("data/intermediate/hosp-", model, "_stanfit_summary.rds"))
+# before saving pos_med model results, name list elements for clarity
+list_names <- c("m2")
+names(pos_med) <- list_names
+names(empiric_vars) <- list_names
+names(stanfit_samples) <- list_names
+```
+
+```{r}
+write_rds(pos_med, paste0("data/intermediate/hosp_pos_med.rds"))
+write_rds(empiric_vars, file = paste0("results/tables/empirical_variance.rds"))
+write_rds(stanfit_samples, paste0("data/intermediate/hosp_stanfit_samples.rds"))
+#write_rds(stanfit_summary, paste0("data/intermediate/hosp_stanfit_summary.rds"))
 ```
