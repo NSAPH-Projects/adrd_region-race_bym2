@@ -24,8 +24,12 @@ model <- "m2"
 
 ## Read data ----
 county_sf <- read_rds("data/symlinks/scratch/county_sf.rds")
-pos_med_adrd <- read_rds(paste0("data/intermediate/adrd-", model, "_pos_med.rds"))
-pos_med_hosp <- read_rds(paste0("data/intermediate/hosp-", model, "_pos_med.rds"))
+pos_med_adrd <- read_rds(paste0("data/intermediate/adrd_pos_med.rds"))
+pos_med_hosp <- read_rds(paste0("data/intermediate/hosp_pos_med.rds"))
+
+pos_med_adrd <- pos_med_adrd[[model]]
+pos_med_hosp <- pos_med_hosp[[model]]
+
 
 # join adrd and hosp
 pos_med <- merge(pos_med_adrd, pos_med_hosp, all = TRUE, 
@@ -86,11 +90,93 @@ pos_med_sf %<>%
 ## Pre-modeling
 
 ```{r}
+# person-years, observed counts, raw observed/expected ratios (all before modeling)
+
+# I want to facet by parameter, so I need to gather the columns of interest
+param_dist <- pos_med_sf |>
+  st_drop_geometry() |>
+  mutate(exp_y_adrd = exp(y_adrd),
+         exp_y_hosp = exp(y_hosp)#,
+         # exp_pos_med_y_adrd = exp(pos_med_y_adrd),
+         # exp_pos_med_y_hosp = exp(pos_med_y_hosp)
+         ) |>
+  gather(key = "parameter", value = "value", 
+         c(person_years, 
+           observed_adrd,
+           observed_hosp,
+           exp_y_adrd,
+           exp_y_hosp#,
+           #exp_pos_med_y_adrd,
+           #exp_pos_med_y_hosp
+           )) |>
+  select(county, race, parameter, value)
+
+# look at NA values
+# NA values are for ADRD rate the 71 
+param_dist |>
+  group_by(parameter) |>
+  summarise(num_NA = sum(is.na(value)))
+# these are just the 71 counties with 0 black person-years, so I can ignore them
+
+# I want to plot on log scale, so change any 0s to 0.00000001
+param_dist %<>%
+  mutate(value = ifelse(value == 0, 0.00000001, value))
+
+# set order of plots
+param_dist$parameter <- factor(param_dist$parameter,
+                               levels = c("person_years", "observed_adrd", "observed_hosp", 
+                                          "exp_y_adrd", "exp_y_hosp"))
+
+# plot
+param_dist |>
+  filter(!is.na(value)) |>
+  mutate(race = factor(ifelse(race == 1, "White", "Black"),
+                       levels = c("White", "Black"))) %>% 
+  ggplot() +
+  geom_density(aes(value, col = as.factor(race))) +
+  labs(x = "",
+       y = "Density",
+       col = "") +
+  scale_x_log10(labels = scales::comma) +
+  facet_wrap(~parameter, scales = "free", 
+             nrow = 3,
+             labeller = as_labeller(c(person_years = "Person years",
+                                      observed_adrd = "Observed hosp. w/ ADRD",
+                                      observed_hosp = "Observed hosp. w/o ADRD",
+                                      exp_y_adrd = "Raw observed/expected hosp. w/ ADRD",
+                                      exp_y_hosp = "Raw observed/expected hosp. w/o ADRD"))) +
+  theme_bw() +
+  theme(strip.background = element_rect(fill = "white"),
+        axis.text.y = element_blank(),
+        axis.ticks.y = element_blank(),
+        panel.grid = element_blank(),
+        legend.position = "bottom")
+
+# plotting x-axis on log scale!!
+
+```
+
+
+
+```{r}
 # what % of all hosp have ADRD code?
 
 # get a new column for observed ADRD / observed hosp %
 pos_med_sf %<>%
   mutate(adrd_pct = (observed_adrd / (observed_adrd + observed_hosp)) * 100)
+
+# get weighted avg. % by race
+# what % of all hospitalizations had ADRD code?
+
+# get total ADRD hosp by race
+# and total other hosp by race
+
+pos_med %>%
+  group_by(race) %>%
+  summarise(total_adrd = sum(observed_adrd),
+            total_hosp = sum(observed_hosp)) %>%
+  mutate(adrd_pct = total_adrd / (total_adrd + total_hosp))
+
 
 # look at distribution of this variable for white vs. black
 pos_med_sf |>
@@ -109,8 +195,10 @@ pos_med_sf |>
 # now map this variable!
 
 pos_med_sf |>
-  # cap at 20%
+  # cap at 30%
   mutate(adrd_pct = ifelse(adrd_pct > 30, 30, adrd_pct)) |>
+  # exclude counties with < 100 hosp
+  mutate(adrd_pct = ifelse(observed_hosp < 100, NA, adrd_pct)) |>
   ggplot() +
   geom_sf(aes(fill = adrd_pct), lwd = 0.1) +
   geom_sf(data = state_sf, fill = NA, col = "black", lwd = 0.1) +
@@ -123,22 +211,23 @@ pos_med_sf |>
         legend.text = element_text(size = 8)
         )
 
-# also try white only (more stable) ==> could combine white + black
-pos_med_sf |>
-  # # limit to rows with at least 25 person-years
-  #mutate(adrd_pct = ifelse(person_years < 50, NA, adrd_pct)) |>
-  mutate(adrd_pct = ifelse(adrd_pct > 20, 20, adrd_pct)) |>
-  filter(race == 1) %>%
-  ggplot() +
-  geom_sf(aes(fill = adrd_pct), lwd = 0.0) +
-  geom_sf(data = state_sf, fill = NA, col = "white", lwd = 0.1) +
-  labs(fill = "% of hosp. w/ ADRD code (white only)") +
-  scale_fill_viridis(option = "D") + 
-  theme_map() +
-  theme(legend.position = "bottom",
-        legend.title = element_text(size = 10),
-        legend.text = element_text(size = 8)
-        )
+# # also try white only (more stable) ==> could combine white + black
+# pos_med_sf |>
+#   # # limit to rows with at least 25 person-years
+#   #mutate(adrd_pct = ifelse(person_years < 50, NA, adrd_pct)) |>
+#   #mutate(adrd_pct = ifelse(adrd_pct > 20, 20, adrd_pct)) |>
+#   mutate(ifelse(observed_hosp < 400, NA, observed_hosp)) |>
+#   filter(race == 1) %>%
+#   ggplot() +
+#   geom_sf(aes(fill = adrd_pct), lwd = 0.0) +
+#   geom_sf(data = state_sf, fill = NA, col = "white", lwd = 0.1) +
+#   labs(fill = "% of hosp. w/ ADRD code (white only)") +
+#   scale_fill_viridis(option = "D") + 
+#   theme_map() +
+#   theme(legend.position = "bottom",
+#         legend.title = element_text(size = 10),
+#         legend.text = element_text(size = 8)
+#         )
 
 ```
 
@@ -232,23 +321,23 @@ pos_med_sf |>
 
 # what about lambdas for each race?
 
-pos_med_sf %<>%
-  mutate(ratio_of_pos_med_y = pos_med_y_adrd / pos_med_y_hosp)
-
-pos_med_sf |>
-  mutate(ratio_of_pos_med_y = ifelse(ratio_of_pos_med_y < -5, -5, ratio_of_pos_med_y),
-         ratio_of_pos_med_y = ifelse(ratio_of_pos_med_y > 5, 5, ratio_of_pos_med_y)) |>
-  ggplot() +
-  geom_sf(aes(fill = ratio_of_pos_med_y), lwd = 0.1) +
-  geom_sf(data = state_sf, fill = NA, col = "black", lwd = 0.1) +
-  labs(fill = "lambda ADRD/lambda hosp") +
-  facet_grid(~race, labeller = as_labeller(race_labels)) +
-  theme_map() +
-  theme(legend.position = "bottom",
-        legend.title = element_text(size = 10),
-        legend.text = element_text(size = 8)
-        ) +
-  sc
+# pos_med_sf %<>%
+#   mutate(ratio_of_pos_med_y = pos_med_y_adrd / pos_med_y_hosp)
+# 
+# pos_med_sf |>
+#   mutate(ratio_of_pos_med_y = ifelse(ratio_of_pos_med_y < -5, -5, ratio_of_pos_med_y),
+#          ratio_of_pos_med_y = ifelse(ratio_of_pos_med_y > 5, 5, ratio_of_pos_med_y)) |>
+#   ggplot() +
+#   geom_sf(aes(fill = ratio_of_pos_med_y), lwd = 0.1) +
+#   geom_sf(data = state_sf, fill = NA, col = "black", lwd = 0.1) +
+#   labs(fill = "lambda ADRD/lambda hosp") +
+#   facet_grid(~race, labeller = as_labeller(race_labels)) +
+#   theme_map() +
+#   theme(legend.position = "bottom",
+#         legend.title = element_text(size = 10),
+#         legend.text = element_text(size = 8)
+#         ) +
+#   sc
 
 ```
 
@@ -275,4 +364,23 @@ pos_med_sf |>
 
 ```
 
+```{r}
+# plot with three categories
+
+# new column to compare RRs
+pos_med_sf %<>%
+  mutate(RR_comp = ifelse(risk_ratio_adrd > 1 & risk_ratio_hosp > 1, "black_worse_both", NA)) %>%
+  mutate(RR_comp = ifelse(risk_ratio_adrd < 1 & risk_ratio_hosp < 1, "white_worse_both", RR_comp)) %>%
+  mutate(RR_comp = ifelse(risk_ratio_adrd < 1 & risk_ratio_hosp > 1 |
+                            risk_ratio_adrd > 1 & risk_ratio_hosp < 1, "different", RR_comp))
+
+pos_med_sf |>
+  filter(race == 1) %>%
+  ggplot() +
+  geom_sf(aes(fill = RR_comp), lwd = 0.1) +
+  geom_sf(data = state_sf, fill = NA, lwd = 0.1) +
+  labs(fill = "ADRD vs. hosp risk ratios") +
+  theme_map()
+
+```
 
