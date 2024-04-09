@@ -82,21 +82,21 @@ county_adj_sparse_list <- read_rds('data/symlinks/scratch/county_adj_sparse_list
 #############################################################
 #############################################################
 
-# ## try restricting the analysis to one state (Alabama)
-# 
-# adrd_ratios_df <- adrd_ratios_df %>%
-#   filter(s_idx == 1)
-# 
-# county_adj_sparse_list$D_sparse <- county_adj_sparse_list$D_sparse[1:67]
-# 
-# county_adj_sparse_list$W_sparse  %<>%
-#   as.data.frame() %>%
-#   filter(row %in% adrd_ratios_df$c_idx & col %in% adrd_ratios_df$c_idx) %>%
-#   as.matrix()
-# 
-# county_adj_sparse_list$lambdas <- county_adj_sparse_list$lambdas[1:67]
-# 
-# county_adj_sparse_list$W_n <- nrow(county_adj_sparse_list$W_sparse)
+## try restricting the analysis to one state (Alabama)
+
+adrd_ratios_df <- adrd_ratios_df %>%
+  filter(s_idx == 1)
+
+county_adj_sparse_list$D_sparse <- county_adj_sparse_list$D_sparse[1:67]
+
+county_adj_sparse_list$W_sparse  %<>%
+  as.data.frame() %>%
+  filter(row %in% adrd_ratios_df$c_idx & col %in% adrd_ratios_df$c_idx) %>%
+  as.matrix()
+
+county_adj_sparse_list$lambdas <- county_adj_sparse_list$lambdas[1:67]
+
+county_adj_sparse_list$W_n <- nrow(county_adj_sparse_list$W_sparse)
 
 
 #############################################################
