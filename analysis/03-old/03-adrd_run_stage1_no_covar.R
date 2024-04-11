@@ -2,7 +2,6 @@
 library(tidyverse)
 library(magrittr)
 library(rstan)
-library(fastDummies)
 
 # path to store model results
 path_mod <- "results/models/adrd/m1/stage1/"
@@ -27,12 +26,12 @@ get_random_seed <-
 
 ## Modeling parameters ----
 ##  Naming
-tstamp <- format(Sys.time(), format = "%Y%m%d-%H")
+tstamp <- format(Sys.time(), format = "%Y%m%d-%H%M%S")
 #tstamp <- format(Sys.time(), format = "%Y%m%d")
 
 mkdir_p(paste0(path_mod, 'model_run_', tstamp))
 model_name <- 'model'
-stan_file <- 'analysis/stan_code/bym2_stan_no_covar_combined.stan'
+stan_file <- 'analysis/stan_code/stage1_no_covar.stan'
 random_seed <- get_random_seed(paste0(path_mod, 'model_run_', tstamp, '/seed.rds'))
 
 # print tstamp (so sbatch output can be linked to model results)
@@ -41,7 +40,7 @@ paste0("Model: ADRD, m1")
 
 ##  Run parameters
 #n_chains <- 4
-n_iter <- 1000
+n_iter <- 100
 n_burnin <- floor(n_iter / 2)
 #n_thin <- 40
 n_thin <- 10
@@ -49,60 +48,41 @@ verbose_flag <- FALSE
 #dont_save_pars = c("v_unstr", "u_str_unscaled", "u_str")
 
 ##  Search
-a_delta = .9 # default = .8
-t_depth = 15    # max tree depth, default = 10
+# a_delta = .9 # default = .8
+# t_depth = 15    # max tree depth, default = 10
 
 ## Load data ----
 adrd_ratios_df <- read_rds('data/symlinks/scratch/adrd_ratios_df.rds')
 county_adj_sparse_list <- read_rds('data/symlinks/scratch/county_adj_sparse_list.rds')
 
 
-######################################################
-######################################################
+#----- make sure data is still in the correct order
 
-#----- re-order the data
+# must be in this order to correspond to adjacency matrix
 
-# sort ADRD data by race, and within race by state, and within state by county
-# this is necessary for model fitting to work!
-# adrd_ratios_df %<>%
-#   arrange(race, s_idx, c_idx)
+# sort ADRD data by race, and within race by county (as numeric)
 adrd_ratios_df %<>%
-  arrange(county)
+  arrange(race, county)
 
-#----- get state_mat_idx
 
-state_df_total <- adrd_ratios_df %>%
+#----- get state_mat_idx (state indicators for each county)
+
+# since this model is combined by race, the matrix has n rows
+
+# get state for each county
+state_df <- adrd_ratios_df %>%
   select(county, s_idx) %>%
   distinct()
 
 # get dummy cols for state
-state_df_total <- dummy_cols(state_df_total, select_columns = "s_idx")
+state_mat <- model.matrix(~factor(s_idx) - 1, data = state_df)
+dim(state_mat) # 49 unique "states" (48 + DC)
 
-# make a matrix with only dummy cols
-state_mat_total <- state_df_total %>%
-  select(-c(county, s_idx)) %>%
-  as.matrix()
-dim(state_mat_total) # 49 unique "states" (48 + DC)
-
-
-#----- alternatively, estimate scaling factor with INLA
-
-# library(devtools)
-# 
-# # install fmesher (dependency)
-# install.packages("fmesher")
-# remotes::install_github("inlabru-org/fmesher", ref = "stable")
-# library(fmesher)
-# 
-# # install INLA
-# install.packages("INLA", dependencies = TRUE)
-# install.packages("INLA",repos=c(getOption("repos"),INLA="https://inla.r-inla-download.org/R/stable"), dep=TRUE)
-# devtools::install_github(repo = "https://github.com/hrue/r-inla", ref = "stable", subdir = "rinla", build = FALSE)
-
+# read scaling factor from previous script
 scaling_factor <- 0.64524
 
 # get a new dataframe for combined white & black
-adrd_ratios_df_combined <- adrd_ratios_df %>%
+adrd_ratios_df_comb <- adrd_ratios_df %>%
   select(county, person_years, expected, observed,
          c_idx, s_idx) %>%
   group_by(county) %>%
@@ -112,62 +92,28 @@ adrd_ratios_df_combined <- adrd_ratios_df %>%
             c_idx = first(c_idx),
             s_idx = first(s_idx))
 
-# now re-order again (because the order gets messed up)
-# actually, I think the order was fine...
-# adrd_ratios_df_combined %<>%
-#   arrange(s_idx, c_idx)
-adrd_ratios_df_combined %<>%
-  arrange(county)
-
-
-######################################################
-######################################################
-
 
 ## Get the data in order ----
 adrd_stan_list  <-
   list(
-    #m = nrow(adrd_ratios_df),
-    # number of observations
-    s = length(unique(adrd_ratios_df$s_idx)),
     # number of states
-    n = length(county_adj_sparse_list$D_sparse),
+    s = length(unique(adrd_ratios_df$s_idx)),
     # number of areas
-    y = adrd_ratios_df_combined$observed_total,
+    n = length(county_adj_sparse_list$D_sparse),
     # population_years
-    #pop = adrd_ratios_df$person_years,
-    # vector of observed (int)
-    log_offset = log(adrd_ratios_df_combined$expected_total),
-    # log of expected
-    # c_idx = adrd_ratios_df$c_idx,
-    # # county index
-    # s_idx = adrd_ratios_df$s_idx,
-    # # state index
-    state_mat_idx = state_mat_total,
-    # m*s matrix with state indicators
+    y = adrd_ratios_df_comb$observed_total,
+    # log of expected (note: must take log after adding black + white!)
+    log_offset = log(adrd_ratios_df_comb$expected_total),
     
-    #d1_idx = 1 - adrd_ratios_df$black,
-    # {1, 0} vector for dis_1
-    #d2_idx = adrd_ratios_df$black,
-    # {0, 1} vector for dis_2
+    # n*s matrix with state indicators
+    state_mat_idx = state_mat,
     
-    # psi_scale1 = psi_scale1,   # var(phi * delta + psi1)
-    # psi_scale2 = psi_scale2,   # var(phi * delta + psi2)
-    # nu_scale = nu_scale,       # var(nu)
-    
-    # Use return_sparse_parts(A) for these next ones
-    #D_sparse = county_adj_sparse_list$D_sparse,
-    # neighbors per node
-    #W_sparse = county_adj_sparse_list$W_sparse,
-    # adjacent pairs
-    #lambda = county_adj_sparse_list$lambdas,
-    # eigenvalues
-    W_n = nrow(county_adj_sparse_list$W_sparse),
     # number of edges
-    W_adj1 = county_adj_sparse_list$W_sparse[,1],
+    W_n = nrow(county_adj_sparse_list$W_sparse),
     # first column of edge list
-    W_adj2 = county_adj_sparse_list$W_sparse[,2],
+    W_adj1 = county_adj_sparse_list$W_sparse[,1],
     # second column of edge list
+    W_adj2 = county_adj_sparse_list$W_sparse[,2],
     
     # scaling factor
     scaling_factor = scaling_factor
@@ -203,8 +149,8 @@ fit <- stan(
   warmup = n_burnin,
   chains = 4, 
   verbose = verbose_flag,
-  #pars = dont_save_pars,
-  #include = FALSE,
+  # pars = dont_save_pars,
+  # include = FALSE,
   save_dso = TRUE,
   seed = 1, 
   # control = list(adapt_delta = a_delta,
@@ -217,9 +163,8 @@ fit <- stan(
 ## Save fit objects
 write_rds(fit, paste0(path_mod, 'model_run_', tstamp, '/stanfit_object.rds'))
 
-# ## Remove the compiled stan model ----
-# # this path will be the same as new_stan_file but ends in dot rds instead of dot stan
-# file.remove(paste0(path_mod, 'model_run_', tstamp, '/temp_file.rds'))
-# file.remove(new_stan_file)
-
+## Remove the compiled stan model ----
+# this path will be the same as new_stan_file but ends in dot rds instead of dot stan
+file.remove(paste0(path_mod, 'model_run_', tstamp, '/temp_file.rds'))
+file.remove(new_stan_file)
 
