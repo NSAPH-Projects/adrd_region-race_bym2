@@ -23,7 +23,8 @@ In this notebook we make sure that the counties match in all objects: the adjace
 ## read county shp files
 county_sf <- read_sf("data/county/cb_2015_us_county/cb_2015_us_county_20m.shp") %>%
   filter(!STATEFP %in% c("02","15", "66", "72", "60", "69", "78")) %>% 
-  mutate(county = as.numeric(GEOID))
+  mutate(county = as.numeric(GEOID)) %>%
+  arrange(county)
 
 #Oglala Lakota County, SD. Shannon County, SD (FIPS code = 46113) was renamed Oglala Lakota County and assigned anew FIPS code (46102) effective in 2014
 county_sf$county[county_sf$county == 46102] <- 46113 
@@ -122,15 +123,14 @@ counties_shp_ = unique(county_sf$county)
 
 setdiff(counties_shp_, counties_adj_)
 setdiff(counties_adj_, counties_shp_)
-
-write_rds(county_sf, "data/symlinks/scratch/county_sf.rds")
 ```
 
 ## ADRD data
 
 ```{r}
 adrd_county_df <- read_csv("data/symlinks/scratch/adrd_rates.csv") %>% 
-  filter(!state %in% c(2, 15, 66, 72, 60, 69, 78))
+  filter(!state %in% c(2, 15, 66, 72, 60, 69, 78)) %>%
+  arrange(race, county)
 
 counties_adrd_ = unique(adrd_county_df$county)
 
@@ -337,11 +337,15 @@ length(county_zero_b)
 adrd_county_df %<>%
   filter(!county %in% county_zero_b)
 
-# remove from county adjacency too
+# and remove from county adjacency
 county_adj_df %<>%
   filter(!fips_i %in% county_zero_b & !fips_j %in% county_zero_b)
-
 length(unique(county_adj_df$county))
+
+# and remove from county_sf
+county_sf %<>%
+  filter(!county %in% county_zero_b)
+length(unique(county_sf$county))
 ```
 
 ```{r}
@@ -524,6 +528,7 @@ check_adj %>%
 
 
 ```{r}
+write_rds(county_sf, "data/symlinks/scratch/county_sf.rds")
 write_rds(adrd_county_df, "data/symlinks/scratch/adrd_county_df.rds")
 write_rds(county_adj_sparse_list, "data/symlinks/scratch/county_adj_sparse_list.rds")
 write_rds(county_fips_df, "data/symlinks/scratch/county_fips_df.rds")
