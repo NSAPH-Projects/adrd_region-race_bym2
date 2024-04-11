@@ -85,36 +85,6 @@ state_mat_total <- state_df_total %>%
 dim(state_mat_total) # 49 unique "states" (48 + DC)
 
 
-# #----- hard code variances for spatial random effects
-# 
-# ### load model results from previous m1
-# # load list with all model results and bind into df
-# pos_med <- read_rds(paste0("data/intermediate/adrd_pos_med.rds"))
-# pos_med <- pos_med[[1]] # m1 only
-# 
-# # load less processed model results to get posterior median of nu for each state
-# stanfit_samples <- read_rds("data/intermediate/adrd_stanfit_samples.rds")[[1]]
-# nu <- colMeans(stanfit_samples$nu)
-# 
-# 
-# # var(phi * delta + psi1)
-# psi_scale1 <- pos_med %>%
-#   filter(race == 1) %>%
-#   mutate(scaled_phi_plus_psi1 = shared + specific) %>%
-#   pull(scaled_phi_plus_psi1) %>%
-#   var()
-# 
-# # var(phi / delta + psi2)
-# psi_scale2 <- pos_med %>%
-#   filter(race == 2) %>%
-#   mutate(scaled_phi_plus_psi2 = shared + specific) %>%
-#   pull(scaled_phi_plus_psi2) %>%
-#   var()
-# 
-# # var(nu)
-# nu_scale <- var(nu)
-#   
-
 #----- alternatively, estimate scaling factor with INLA
 
 # library(devtools)
