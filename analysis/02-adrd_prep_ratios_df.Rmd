@@ -281,7 +281,7 @@ exp_rates_tab <- exp_df %>%
 exp_rates_tab
 
 # save table
-write_rds(exp_rates_tab, file = paste0("results/tables/expected_rates.rds"))
+write_rds(exp_rates_tab, file = paste0("results/tables/adrd_expected_rates.rds"))
 ```
 
 ```{r}
@@ -299,9 +299,9 @@ obs_df <- adrd_county_df %>%
     dplyr::summarize(n_enrollees = sum(n_enrollees),
                      n_admissions = sum(n_admissions), 
                      obs_rate = n_admissions / n_enrollees,
-                     # HPI and PM2.5 are the same across all years --> just take mean
-                     med_house_income = mean(med_house_income),
-                     house_price_income_ratio = mean(house_price_income_ratio),
+                     # HPI and PM2.5 are the same across all years
+                     med_house_income = first(med_house_income),
+                     house_price_income_ratio = first(house_price_income_ratio),
                      pm25 = mean(pm25))
 
 ## fill NAs

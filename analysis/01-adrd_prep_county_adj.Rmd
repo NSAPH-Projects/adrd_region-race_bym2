@@ -32,11 +32,6 @@ county_sf$county[county_sf$county == 46102] <- 46113
 # get adjacent counties from shapefile
 county_adj_list <-  st_touches(x = county_sf, y = county_sf, sparse = TRUE)
 
-# name elements of list with county FIPS but make sure to pad with leading 0!!
-# county_fips_char <- as.character(county_sf$county)
-# county_fips_char_pad <- str_pad(county_fips_char, width = 5, side = "left", pad = "0")
-# names(county_adj_list) <- county_fips_char_pad
-
 # this will become character. convert back to integer
 names(county_adj_list) <- county_sf$county
 
