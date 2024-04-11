@@ -467,6 +467,10 @@ adrd_ratios_df %<>%
   ) %>% 
   left_join(county_fips_df)
 
+# sort by race and then county
+adrd_ratios_df %<>%
+  arrange(race, county)
+
 sum(is.na(adrd_ratios_df$c_idx))
 sum(is.na(adrd_ratios_df$s_idx))
 sum(is.na(adrd_ratios_df$observed))
