@@ -2,7 +2,6 @@
 library(tidyverse)
 library(magrittr)
 library(rstan)
-library(fastDummies)
 
 # path to store model results
 path_mod <- "results/models/adrd/m1/stage2/"
