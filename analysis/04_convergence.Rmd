@@ -15,18 +15,22 @@ library(ggplot2)
 ```
 
 ```{r}
-# # load all models in working model directory
-# stanfit_list <- lapply(paste0("results/models/working/", 
-#                             list.files("results/models/working/")), read_rds) 
-# 
-# # name list elements
-# names(stanfit_list) <- str_remove_all(list.files("results/models/working/"), "stanfit_object_|\\.rds")
+# load all models in working model directory
+stanfit_list <- lapply(paste0("results/models/working/",
+                            list.files("results/models/working/")), read_rds)
+
+# name list elements
+names(stanfit_list) <- str_remove_all(list.files("results/models/working/"), "stanfit_object_|\\.rds")
+
+# just look at stage 1 for now
+stanfit_list <- stanfit_list[str_detect(names(stanfit_list), "stage1")]
 ```
 
 ```{r}
-# for a specific file!
-# stanfit_list <- list(read_rds("results/models/adrd/m1/stage1/model_run_20240404/stanfit_object_NA.rds"))
-stanfit_list <- list(read_rds("results/models/adrd/m1/stage1/model_run_20240405-18/stanfit_object.rds"))
+# #----- for a specific file!
+# 
+# # stanfit_list <- list(read_rds("results/models/adrd/m1/stage1/model_run_20240405-18/stanfit_object.rds"))
+
 ```
 
 ```{r}
@@ -49,13 +53,16 @@ for (i in seq_along(rhat_plots)) {
 
   # get plot title
   plot_title <- paste0(names(stanfit_list)[i], ": ", round(pct_good), 
-                       "% of parameters have R hat < 1.1")
+                       "% of params < 1.1")
   
   rhat_plots[[i]] <- rhat_plots[[i]] + ggplot2::labs(title = plot_title)
 }
 
-# print
-rhat_plots
+print(rhat_plots)
+
+library(gridExtra)
+
+grid.arrange(rhat_plots[[1]], rhat_plots[[2]], rhat_plots[[3]], rhat_plots[[4]], rhat_plots[[5]], rhat_plots[[6]], nrow = 2)
 ```
 
 ## Now look at R hat values for specific parameters
@@ -145,8 +152,10 @@ ess_list <- lapply(summary_info, function(x) {
 })
 
 # get into df for plotting
-ess_df <- data.frame(ess = unlist(ess_list), 
+ess_df <- data.frame(ess = unlist(ess_list),
                      model = rep(names(stanfit_list), times = sapply(ess_list, length)))
+
+#ess = unlist(ess_list)
 
 # plot histogram of each ESS values for each model
 ess_df |>
