@@ -252,32 +252,26 @@ yy %>%
 ## We just get the standard rate for each sex/age group combination
 ## combining all observations over the time period (over fips).
 exp_df <- adrd_county_df %>%
-    dplyr::group_by(race, sex, age_grp) %>% # race, sex, age_grp
+    dplyr::group_by(sex, age_grp) %>% # race, sex, age_grp
     dplyr::summarize(
         n_admissions = sum(n_admissions),
         n_enrollees = sum(n_enrollees),
         exp_rate = n_admissions / n_enrollees
     )
+```
 
+```{r}
 # make a table of standardized rates
 exp_rates_tab <- exp_df %>%
   select(-c(n_enrollees, n_admissions)) %>%
-  spread(key = "race", value = "exp_rate") %>%
   mutate(sex = ifelse(sex == 1, "Male", "Female"),
          age_grp = ifelse(age_grp == "[65,75)", "65-74", age_grp),
          age_grp = ifelse(age_grp == "[75,85)", "75-85", age_grp),
-         age_grp = ifelse(age_grp == ">85", "86+", age_grp),
-         exp_mean = (`1` + `2`)/2,
-         `1` = format(round(`1`*100, 1), nsmall = 1),
-         `2` = format(round(`2`*100, 1), nsmall = 1),
-         exp_mean = format(round(exp_mean*100, 1)), nsmall = 1) %>%
+         age_grp = ifelse(age_grp == ">85", "86+", age_grp)) %>%
   arrange(age_grp) %>%
-  select(age_grp, sex, `1`, `2`, exp_mean) %>%
   rename("Sex" = "sex",
          "Age group" = "age_grp",
-         "Observed rate White (%)" = "1",
-         "Observed rate Black (%)" = "2",
-         "Expected rate (%)" = "exp_mean")
+         "Expected rate (%)" = "exp_rate")
 exp_rates_tab
 
 # save table
@@ -285,11 +279,49 @@ write_rds(exp_rates_tab, file = paste0("results/tables/adrd_expected_rates.rds")
 ```
 
 ```{r}
-exp_df %<>%
-  group_by(sex, age_grp) %>% 
-  summarise(exp_rate = mean(exp_rate)) # equal weight to race
-exp_df
+#---------- use this instead of weighting both races equally
+
+# ## Get the standard rates ----
+# ## We just get the standard rate for each sex/age group combination
+# ## combining all observations over the time period (over fips).
+# exp_df <- adrd_county_df %>%
+#     dplyr::group_by(race, sex, age_grp) %>% # race, sex, age_grp
+#     dplyr::summarize(
+#         n_admissions = sum(n_admissions),
+#         n_enrollees = sum(n_enrollees),
+#         exp_rate = n_admissions / n_enrollees
+#     )
+# 
+# # make a table of standardized rates
+# exp_rates_tab <- exp_df %>%
+#   select(-c(n_enrollees, n_admissions)) %>%
+#   spread(key = "race", value = "exp_rate") %>%
+#   mutate(sex = ifelse(sex == 1, "Male", "Female"),
+#          age_grp = ifelse(age_grp == "[65,75)", "65-74", age_grp),
+#          age_grp = ifelse(age_grp == "[75,85)", "75-85", age_grp),
+#          age_grp = ifelse(age_grp == ">85", "86+", age_grp),
+#          exp_mean = (`1` + `2`)/2,
+#          `1` = format(round(`1`*100, 1), nsmall = 1),
+#          `2` = format(round(`2`*100, 1), nsmall = 1),
+#          exp_mean = format(round(exp_mean*100, 1)), nsmall = 1) %>%
+#   arrange(age_grp) %>%
+#   select(age_grp, sex, `1`, `2`, exp_mean) %>%
+#   rename("Sex" = "sex",
+#          "Age group" = "age_grp",
+#          "Observed rate White (%)" = "1",
+#          "Observed rate Black (%)" = "2",
+#          "Expected rate (%)" = "exp_mean")
+# exp_rates_tab
+# 
+# # save table
+# write_rds(exp_rates_tab, file = paste0("results/tables/adrd_expected_rates.rds"))
+# 
+# exp_df %<>%
+#   group_by(sex, age_grp) %>% 
+#   summarise(exp_rate = mean(exp_rate)) # equal weight to race
+# exp_df
 ```
+
 
 ```{r}
 ## Aggregate over years ----
