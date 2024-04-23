@@ -16,11 +16,11 @@ library(rstan)
 # Load data
 
 # load all models in working model directory
-stanfit_list <- lapply(paste0("results/models/working/", 
-                            list.files("results/models/working/", pattern = "adrd")), read_rds) 
+stanfit_list <- lapply(paste0("results/models/old_good/", 
+                            list.files("results/models/old_good/", pattern = "adrd")), read_rds) 
 
 # name list elements
-names(stanfit_list) <- str_remove_all(list.files("results/models/working/", pattern = "adrd"), "stanfit_object_|\\.rds")
+names(stanfit_list) <- str_remove_all(list.files("results/models/old_good/", pattern = "adrd"), "stanfit_object_|\\.rds")
 
 # load adrd ratios and county fips data
 adrd_ratios_df <- read_rds('data/symlinks/scratch/adrd_ratios_df.rds')
@@ -166,6 +166,8 @@ for (i in seq_along(stanfit_samples)){
     
     nu_expanded[[i]][, start_ix:end_ix] <- stanfit_samples[[i]]$nu[, s]
   }
+  
+  ##### NEED TO EXTRACT BETAS HERE!!!!!!!
   
   # white log relative risk
   posterior_white[[i]] <- stanfit_samples[[i]]$alpha1 + stanfit_samples[[i]]$psi1 + 
