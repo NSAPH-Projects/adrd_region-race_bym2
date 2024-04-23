@@ -1,3 +1,4 @@
+// STAN implementation of BYM2 without covariates
 functions {
   // ICAR model with sparse representation
   // @param phi vector of ICAR random effects
@@ -21,7 +22,7 @@ data {
   matrix[m, s] state_mat_idx; // State indicators correspond to y
   vector[m] d1_idx;           // Race 1 indicator corresponding to y
   vector[m] d2_idx;           // Race 2 indicator corresponding to y
-  vector[m] phi_hat;          // Fitted spatial effects from combined data model
+  vector[n] phi_hat;          // Fitted spatial effects from combined data model
   
   // adjacency matrix
   int W_n;                        // Number of edges
@@ -34,20 +35,20 @@ data {
 
 
 parameters {
-  real alpha1;                // Race 1 intercept
-  real alpha2;                // Race 2 intercept
+  real alpha1;                // White intercept
+  real alpha2;                // Black intercept
   vector[s] nu;               // state random effect
-  real<lower = 0> sigma_s;    // state effect scaling factor
-  // real<lower = 0> delta;      // Scaling of shared component (phi_hat)
+  real<lower = 0> sigma_s;    // state effect variance
+  // real<lower = 0> delta;   // Scaling of shared component (phi_hat)
   
-  vector[n] psi1;             // race 1 and 2 spatial random effects
-  vector[n] psi2;             
-  // vector[n] theta1;           // race 1 and 2 non spatial random effects
-  // vector[n] theta2;
-  real<lower = 0> sigma1;     // BYM2 scaling factor
-  real<lower = 0> sigma2;      
-  real logit_rho1;            // BYM2 spatial vs non spatial random effect
-  real logit_rho2;            
+  vector[n] psi1;             // White spatial random effects
+  vector[n] psi2;             // Black spatial random effects
+  // vector[n] theta1;        // White non spatial random effects
+  // vector[n] theta2;        // Black non spatial random effects
+  real<lower = 0> sigma1;     // BYM2 scaling for White
+  real<lower = 0> sigma2;     // BYM2 scaling for Black
+  real logit_rho1;            // BYM2 spatial vs non spatial random effect for White
+  real logit_rho2;            // BYM2 spatial vs non spatial random effect for Black
     
 }
 
@@ -57,10 +58,13 @@ transformed parameters {
   real<lower=0, upper=1> rho2 = inv_logit(logit_rho2);
   vector[m] convolved_re_sigma = rep_vector(0, m);
   
+  // random effects component
+  // first half of vector for White
   convolved_re_sigma[1:n] = sigma1 / sqrt(scaling_factor) * (sqrt(rho1) * psi1 +
-                       sqrt(1 - rho1) * phi_hat[1:n]);
+                       sqrt(1 - rho1) * phi_hat);
+  // second half of vector for Black
   convolved_re_sigma[(n + 1):m] =  sigma2 / sqrt(scaling_factor) * (sqrt(rho2) * psi2 + 
-                            sqrt(1 - rho2) * phi_hat[(n+1):m]);
+                            sqrt(1 - rho2) * phi_hat);
 }
 
 
@@ -72,14 +76,15 @@ model {
                   // phi_hat .* d2_idx / delta +
                   convolved_re_sigma
                   );
-  // intercepts, state random effect, shared spatial component
+  // fixed effects
   alpha1 ~ normal(0, 10);
   alpha2 ~ normal(0, 10);
+  // random effect of state
   nu ~ normal(0, sigma_s);
   sigma_s ~ normal(0, 5);
   // delta ~ lognormal(0, .4117);
   
-  // BYM random effects
+  // spatial random effects
   psi1 ~ icar_normal_lpdf(W_n, W_adj1, W_adj2);
   psi2 ~ icar_normal_lpdf(W_n, W_adj1, W_adj2);
   // theta1 ~ normal(0, 1);
