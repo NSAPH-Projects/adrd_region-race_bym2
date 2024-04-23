@@ -1,3 +1,4 @@
+// STAN implementation of BYM2 with covariates
 functions {
   // ICAR model with sparse representation
   // @param phi vector of ICAR random effects
@@ -36,19 +37,20 @@ data {
 
 
 parameters {
-  real alpha1;                // Race 1 intercept
-  real alpha2;                // Race 2 intercept
-  vector[p] beta;               // Covariate fixed effects
+  real alpha1;                // White intercept
+  real alpha2;                // Black intercept
+  vector[p] beta1;            // Covariate fixed effects for White
+  vector[p] beta2;            // Covariate fixed effects for Black
   vector[s] nu;               // state random effect
-  real<lower = 0> sigma_s;    // state effect scaling factor
-  real<lower = 0> delta;      // Scaling of shared component (phi_hat)
+  real<lower = 0> sigma_s;    // state effect variance
+  // real<lower = 0> delta;      // Scaling of shared component (phi_hat)
   
-  vector[n] psi1;             // race 1 and 2 spatial random effects
-  vector[n] psi2;             
-  real<lower = 0> sigma1;     // BYM2 scaling factor
-  real<lower = 0> sigma2;      
-  real logit_rho1;            // BYM2 spatial vs non spatial random effect
-  real logit_rho2;            
+  vector[n] psi1;             // White spatial random effects
+  vector[n] psi2;             // Black spatial random effects
+  real<lower = 0> sigma1;     // BYM2 scaling for White
+  real<lower = 0> sigma2;     // BYM2 scaling for Black 
+  real logit_rho1;            // BYM2 spatial vs non spatial random effect for White
+  real logit_rho2;            // BYM2 spatial vs non spatial random effect for Black
     
 }
 
@@ -58,26 +60,35 @@ transformed parameters {
   real<lower=0, upper=1> rho2 = inv_logit(logit_rho2);
   vector[m] convolved_re_sigma = rep_vector(0, m);
   
-  convolved_re_sigma[1:n] = sigma1 / sqrt(scaling_factor) * (sqrt(rho1) * psi1 + 
-                       sqrt(1 - rho1) * phi_hat) * sigma1;
-  convolved_re_sigma[(n + 1):m] = sigma2 / sqrt(scaling_factor) *
-       (sqrt(rho2) * psi2 + sqrt(1 - rho2) * phi_hat);
+  // random effects component
+  // first half of vector for White
+  convolved_re_sigma[1:n] = sigma1 / sqrt(scaling_factor) * (sqrt(rho1) * psi1 +
+                       sqrt(1 - rho1) * phi_hat);
+  // second half of vector for Black
+  convolved_re_sigma[(n + 1):m] =  sigma2 / sqrt(scaling_factor) * (sqrt(rho2) * psi2 + 
+                            sqrt(1 - rho2) * phi_hat);
+                            
 }
 
 
 model {
   y ~ poisson_log(log_offset + 
                   alpha1 * d1_idx + alpha2 * d2_idx + 
-                  state_mat_idx * nu + covar_mat * beta +
-                  convolved_re_sigma);
-  // intercepts, state random effect, shared spatial component
-  alpha1 ~ normal(0, 100);
-  alpha2 ~ normal(0, 100);
-  beta ~ normal(0, 100);
+                  state_mat_idx * nu + 
+                  (covar_mat * beta1) .* d1_idx + (covar_mat * beta2) .* d2_idx + 
+                  convolved_re_sigma
+                  )
+                  ;
+  // fixed effects
+  alpha1 ~ normal(0, 10);
+  alpha2 ~ normal(0, 10);
+  beta1 ~ normal(0, 10);
+  beta2 ~ normal(0, 10);
+  // random effect of state
   nu ~ normal(0, sigma_s);
   sigma_s ~ normal(0, 5);
   
-  // BYM random effects
+  // spatial random effects
   psi1 ~ icar_normal_lpdf(W_n, W_adj1, W_adj2);
   psi2 ~ icar_normal_lpdf(W_n, W_adj1, W_adj2);
   logit_rho1 ~ normal(0, 1);

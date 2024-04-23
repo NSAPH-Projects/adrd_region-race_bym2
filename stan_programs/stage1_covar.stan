@@ -33,19 +33,20 @@ data {
 
 
 parameters {
-  real alpha;                // Coeffs on intercepts
+  real alpha;                // Intercept
   vector[s] nu;              // State random effect
   vector[p] beta;            // Covariate fixed effects
   real<lower = 0> sigma_s;   // State effect variance
   vector[n] phi;             // spatial random effect
   vector[n] theta;           // nonspatial random effect
   real<lower = 0> sigma;     // BYM2 scaling
-  real logit_rho;            // control amt spatial vs nonspatial heterogeneity
+  real logit_rho;            // BYM2 spatial vs non spatial random effect 
 }
 
 
 transformed parameters {
   real<lower=0, upper=1> rho = inv_logit(logit_rho);
+  // random effects component
   vector[n] convolved_re = sqrt(rho / scaling_factor) * phi + sqrt(1 - rho) * theta;
 }
 
@@ -55,8 +56,8 @@ model {
                   alpha + state_mat_idx * nu + covar_mat * beta +
                   convolved_re * sigma);
   // fixed effects
-  alpha ~ normal(0, 100);
-  beta ~ normal(0, 100);
+  alpha ~ normal(0, 10);
+  beta ~ normal(0, 10);
   // random effect of state
   nu ~ normal(0, sigma_s);
   sigma_s ~ normal(0, 5);
