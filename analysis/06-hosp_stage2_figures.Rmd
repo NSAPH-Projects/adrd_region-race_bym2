@@ -1,0 +1,177 @@
+
+```{r setup, include=FALSE}
+## Set working directory as project root
+library(here)
+knitr::opts_knit$set(root.dir = here())
+knitr::opts_chunk$set(echo = FALSE, warning = FALSE, message = FALSE)
+```
+
+```{r, message=FALSE, warning=FALSE}
+## Load libraries ----
+library(tidyverse)
+library(magrittr)
+library(sf)
+library(cowplot)
+library(viridis)
+library(RColorBrewer)
+library(ggpubr)
+library(pander)
+library(data.table)
+```
+
+## Load data
+
+```{r}
+# load lists with model results and bind into df
+hosp_res <- read_rds("data/intermediate/stage2_hosp_model_results.rds")
+#hosp_res <- read_rds("data/intermediate/stage2_hosp_model_results.rds")
+
+hosp_res <- bind_rows(hosp_res, .id = "model")
+#hosp_res <- bind_rows(hosp_res, .id = "model")
+
+#mod_res <- rbind.data.frame(hosp_res, hosp_res)
+```
+
+
+```{r}
+## Read data ----
+hosp_ratios_df <- read_rds('data/symlinks/scratch/hosp_ratios_df.rds')
+county_sf <- read_rds("data/symlinks/scratch/county_sf.rds")
+
+hosp_res_sf <- county_sf %>% 
+  select(county) %>% 
+  right_join(hosp_ratios_df) %>%
+  right_join(hosp_res)
+
+# dim(county_sf)
+# dim(pos_med_sf)
+colnames(hosp_res_sf)
+```
+
+```{r}
+county_fips_df <- read_rds("data/symlinks/scratch/county_fips_df.rds")
+state_sf <- read_sf("data/county/cb_2015_us_state/cb_2015_us_state_20m.shp")
+state_sf %<>% 
+  left_join(
+    county_sf %>% 
+      left_join(county_fips_df) %>% 
+      st_drop_geometry() %>% 
+      distinct(STATEFP, s_idx)
+  ) %>% 
+  filter(!is.na(s_idx))
+```
+
+```{r}
+# change projection to Albers Equal Area Conic (good for maps of US)
+
+# look into this
+#sf_data_albers <- st_transform(sf_data, crs = 5070)
+
+hosp_res_sf <- st_transform(hosp_res_sf, 
+                           crs = st_crs("+proj=aea +lat_1=29.5 +lat_2=45.5 +lat_0=37.5
+                                        +lon_0=-96 +x_0=0 +y_0=0 +datum=NAD83 +units=m +no_defs"))
+state_sf <- st_transform(state_sf, 
+                           crs = st_crs("+proj=aea +lat_1=29.5 +lat_2=45.5 +lat_0=37.5
+                                        +lon_0=-96 +x_0=0 +y_0=0 +datum=NAD83 +units=m +no_defs"))
+```
+
+```{r}
+# plot lambdas
+hosp_res_sf %>% 
+  mutate(race = ifelse(race == 1, "1 - white", "2 - black")) %>%
+  ggplot() +
+  geom_sf(aes(fill = exp(log_lambda)), lwd = 0.0) +
+  geom_sf(data = state_sf, fill = NA, col = "white", lwd = 0.1) +
+  facet_grid(race ~ model
+             ) +
+  labs(fill = expression('Smoothed standardized risk ('*lambda*')')) +
+  scale_fill_viridis(option = "A", 
+                     na.value = "gray60",
+                     limits = c(0, 2.8)) + 
+  theme_map() +
+  theme(legend.position = "bottom",
+        legend.text = element_text(size = 8))
+```
+
+
+
+```{r}
+sc <- scale_fill_gradient2(high = "#7600bc", mid = "white", low = "#028A0F", 
+                           na.value = "gray50", midpoint = 0)
+
+# plot psis
+hosp_res_sf %>% 
+  mutate(race = ifelse(race == 1, "1 - white", "2 - black")) %>%
+  mutate(psi = ifelse(psi_sig, psi, NA)) %>%
+  ggplot() +
+  geom_sf(aes(fill = psi), lwd = 0.0) +
+  geom_sf(data = state_sf, fill = NA, col = "black", lwd = 0.1) +
+  facet_grid(race ~ model
+             ) +
+  labs(fill = "Race-specific risk (psi)") +
+  theme_map() +
+  theme(legend.position = "bottom",
+        legend.text = element_text(size = 8)) +
+  sc
+```
+
+```{r}
+bin_breaks <- c(0, 0.2, 0.4, 0.6, 0.8, 1, 1.2, 1.4, 1.6, 1.8, 2, 2.2, 2.4, 3.6)
+
+
+# get bin labels from bin breaks (get mean)
+bin_df <- embed(bin_breaks, 2) |> as.data.frame()
+bin_means <- rowMeans(bin_df) |> format(nsmall = 1)
+
+# new column for risk ratio
+hosp_res_sf %<>% 
+  mutate(
+    risk_ratio = ifelse(risk_ratio_sig, risk_ratio, as.numeric(NA)),
+    risk_ratio_bins = cut(risk_ratio, 
+                          breaks = bin_breaks,
+                          labels = bin_means
+                          ))
+
+# plot risk ratios
+hosp_res_sf %>% 
+  mutate(risk_ratio = ifelse(risk_ratio_sig, risk_ratio, NA)) %>%
+  ggplot() +
+  geom_sf(aes(fill = risk_ratio_bins), lwd = 0.0) +
+  geom_sf(data = state_sf, fill = NA, col = "black", lwd = 0.1) +
+  theme(legend.position = "bottom", 
+        #legend.justification = "right", 
+        #legend.direction = "vertical",
+        legend.title = element_text(size = 10),
+        legend.text = element_text(size = 8)) +
+  scale_fill_manual(
+    values = c("#08306b",
+               "#313695",
+               "#2171b5",
+               "#74add1",
+               "#abd9e9",
+               "#fee6ce",
+               "#fdd0a2", 
+               "#fdae6b", 
+               "#fd8d3c", 
+               "#f16913",
+               "#d94801",
+               "#a63603", 
+               "#7f2704"),
+    na.value = "gray40",
+    breaks = levels(unique(hosp_res_sf$risk_ratio_bins))#,
+    #na.translate = F      # makes NA white
+  ) +
+  facet_grid(~ model
+             ) +
+  labs(fill = "risk ratio (black/white)") +
+  theme_map() +
+  theme(legend.position = "bottom",
+        legend.text = element_text(size = 8)) +
+  guides(fill = guide_legend(
+    title.position = "top",
+    nrow = 1,
+            label.position = "bottom",
+            keywidth = grid::unit(2.5, "lines"),
+            keyheight = grid::unit(.5, "lines"),
+            label.hjust = 0))
+```

@@ -1,0 +1,117 @@
+
+```{r setup, include=FALSE}
+## Set working directory as project root
+library(here)
+knitr::opts_knit$set(root.dir = here())
+knitr::opts_chunk$set(echo = FALSE, warning = FALSE, message = FALSE)
+```
+
+```{r, message=FALSE, warning=FALSE}
+## Load libraries ----
+library(tidyverse)
+library(magrittr)
+library(sf)
+library(cowplot)
+library(viridis)
+library(RColorBrewer)
+library(ggpubr)
+library(pander)
+library(data.table)
+```
+
+## Load data
+
+```{r}
+# load lists with model results and bind into df
+adrd_res <- read_rds("data/intermediate/stage1_adrd_model_results.rds")
+#hosp_res <- read_rds("data/intermediate/stage1_hosp_model_results.rds")
+
+adrd_res <- bind_rows(adrd_res, .id = "model")
+#hosp_res <- bind_rows(hosp_res, .id = "model")
+
+#mod_res <- rbind.data.frame(adrd_res, hosp_res)
+```
+
+
+```{r}
+## Read data ----
+adrd_ratios_df_comb <- read_rds('data/symlinks/scratch/adrd_combined_data.rds')
+county_sf <- read_rds("data/symlinks/scratch/county_sf.rds")
+
+adrd_res_sf <- county_sf %>% 
+  select(county) %>% 
+  right_join(adrd_ratios_df_comb) %>%
+  right_join(adrd_res)
+
+# dim(county_sf)
+# dim(pos_med_sf)
+colnames(adrd_res_sf)
+```
+
+```{r}
+county_fips_df <- read_rds("data/symlinks/scratch/county_fips_df.rds")
+state_sf <- read_sf("data/county/cb_2015_us_state/cb_2015_us_state_20m.shp")
+state_sf %<>% 
+  left_join(
+    county_sf %>% 
+      left_join(county_fips_df) %>% 
+      st_drop_geometry() %>% 
+      distinct(STATEFP, s_idx)
+  ) %>% 
+  filter(!is.na(s_idx))
+```
+
+```{r}
+# change projection to Albers Equal Area Conic (good for maps of US)
+
+# look into this
+#sf_data_albers <- st_transform(sf_data, crs = 5070)
+
+adrd_res_sf <- st_transform(adrd_res_sf, 
+                           crs = st_crs("+proj=aea +lat_1=29.5 +lat_2=45.5 +lat_0=37.5
+                                        +lon_0=-96 +x_0=0 +y_0=0 +datum=NAD83 +units=m +no_defs"))
+state_sf <- st_transform(state_sf, 
+                           crs = st_crs("+proj=aea +lat_1=29.5 +lat_2=45.5 +lat_0=37.5
+                                        +lon_0=-96 +x_0=0 +y_0=0 +datum=NAD83 +units=m +no_defs"))
+```
+
+```{r}
+# plot lambdas
+adrd_res_sf %>%
+  # # don't plot lambda for zero black person-years for black counties only
+  # mutate(pos_med_y = ifelse(person_years == 0, NA, pos_med_y)) %>%
+  ggplot() +
+  geom_sf(aes(fill = exp(log_lambda)), lwd = 0.0) +
+  geom_sf(data = state_sf, fill = NA, col = "white", lwd = 0.1) +
+  facet_grid(~ model
+             ) +
+  labs(fill = expression('Smoothed standardized risk ('*lambda*')')) +
+  scale_fill_viridis(option = "A",
+                     na.value = "gray60",
+                     limits = c(0.25, 2.3)) +
+  theme_map() +
+  theme(legend.position = "bottom",
+        legend.text = element_text(size = 8))
+```
+
+
+
+```{r}
+sc <- scale_fill_gradient2(high = "#7600bc", mid = "white", low = "#028A0F", 
+                           na.value = "gray50", midpoint = 0, limits = c(-1, 1))
+
+# plot phis
+adrd_res_sf %>% 
+  mutate(phi = ifelse(phi_sig, phi, NA)) %>%
+  ggplot() +
+  geom_sf(aes(fill = phi), lwd = 0.0) +
+  geom_sf(data = state_sf, fill = NA, col = "black", lwd = 0.1) +
+  facet_grid(~ model
+             ) +
+  labs(fill = "Shared/combined risk (phi)") +
+  theme_map() +
+  theme(legend.position = "bottom",
+        legend.text = element_text(size = 8)) + 
+  sc
+```
+
