@@ -14,4 +14,4 @@ my_packages=${HOME}/R/ifxrstudio/RELEASE_3_16
 rstudio_singularity_image="/n/singularity_images/informatics/ifxrstudio/ifxrstudio:RELEASE_3_16.sif"
 
 # run myscript.R using RStudio Server signularity image
-singularity exec --cleanenv --env R_LIBS_USER=${my_packages} ${rstudio_singularity_image} Rscript --vanilla analysis/03-run_stage2.R ${outcome_to_run} ${model_to_run} 
+singularity exec --cleanenv --env R_LIBS_USER=${my_packages} ${rstudio_singularity_image} Rscript --vanilla analysis/06-run_stage2.R ${outcome_to_run} ${model_to_run} 
