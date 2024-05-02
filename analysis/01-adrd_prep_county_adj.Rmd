@@ -164,6 +164,7 @@ setdiff(counties_adrd_, counties_adj_)
 setdiff(counties_adj_, counties_adrd_)
 ```
 
+
 ## Sociodemographic
 
 * year 2000
@@ -328,6 +329,11 @@ county_zero_b <- adrd_county_df %>%
 
 length(county_zero_b)
 
+# save these counties so we can plot them later
+#write_rds(county_zero_b, "data/intermediate/counties_zero_black_person_years.rds")
+```
+
+```{r}
 # remove rows for these counties from ADRD data (both white and black rows)
 adrd_county_df %<>%
   filter(!county %in% county_zero_b)
@@ -337,7 +343,11 @@ county_adj_df %<>%
   filter(!fips_i %in% county_zero_b & !fips_j %in% county_zero_b)
 length(unique(county_adj_df$county))
 
-# and remove from county_sf
+# and remove from county_sf, but save the geometry first
+county_sf_zero_b <- county_sf %>%
+  filter(county %in% county_zero_b)
+write_rds(county_sf_zero_b, "data/symlinks/scratch/county_sf_zero_b.rds")
+
 county_sf %<>%
   filter(!county %in% county_zero_b)
 length(unique(county_sf$county))
