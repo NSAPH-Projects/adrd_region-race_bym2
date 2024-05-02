@@ -18,26 +18,50 @@ library(cowplot)
 
 ```{r}
 # choose which model to use
-#model <- "m1"
-model <- "m2"
+model <- "m1"
+#model <- "m2"
 #model <- "m3"
 
 ## Read data ----
 county_sf <- read_rds("data/symlinks/scratch/county_sf.rds")
-pos_med_adrd <- read_rds(paste0("data/intermediate/adrd_pos_med.rds"))
-pos_med_hosp <- read_rds(paste0("data/intermediate/hosp_pos_med.rds"))
+adrd_res <- read_rds("data/intermediate/adrd_model_results.rds")
+hosp_res <- read_rds("data/intermediate/hosp_model_results.rds")
 
-pos_med_adrd <- pos_med_adrd[[model]]
-pos_med_hosp <- pos_med_hosp[[model]]
+adrd_res <- adrd_res[[paste0("adrd_", model)]]
+hosp_res <- hosp_res[[paste0("hosp_", model)]]
 
+## Read non-modeled data ----
+adrd_ratios_df_comb <- read_rds('data/symlinks/scratch/adrd_combined_data.rds')
+hosp_ratios_df_comb <- read_rds('data/symlinks/scratch/hosp_combined_data.rds')
+
+adrd_ratios_df <- read_rds('data/symlinks/scratch/adrd_ratios_df.rds')
+hosp_ratios_df <- read_rds('data/symlinks/scratch/hosp_ratios_df.rds')
+
+adrd_res_df <- adrd_res %>%
+  right_join(adrd_ratios_df_comb) %>%
+  right_join(adrd_ratios_df)
+hosp_res_df <- hosp_res %>%
+  right_join(hosp_ratios_df_comb) %>%
+  right_join(hosp_ratios_df)
+
+
+# make a new column for log(observed/expected) separated by race
+adrd_res_df %<>%
+  mutate(y = log(observed/expected))
+hosp_res_df %<>%
+  mutate(y = log(observed/expected))
+# make a new column for log(observed/expected) combined race
+adrd_res_df %<>%
+  mutate(y_total = log(observed_total/expected_total))
+hosp_res_df %<>%
+  mutate(y_total = log(observed_total/expected_total))
 
 # join adrd and hosp
-pos_med <- merge(pos_med_adrd, pos_med_hosp, all = TRUE, 
-                 by = c("county", "race", "person_years", "med_house_income", 
-                        "house_price_income_ratio", "pm25", "black", "fipschar", 
-                        "fips_st", "c_idx", "s_idx"),
+pos_med <- merge(adrd_res_df, hosp_res_df, all = TRUE, 
+                 by = c("county", "race", "black", "c_idx", "s_idx", "person_years", 
+                        "fipschar", "fips_st", "house_price_income_ratio", "pm25",
+                        "med_house_income", "person_years_total"),
                  suffixes = c("_adrd", "_hosp"))
-rm(pos_med_adrd, pos_med_hosp)
 
 pos_med_sf <- county_sf %>% 
   select(county) %>% 
@@ -157,6 +181,14 @@ param_dist |>
 ```
 
 
+```{r}
+# look at white vs. black person years
+pos_med_sf %>%
+  group_by(race) %>%
+  summarise(q25_py = quantile(person_years, 0.25))
+```
+
+
 
 ```{r}
 # what % of all hosp have ADRD code?
@@ -165,6 +197,9 @@ param_dist |>
 pos_med_sf %<>%
   mutate(adrd_pct = (observed_adrd / (observed_adrd + observed_hosp)) * 100)
 
+```
+
+```{r}
 # get weighted avg. % by race
 # what % of all hospitalizations had ADRD code?
 
@@ -176,29 +211,34 @@ pos_med %>%
   summarise(total_adrd = sum(observed_adrd),
             total_hosp = sum(observed_hosp)) %>%
   mutate(adrd_pct = total_adrd / (total_adrd + total_hosp))
+```
 
 
-# look at distribution of this variable for white vs. black
-pos_med_sf |>
-  mutate(race = factor(ifelse(race == 1, "White", "Black"),
-                       levels = c("White", "Black"))) %>% 
-  ggplot() +
-  geom_density(aes(adrd_pct, col = as.factor(race))) +
-  labs(x = "% of all hospitalizations with ADRD code",
-       y = "Density",
-       col = "") +
-  theme_bw() +
-  theme(axis.text.y = element_blank(),
-        axis.ticks.y = element_blank(),
-        panel.grid = element_blank())
+```{r}
+# # look at distribution of this variable for white vs. black at county-level
+# pos_med_sf |>
+#   mutate(race = factor(ifelse(race == 1, "White", "Black"),
+#                        levels = c("White", "Black"))) %>% 
+#   ggplot() +
+#   geom_density(aes(adrd_pct, col = as.factor(race))) +
+#   labs(x = "% of all hospitalizations with ADRD code",
+#        y = "Density",
+#        col = "") +
+#   theme_bw() +
+#   theme(axis.text.y = element_blank(),
+#         axis.ticks.y = element_blank(),
+#         panel.grid = element_blank())
+```
 
+
+```{r}
 # now map this variable!
 
 pos_med_sf |>
   # cap at 30%
-  mutate(adrd_pct = ifelse(adrd_pct > 30, 30, adrd_pct)) |>
-  # exclude counties with < 100 hosp
-  mutate(adrd_pct = ifelse(observed_hosp < 100, NA, adrd_pct)) |>
+  #mutate(adrd_pct = ifelse(adrd_pct > 30, 30, adrd_pct)) |>
+  # exclude counties with < 500 person-years
+  mutate(adrd_pct = ifelse(person_years < 700, NA, adrd_pct)) |>
   ggplot() +
   geom_sf(aes(fill = adrd_pct), lwd = 0.1) +
   geom_sf(data = state_sf, fill = NA, col = "black", lwd = 0.1) +
@@ -210,26 +250,27 @@ pos_med_sf |>
         legend.title = element_text(size = 10),
         legend.text = element_text(size = 8)
         )
-
-# # also try white only (more stable) ==> could combine white + black
-# pos_med_sf |>
-#   # # limit to rows with at least 25 person-years
-#   #mutate(adrd_pct = ifelse(person_years < 50, NA, adrd_pct)) |>
-#   #mutate(adrd_pct = ifelse(adrd_pct > 20, 20, adrd_pct)) |>
-#   mutate(ifelse(observed_hosp < 400, NA, observed_hosp)) |>
-#   filter(race == 1) %>%
-#   ggplot() +
-#   geom_sf(aes(fill = adrd_pct), lwd = 0.0) +
-#   geom_sf(data = state_sf, fill = NA, col = "white", lwd = 0.1) +
-#   labs(fill = "% of hosp. w/ ADRD code (white only)") +
-#   scale_fill_viridis(option = "D") + 
-#   theme_map() +
-#   theme(legend.position = "bottom",
-#         legend.title = element_text(size = 10),
-#         legend.text = element_text(size = 8)
-#         )
-
 ```
+
+
+```{r}
+# try to understand if this makes sense
+pct_df <- pos_med_sf %>%
+  st_drop_geometry() %>%
+  select(county, race, observed_adrd, observed_hosp, adrd_pct)
+
+
+
+# look at Freemont, WY (very high % with lots of people)
+a = pos_med_sf %>%
+  filter(county == 56013)
+
+# Aroostook, ME
+b = pos_med_sf %>%
+  filter(county == 23003)
+```
+
+
 
 ## Model results
 
@@ -248,9 +289,7 @@ pos_med_sf %>%
        y = "Density",
        col = "Outcome") +
   theme_bw() +
-  theme(axis.text.y = element_blank(),
-        axis.ticks.y = element_blank(),
-        panel.grid = element_blank())
+  theme(panel.grid = element_blank())
 ```
 
 ```{r}
