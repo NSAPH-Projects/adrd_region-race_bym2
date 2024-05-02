@@ -307,6 +307,7 @@ length(unique(county_adj_df$county))
 
 ```
 
+
 ```{r}
 write_rds(hosp_county_df, "data/symlinks/scratch/hosp_county_df.rds")
 ```
