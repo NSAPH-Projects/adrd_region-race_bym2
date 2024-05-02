@@ -9,14 +9,14 @@
 #----- stage 2 -----#
 
 adrd_stage2 <- paste0("results/models/stage2/adrd/", 
-                      c("m1/model_run_20240416-1958/stanfit_object_stage2_adrd_m1.rds",
-                        "m2/model_run_20240416-1958/stanfit_object_stage2_adrd_m2.rds",
-                        "m3/model_run_20240416-1958/stanfit_object_stage2_adrd_m3.rds"))
+                      c("m1/model_run_20240423-1258/stanfit_object_stage2_adrd_m1.rds",
+                        "m2/model_run_20240423-1258/stanfit_object_stage2_adrd_m2.rds",
+                        "m3/model_run_20240423-1258/stanfit_object_stage2_adrd_m3.rds"))
 
 hosp_stage2 <- paste0("results/models/stage2/hosp/",
-                      c("m1/model_run_20240416-1958/stanfit_object_stage2_hosp_m1.rds",
-                        "m2/model_run_20240416-1958/stanfit_object_stage2_hosp_m2.rds",
-                        "m3/model_run_20240416-1958/stanfit_object_stage2_hosp_m3.rds"))
+                      c("m1/model_run_20240423-1258/stanfit_object_stage2_hosp_m1.rds",
+                        "m2/model_run_20240423-1258/stanfit_object_stage2_hosp_m2.rds",
+                        "m3/model_run_20240423-1258/stanfit_object_stage2_hosp_m3.rds"))
 
 # get all model names in one vector
 models <- c(adrd_stage2, hosp_stage2)
