@@ -58,6 +58,16 @@ setdiff(counties_shp_, counties_adrd_)
 setdiff(counties_adrd_, counties_shp_)
 ```
 
+
+```{r}
+# get basic stats from data (before rounding)
+
+# number of hospitalizations with ADRD by race
+adrd_county_df %>%
+  group_by(race) %>%
+  summarise(total_hosp = sum(n_admissions, na.rm = TRUE))
+```
+
 ```{r}
 ## Plot number of enrollees across years ----
 adrd_county_df %>% 
@@ -266,12 +276,13 @@ exp_rates_tab <- exp_df %>%
   select(-c(n_enrollees, n_admissions)) %>%
   mutate(sex = ifelse(sex == 1, "Male", "Female"),
          age_grp = ifelse(age_grp == "[65,75)", "65-74", age_grp),
-         age_grp = ifelse(age_grp == "[75,85)", "75-85", age_grp),
-         age_grp = ifelse(age_grp == ">85", "86+", age_grp)) %>%
+         age_grp = ifelse(age_grp == "[75,85)", "75-84", age_grp),
+         age_grp = ifelse(age_grp == ">85", "85+", age_grp),
+         exp_rate = format(round(exp_rate * 100, 1), nsmall = 1)) %>%
   arrange(age_grp) %>%
   rename("Sex" = "sex",
          "Age group" = "age_grp",
-         "Expected rate (%)" = "exp_rate")
+         "National rate (%)" = "exp_rate")
 exp_rates_tab
 
 # save table

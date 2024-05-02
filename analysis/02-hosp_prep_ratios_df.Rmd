@@ -59,6 +59,15 @@ hosp_county_df %<>%
   mutate(n_admissions = n_admissions_hosp - n_admissions_adrd)
 ```
 
+```{r}
+# get basic stats from data 
+# (before rounding but after removing those counties with zero black person-years)
+
+# number of hospitalizations by race
+hosp_county_df %>%
+  group_by(race) %>%
+  summarise(total_hosp = sum(n_admissions, na.rm = TRUE))
+```
 
 ```{r}
 ## Subset ----
@@ -287,12 +296,13 @@ exp_rates_tab <- exp_df %>%
   select(-c(n_enrollees, n_admissions)) %>%
   mutate(sex = ifelse(sex == 1, "Male", "Female"),
          age_grp = ifelse(age_grp == "[65,75)", "65-74", age_grp),
-         age_grp = ifelse(age_grp == "[75,85)", "75-85", age_grp),
-         age_grp = ifelse(age_grp == ">85", "86+", age_grp)) %>%
+         age_grp = ifelse(age_grp == "[75,85)", "75-84", age_grp),
+         age_grp = ifelse(age_grp == ">85", "85+", age_grp),
+         exp_rate = format(round(exp_rate * 100, 1), nsmall = 1)) %>%
   arrange(age_grp) %>%
   rename("Sex" = "sex",
          "Age group" = "age_grp",
-         "Expected rate (%)" = "exp_rate")
+         "National rate (%)" = "exp_rate")
 exp_rates_tab
 
 # save table
