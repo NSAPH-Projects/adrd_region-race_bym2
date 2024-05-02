@@ -17,29 +17,35 @@ library(RColorBrewer)
 library(ggpubr)
 library(pander)
 library(data.table)
+library(ggthemes)
 ```
 
 ## Load data
 
 ```{r}
 # load list with all model results and bind into df
-pos_med <- read_rds(paste0("data/intermediate/adrd_pos_med.rds"))
-pos_med <- bind_rows(pos_med, .id = "model")
+adrd_res <- read_rds("data/intermediate/adrd_model_results.rds")
+adrd_res <- bind_rows(adrd_res, .id = "model")
+
+# limiting to model 1 for now
+adrd_res <- adrd_res %>%
+  filter(model == "adrd_m1")
 ```
 
 ```{r}
 ## Read data ----
+adrd_ratios_df_comb <- read_rds('data/symlinks/scratch/adrd_combined_data.rds')
+adrd_ratios_df <- read_rds('data/symlinks/scratch/adrd_ratios_df.rds')
 county_sf <- read_rds("data/symlinks/scratch/county_sf.rds")
-#pos_med <- read_rds(paste0("data/intermediate/adrd-", model, "_pos_med.rds"))
+county_sf_zero_b <- read_rds("data/symlinks/scratch/county_sf_zero_b.rds")
 
-
-pos_med_sf <- county_sf %>% 
+adrd_res_sf <- county_sf %>% 
   select(county) %>% 
-  right_join(pos_med)
+  right_join(adrd_ratios_df_comb) %>%
+  right_join(adrd_ratios_df) %>%
+  right_join(adrd_res)
 
-# dim(county_sf)
-# dim(pos_med_sf)
-colnames(pos_med_sf)
+colnames(adrd_res_sf)
 ```
 
 ```{r}
@@ -58,14 +64,14 @@ state_sf %<>%
 ```{r}
 # change projection to Albers Equal Area Conic (good for maps of US)
 
-# look into this
-#sf_data_albers <- st_transform(sf_data, crs = 5070)
-
-pos_med_sf <- st_transform(pos_med_sf, 
+adrd_res_sf <- st_transform(adrd_res_sf, 
                            crs = st_crs("+proj=aea +lat_1=29.5 +lat_2=45.5 +lat_0=37.5
                                         +lon_0=-96 +x_0=0 +y_0=0 +datum=NAD83 +units=m +no_defs"))
 state_sf <- st_transform(state_sf, 
                            crs = st_crs("+proj=aea +lat_1=29.5 +lat_2=45.5 +lat_0=37.5
+                                        +lon_0=-96 +x_0=0 +y_0=0 +datum=NAD83 +units=m +no_defs"))
+county_sf_zero_b <- st_transform(county_sf_zero_b,
+                                 crs = st_crs("+proj=aea +lat_1=29.5 +lat_2=45.5 +lat_0=37.5
                                         +lon_0=-96 +x_0=0 +y_0=0 +datum=NAD83 +units=m +no_defs"))
 ```
 
@@ -78,70 +84,37 @@ race_labels <- c(
 
 # model labels for plotting
 model_labels <- c(
-  m1 = "Unadjusted",
-  m2 = "Adjusted for\n price-to-income ratio",
-  m3 = "Adjusted for PM\u2082.\u2085"
+  adrd_m1 = "Unadjusted",
+  adrd_m2 = "Adjusted for\n price-to-income ratio",
+  adrd_m3 = "Adjusted for PM\u2082.\u2085"
 )
 
 # race and model labels for plotting
 race_model_labels <- c(
   `1` = "White",
   `2` = "Black",
-  m1 = "Unadjusted",
-  m2 = "Adjusted for\n price-to-income ratio",
-  m3 = "Adjusted for PM\u2082.\u2085"
+  adrd_m1 = "Unadjusted",
+  adrd_m2 = "Adjusted for\n price-to-income ratio",
+  adrd_m3 = "Adjusted for PM\u2082.\u2085"
 )
 ```
 
 ```{r}
+# make a new column for log(observed/expected) separated by race
+adrd_res_sf %<>%
+  mutate(y = log(observed/expected))
+
+# make a new column for log(observed/expected) combined race
+adrd_res_sf %<>%
+  mutate(y_total = log(observed_total/expected_total))
+
 # make a new column for rate of hospitalization (observed/person-years)
-pos_med_sf %<>% 
+adrd_res_sf %<>% 
   mutate(adrd_rate_obs = observed/person_years)
 
 # and a new column for expected rate of hospitalization (expected/person-years)
-pos_med_sf %<>% 
+adrd_res_sf %<>% 
   mutate(adrd_rate_exp = expected/person_years)
-```
-
-
-## Look at counties with zero person-years and counties with zero expected hospitalizations
-
-```{r}
-# counties with zero person-years
-filter(pos_med_sf, model == "m1" & person_years == 0) %>% 
-  st_drop_geometry() %>% 
-  select(county, race, person_years, expected) %>%
-  nrow()
-# 71 counties with zero Black person-years
-
-# get # of counties with zero expected hospitalizations with ADRD
-filter(pos_med_sf, model == "m1" & expected == 0) %>% 
-  st_drop_geometry() %>% 
-  select(county, race, person_years, expected) %>% 
-  nrow()
-# the only counties with zero expected hospitalizations have zero person-years
-
-```
-
-```{r}
-# if zero black person years, make lambda, specific, shared, and risk_ratio columns NA for BOTH white and black rows
-
-# FOR NOW: keeping all counties
-
-# # get counties with zero person-years for black people
-# county_zero_b <- pos_med_sf %>%
-#   filter(person_years == 0) %>%
-#   pull(county)
-# 
-# # make NA for white and black rows
-# pos_med_sf %<>% 
-#   mutate(
-#     pos_med_y = if_else(county %in% county_zero_b, as.numeric(NA), pos_med_y),
-#     shared = if_else(county %in% county_zero_b, as.numeric(NA), shared),
-#     shared_unscaled = if_else(county %in% county_zero_b, as.numeric(NA), shared_unscaled),
-#     specific = if_else(county %in% county_zero_b, as.numeric(NA), specific),
-#     risk_ratio = if_else(county %in% county_zero_b, as.numeric(NA), risk_ratio)
-#   )
 ```
 
 
@@ -149,87 +122,94 @@ filter(pos_med_sf, model == "m1" & expected == 0) %>%
 
 ```{r}
 # plot % of person-years contributed by black people in each county
-pos_med_sf %>%
-  filter(model == "m1") %>%
+adrd_res_sf %>%
+  filter(model == "adrd_m1") %>%
   group_by(county) %>%
   summarise(pct_blk = 100 * (person_years[race == 2] /
                                (person_years[race == 1] + person_years[race == 2]))) %>%
   ggplot() +
   geom_sf(aes(fill = pct_blk), lwd = 0) +
+  geom_sf(data = county_sf_zero_b, fill = "gray70", lwd = 0.0) + 
   geom_sf(data = state_sf, fill = NA, col = "white", lwd = 0.1) +
   labs(fill = "% of person-years \ncontributed by Black \nindividuals") +
   scale_fill_viridis(option = "D") +
   theme_map() +
-  theme(legend.title = element_text(size = 10))
+  theme(legend.title = element_text(size = 10),
+        legend.position = "right")
 ```
 
 ```{r}
 # map PM2.5, PIR, median household income
 
-pos_med_sf %>%
-  filter(model == "m1") %>%
+adrd_res_sf %>%
+  filter(model == "adrd_m1") %>%
   ggplot() +
+  geom_sf(data = county_sf_zero_b, fill = "gray70", lwd = 0.0) + 
   geom_sf(aes(fill = pm25), alpha = 1, lwd = 0.0) +
   labs(fill = expression('PM'[2.5]*' (\u00B5g/m'^3*')')) +
   scale_fill_viridis(option = "D") +
   geom_sf(data = state_sf, fill = NA, col = "white", lwd = 0.1) +
-  theme(legend.position = "bottom") +
-  theme_map()
+  theme_map() +
+  theme(legend.position = "right")
   
-pos_med_sf %>%
-  filter(model == "m1") %>%
+adrd_res_sf %>%
+  filter(model == "adrd_m1") %>%
   ggplot() +
   geom_sf(aes(fill = log10(house_price_income_ratio)), alpha = 1, lwd = 0.0) +
   labs(fill = "log(house price-to- \nincome ratio)") +
   scale_fill_viridis(option = "D") +
+  geom_sf(data = county_sf_zero_b, fill = "gray70", lwd = 0.0) + 
   geom_sf(data = state_sf, fill = NA, col = "white", lwd = 0.1) +
-  theme(legend.position = "bottom") +
-  theme_map()
+  theme_map() +
+  theme(legend.position = "right")
 
-pos_med_sf %>%
-  filter(model == "m1") %>%
+adrd_res_sf %>%
+  filter(model == "adrd_m1") %>%
   ggplot() +
   geom_sf(aes(fill = med_house_income), alpha = 1, lwd = 0.0) +
   labs(fill = "Median household \nincome") +
   scale_fill_viridis(option = "D") +
+  geom_sf(data = county_sf_zero_b, fill = "gray70", lwd = 0.0) + 
   geom_sf(data = state_sf, fill = NA, col = "white", lwd = 0.1) +
-  theme(legend.position = "bottom") +
-  theme_map()
+  theme_map() +
+  theme(legend.position = "right")
 ```
 
 ```{r}
 # number of person-years observed in each county by race
-pos_med_sf %>%
-  filter(model == "m1") %>%
+adrd_res_sf %>%
+  filter(model == "adrd_m1") %>%
   ggplot() +
   geom_sf(aes(fill = log(person_years)), alpha = 1, lwd = 0.0) +
   labs(fill = "log(person-years)") +
   scale_fill_viridis(option = "D") +
+  geom_sf(data = county_sf_zero_b, fill = "gray70", lwd = 0.0) + 
   geom_sf(data = state_sf, fill = NA, col = "white", lwd = 0.1) +
   facet_grid(~race, 
              labeller = as_labeller(race_labels)) +
-  theme(legend.position = "bottom") +
-  theme_map()
+  theme_map() +
+  theme(legend.position = "right",
+        strip.background = element_blank())
 ```
 
 ```{r}
 # which counties have very few person-years?
-pos_med_sf %>%
-  filter(model == "m1" & race == "2") %>%
-  mutate(few_person_years = ifelse(person_years < 30, 1, 0)) %>%
+adrd_res_sf %>%
+  filter(model == "adrd_m1" & race == "2") %>%
+  mutate(few_person_years = ifelse(person_years < 100, 1, 0)) %>%
   mutate(few_person_years = ifelse(person_years > 0, few_person_years, NA)) %>%
   ggplot() +
   geom_sf(aes(fill = as.factor(few_person_years)), alpha = 1, lwd = 0.03) +
   geom_sf(data = state_sf, fill = NA, col = "white", lwd = 0.1) +
-  labs(fill = "< 30 Black person-years") +
+  labs(fill = "< 100 Black person-years") +
   # facet_grid(~race, 
   #            labeller = as_labeller(race_labels)) +
   theme(legend.position = "bottom") +
   theme_map()
 
-pos_med_sf %>%
-  filter(model == "m1" & race == "2") %>%
-  mutate(few_person_years = ifelse(person_years < 30, 1, 0)) %>%
+adrd_res_sf %>%
+  filter(model == "adrd_m1" & race == "2") %>%
+  mutate(few_person_years = ifelse(person_years < 100, 1, 0)) %>%
   mutate(few_person_years = ifelse(person_years > 0, few_person_years, NA)) %>%
      count(few_person_years)
 ```
@@ -240,7 +220,7 @@ pos_med_sf %>%
 ### Expected rates table
 
 ```{r}
-exp_rates <- read_rds(paste0("results/tables/expected_rates.rds"))
+exp_rates <- read_rds(paste0("results/tables/adrd_expected_rates.rds"))
 
 # stripes might be very helpful for male vs. female
 exp_rates %>%
@@ -253,17 +233,19 @@ exp_rates %>%
 ```{r}
 # try capping at 50%--otherwise we're just seeing really small counties
 # alternatively, could restrict this to counties with a certain number of person-years observed
-pos_med_sf %>%
-  filter(model == "m1") %>%
+adrd_res_sf %>%
+  filter(model == "adrd_m1") %>%
   mutate(adrd_rate_obs = ifelse(adrd_rate_obs > 0.12, 0.12, adrd_rate_obs)) |>
   ggplot() +
   geom_sf(aes(fill = adrd_rate_obs * 100), alpha = 1, lwd = 0.0) +
   labs(fill = "Rate of hosp. \nwith ADRD (%)") +
   scale_fill_viridis(option = "D") +
+  geom_sf(data = county_sf_zero_b, fill = "gray70", lwd = 0.0) + 
   geom_sf(data = state_sf, fill = NA, col = "white", lwd = 0.1) +
   facet_grid(~race, labeller = as_labeller(race_labels)) +
-  theme(legend.position = "bottom") +
-  theme_map()
+  theme_map() +
+  theme(legend.position = "bottom",
+        strip.background = element_blank())
 
 # could also try lumping together white and black (this just tells us where there are more ADRD hospitalizations)
 ```
@@ -272,19 +254,21 @@ pos_med_sf %>%
 ### Expected rate of hospitalization with ADRD (expected/person-years)
 
 ```{r}
-# try capping at 50%--otherwise we're just seeing really small counties
+# try capping at 5%--otherwise we're just seeing really small counties
 # alternatively, could restrict this to counties with a certain number of person-years
-pos_med_sf %>%
-  filter(model == "m1") %>%
-  mutate(adrd_rate_exp = ifelse(adrd_rate_exp > 0.10, 0.10, adrd_rate_exp)) |>
+adrd_res_sf %>%
+  filter(model == "adrd_m1") %>%
+  mutate(adrd_rate_exp = ifelse(adrd_rate_exp > 0.12, 0.12, adrd_rate_exp)) |>
   ggplot() +
   geom_sf(aes(fill = adrd_rate_exp * 100), alpha = 1, lwd = 0.0) +
   labs(fill = "Expected rate of \nhosp. with ADRD (%)") +
   scale_fill_viridis(option = "D") +
+  geom_sf(data = county_sf_zero_b, fill = "gray70", lwd = 0.0) + 
   geom_sf(data = state_sf, fill = NA, col = "white", lwd = 0.1) +
   facet_grid(~race, labeller = as_labeller(race_labels)) +
-  theme(legend.position = "bottom") +
-  theme_map()
+  theme_map() +
+  theme(legend.position = "bottom",
+        strip.background = element_blank())
 
 # could also try lumping together white and black (this just tells us where there are more ADRD hospitalizations)
 ```
@@ -293,91 +277,175 @@ pos_med_sf %>%
 
 ```{r}
 # map of observed counts
-pos_med_sf %>%
+adrd_res_sf %>%
   ggplot() +
   geom_sf(aes(fill = observed), lwd = 0.03) +
   scale_fill_viridis(option = "D", labels = scales::comma) +
   geom_sf(data = state_sf, fill = NA, col = "white", lwd = 0.1) +
   labs(fill = "Observed counts") +
   facet_grid(~race, labeller = as_labeller(race_labels)) +
-  theme(legend.position = "bottom") +
-  theme_map()
+  theme_map() + 
+  theme(legend.position = "bottom",
+        strip.background = element_blank())
 
 # map of expected counts
-pos_med_sf %>%
+adrd_res_sf %>%
   ggplot() +
   geom_sf(aes(fill = expected), lwd = 0.03) +
   geom_sf(data = state_sf, fill = NA, col = "white", lwd = 0.1) +
   scale_fill_viridis(option = "D", labels = scales::comma) +
   labs(fill = "Expected counts") +
   facet_grid(~race, labeller = as_labeller(race_labels)) +
-  theme(legend.position = "bottom") +
-  theme_map()
+  theme_map() + 
+  theme(legend.position = "bottom",
+        strip.background = element_blank())
 ```
 
-### Observed/expected counts ratio
 
-Note: y is log(observed) - log(expected) or log(observed/expected), so exp(y) is observed/expected. exp(y) is analogous to the standardized mortality ratio (SMR) in Kiang et al.
+## Model results
 
+### Stage 1 raw vs. smoothed lambdas
 
 ```{r}
-# map of observed/expected = exp(y)
+
+# Note: y is log(observed) - log(expected) or log(observed/expected), so exp(y) is observed/expected. exp(y) is analogous to the standardized mortality ratio (SMR) in Kiang et al.
 
 # note: it's better to plot y than log(y)!
 # if zero hosp are observed and 1 is expected, log(y) = -Inf, but y = 0
 # (if zero hosp are expected, then y and log(y) will both be undefined)
 
-pos_med_sf %>% 
-  mutate(y = ifelse(exp(y) > 3, log(3), y)) %>%
-  ggplot() +
-  geom_sf(aes(fill = exp(y)), lwd = 0.00) +
-  geom_sf(data = state_sf, fill = NA, col = "white", lwd = 0.1) +
-  labs(fill = "Observed/expected") +
-  scale_fill_viridis(option = "A") + 
-  facet_grid(~race, labeller = as_labeller(race_labels)) +
-  theme_map() +
-  theme(legend.position = "bottom",
-        legend.title = element_text(size = 10),
-        legend.text = element_text(size = 8)
-        )
+# gather raw observed/expected and lambdas
+stage1_total_risk_df <- adrd_res_sf |>
+  filter(race == 1) |>
+  select(county, geometry, model, 
+         y_total, log_lambda_stage1) |>
+  # gather raw and modeled lambdas
+  gather(key = "raw_vs_model", value = "estimate", y_total, log_lambda_stage1) %>%
+  # separate category for each model
+  mutate(raw_vs_model = ifelse(raw_vs_model == "log_lambda_stage1", model, "raw")) %>%
+  select(-model) %>%
+  distinct()
 
-# note: the only counties in gray here have 0 black person-years, meaning that they also have zero expected hospitalizations with ADRD, meaning observed/expected is undefined
+# set levels for plotting
+stage1_total_risk_df$raw_vs_model <- factor(stage1_total_risk_df$raw_vs_model,
+                                       levels = c("raw", "adrd_m1", "adrd_m2", "adrd_m3"))
+
+# labels for facets
+stage1_total_risk_labels <- c(
+  raw = "Raw observed/expected",
+  adrd_m1 = "Unadjusted",
+  adrd_m2 = "Adjusted for\n price-to-income ratio",
+  adrd_m3 = "Adjusted for PM\u2082.\u2085",
+  "1_specific" = "White-specific\n (\u03C8\u2081)",
+  "both_shared_unscaled" = "Unscaled shared\n (\u03A6)",
+  "2_specific" = "Black-specific\n (\u03C8\u2082)"
+)
+
+# plot
+stage1_total_risk_df |>
+  ggplot() +
+  geom_sf(aes(fill = exp(estimate)), lwd = 0.03) + 
+  geom_sf(data = county_sf_zero_b, fill = "gray70", lwd = 0.0) + 
+  geom_sf(data = state_sf, fill = NA, col = "white", lwd = 0.1) +
+  labs(fill = expression('Standardized risk')) +
+  scale_fill_viridis(option = "A", 
+                     na.value = "gray60",
+                     limits = c(0, 3)) +
+  facet_grid(~raw_vs_model,
+             labeller = as_labeller(stage1_total_risk_labels)
+             ) +
+  theme_map() + 
+  theme(legend.title = element_text(size = 10),
+        legend.text = element_text(size = 8),
+        legend.position = "bottom",
+        strip.text = element_text(size = 10),
+        strip.background = element_blank())
+
 ```
 
 
-
-## Model results
-
-### Relative/standardized risks (posterior medians of lambda = pos_med_y)
-The "predictions" are a smoothed version of the observations.
+### Stage 2 raw vs. smoothed lambdas
 
 ```{r}
+# gather raw observed/expected and lambdas
+stage2_total_risk_df <- adrd_res_sf |>
+  select(county, geometry, model, race,
+         y, log_lambda_stage2) |>
+  # gather raw and modeled lambdas
+  gather(key = "raw_vs_model", value = "estimate", y, log_lambda_stage2) %>%
+  # separate category for each model
+  mutate(raw_vs_model = ifelse(raw_vs_model == "log_lambda_stage2", model, "raw")) %>%
+  select(-model) %>%
+  distinct()
 
-# change this to make a column for exp(y), then gather these two columns for plotting
+# set levels for plotting
+stage2_total_risk_df$raw_vs_model <- factor(stage2_total_risk_df$raw_vs_model,
+                                       levels = c("raw", "adrd_m1", "adrd_m2", "adrd_m3"))
 
-# plot lambdas
-pos_med_sf %>% 
-  # # don't plot lambda for zero black person-years for black counties only
-  # mutate(pos_med_y = ifelse(person_years == 0, NA, pos_med_y)) %>%
+# labels for facets
+stage2_total_risk_labels <- c(
+  `1` = "White",
+  `2` = "Black",
+  raw = "Raw observed/expected",
+  adrd_m1 = "Unadjusted",
+  adrd_m2 = "Adjusted for\n price-to-income ratio",
+  adrd_m3 = "Adjusted for PM\u2082.\u2085",
+  "1_specific" = "White-specific\n (\u03C8\u2081)",
+  "both_shared_unscaled" = "Unscaled shared\n (\u03A6)",
+  "2_specific" = "Black-specific\n (\u03C8\u2082)"
+)
+
+# plot
+stage2_total_risk_df |>
   ggplot() +
-  geom_sf(aes(fill = exp(pos_med_y)), lwd = 0.0) +
+  geom_sf(aes(fill = exp(estimate)), lwd = 0.03) + 
+  geom_sf(data = county_sf_zero_b, fill = "gray70", lwd = 0.0) + 
   geom_sf(data = state_sf, fill = NA, col = "white", lwd = 0.1) +
-  facet_grid(race ~ model,
-             labeller = as_labeller(race_model_labels)
+  theme_map() + 
+  labs(fill = expression('Standardized risk')) +
+  facet_grid(race ~ raw_vs_model,
+             labeller = as_labeller(stage2_total_risk_labels)
              ) +
-  labs(fill = expression('Smoothed standardized risk ('*lambda*')')) +
+  theme(legend.title = element_text(size = 10),
+        legend.text = element_text(size = 8),
+        legend.position = "bottom",
+        strip.text = element_text(size = 10),
+        strip.background = element_blank()) +
+  # this scale is capping at max in previous plot
   scale_fill_viridis(option = "A", 
-                     na.value = "gray60") + 
-  theme_map() +
-  theme(legend.position = "bottom",
-        legend.text = element_text(size = 8))
+                     na.value = "gray60",
+                     limits = c(0, 3))
+  
+
 ```
+
 
 ```{r}
 # now compare raw ratios (observed/expected--unsmoothed) to model results (lambda--smoothed)
-pos_med_sf %>%
+
+# stage 1
+adrd_res_sf %>%
   mutate(
-    res = y - pos_med_y,
+    res = y - log_lambda_stage1#,
+    #res_is_out = if_else(abs(res) > 1, "different", "similar")
+  ) %>%
+  ggplot() +
+  geom_sf(aes(fill = res 
+              #fill = as.factor(res_is_out)), lwd = 0.1
+    )) +
+  geom_sf(data = state_sf, fill = NA, col = "black", lwd = 0.1) +
+  labs(fill = "Raw ratio - lambda") +
+  facet_grid(~ model,
+             labeller = as_labeller(model_labels)
+             ) +
+  theme_map() +
+  theme(legend.position = "right",
+        strip.background = element_blank())
+
+# stage 2
+adrd_res_sf %>%
+  mutate(
+    res = y - log_lambda_stage2,
     res_is_out = if_else(abs(res) > 2/3, "different", "similar")
   ) %>%
   ggplot() +
@@ -388,8 +456,9 @@ pos_med_sf %>%
   facet_grid(race ~ model,
              labeller = as_labeller(race_model_labels)
              ) +
-  theme(legend.position = "bottom") +
-  theme_map()
+  theme_map() +
+  theme(legend.position = "right",
+        strip.background = element_blank())
 # makes sense that they are more different for Black individuals (more to smooth)
 ```
 
@@ -416,7 +485,7 @@ pos_med_sf %>%
 #   theme_map()
 ```
 
-### White-specific, Black-specific, and shared (unscaled) risks (three risk surfaces)
+### White-specific, Black-specific, and shared risks (three risk surfaces)
 
 ```{r}
 # summary(pos_med$shared_unscaled)
@@ -430,394 +499,117 @@ pos_med_sf %>%
 ```
 
 ```{r}
-# # find outliers for phi
-# pos_med_sf %<>% 
-#   mutate(
-#     shared_unscaled_inliers = if_else(shared_unscaled > -1 & shared_unscaled < 1, 
-#                                       shared_unscaled, as.numeric(NA)),
-#     shared_unscaled_outliers = if_else(shared_unscaled <= -1 | shared_unscaled >= 1, 
-#                                        shared_unscaled, as.numeric(NA)),
-#     shared_unscaled_outliers = if_else(shared_unscaled_outliers <= -1, -1, shared_unscaled_outliers),
-#     shared_unscaled_outliers = if_else(shared_unscaled_outliers >= 1, 1, shared_unscaled_outliers)
-#   ) 
-
-# pos_med_sf %>% 
-#   st_drop_geometry() %>% 
-#   select(shared_unscaled, shared_unscaled_inliers, shared_unscaled_outliers)
-```
-
-```{r}
-# # look at outliers
-# filter(pos_med_sf, !is.na(shared_unscaled_outliers)) %>% 
-#   st_drop_geometry() %>% 
-#   select(shared_unscaled, shared_unscaled_inliers, shared_unscaled_outliers) %>%
-#   nrow()
-```
-
-
-```{r}
 # plot three risk surfaces
 # first, include non-significant counties
 
-# set color palette
-# not sure about old palette b/c it ignores values <-1 and >1 and isn't colorblind safe
-# myPalette <- colorRampPalette(rev(RColorBrewer::brewer.pal(11, "Spectral")))
-# sc <- scale_fill_gradientn(colors = myPalette(100), 
-#                            limits = c(-1, 1),
-#                            na.value = "gray70")
 sc <- scale_fill_gradient2(high = "#7600bc", mid = "white", low = "#028A0F", na.value = "gray50",
                          midpoint = 0)
 
-# # psi for white people
-# p1 <- pos_med_sf %>% 
-#   filter(race == 1) %>% 
-#   ggplot() +
-#   geom_sf(aes(fill = specific), lwd = 0.03) + 
-#   geom_sf(data = state_sf, fill = NA, col = "black", lwd = 0.1) +
-#   theme_map() +
-#   labs(subtitle = expression('White-specific ('*psi[1]*')'),
-#        fill = "Median posterior estimate") +
-#   facet_wrap(~ model,
-#              labeller = as_labeller(model_labels),
-#              nrow = 3
-#              ) +
-#   theme(legend.title = element_text(size = 10),
-#         legend.text = element_text(size = 8)) +
-#   sc
-# 
-# # shared unscaled (phi)
-# p2 <- pos_med_sf %>% 
-#   filter(race == 1) %>% #shared_unscaled is non-race specific
-#   ggplot() +
-#   geom_sf(aes(fill = shared_unscaled), lwd = 0.03) + 
-#   geom_sf(data = state_sf, fill = NA, col = "black", lwd = 0.1) +
-#   # geom_sf(data = filter(pos_med_sf, shared_unscaled_outliers == 1), color = "red", lwd = 0.5) + 
-#   # geom_sf(data = filter(pos_med_sf, shared_unscaled_outliers == -1), color = "blue", lwd = 0.5) + 
-#   theme_map() + 
-#   labs(subtitle = expression('Unscaled shared (\u03A6)'),
-#        fill = "Median posterior estimate") +
-#   facet_wrap(~ model,
-#              labeller = as_labeller(model_labels),
-#              nrow = 3
-#              ) +
-#   theme(legend.title = element_text(size = 10),
-#         legend.text = element_text(size = 8)) +
-#   sc
-# 
-# # psi for black people
-# p3 <- pos_med_sf %>% 
-#   filter(race == 2) %>% 
-#   ggplot() +
-#   geom_sf(aes(fill = specific), lwd = 0.03) + 
-#   geom_sf(data = state_sf, fill = NA, col = "black", lwd = 0.1) +
-#   theme_map() + 
-#   labs(subtitle = expression('Black-specific ('*psi[2]*')'),
-#        fill = "Median posterior estimate") +
-#   facet_wrap(~ model,
-#              labeller = as_labeller(model_labels),
-#              nrow = 3
-#              ) +
-#   theme(legend.title = element_text(size = 10),
-#         legend.text = element_text(size = 8)) +
-#   sc
-#   
-# # p <- cowplot::plot_grid(
-# #   p1 + theme(legend.position = "none"),
-# #   p2 + theme(legend.position = "none"),
-# #   p3  + theme(legend.position = "none"),
-# #   nrow = 3)
-# # 
-# # cowplot::plot_grid(
-# #   p,
-# #   cowplot::get_legend(p1),
-# #   ncol = 2
-# # )
-# 
-# # alternative to cowplot
-# ggarrange(p1, p2, p3,
-#           common.legend = TRUE,
-#           nrow = 1,
-#           legend = "bottom")
-
-###
-
-shared_unscaled_df <- pos_med_sf |>
+# gather shared and specific columns
+shared_specific_df <- adrd_res_sf |>
   select(county, geometry, model, race, 
-         specific, specific_sig,
-         shared_unscaled, shared_unscaled_sig) |>
-  gather(key = "spec_vs_shared", value = "estimate", specific, shared_unscaled) %>%
+         phi, phi_sig, psi, psi_sig) |>
+  gather(key = "shared_vs_spec", value = "estimate", phi, psi) %>%
   # new sig column for estimate
-  mutate(estimate_sig = ifelse(spec_vs_shared == "specific", 
-                               specific_sig, shared_unscaled_sig)) |>
+  mutate(estimate_sig = ifelse(shared_vs_spec == "psi", psi_sig, phi_sig)) |>
   # remove other sig columns for clarity
-  select(-c(specific_sig, shared_unscaled_sig)) |>
+  select(-c(phi_sig, psi_sig)) |>
   # change race for shared rows
-  mutate(race = ifelse(spec_vs_shared == "shared_unscaled", "both", race)) %>%
+  mutate(race = ifelse(shared_vs_spec == "phi", "both", race)) %>%
   distinct() |>
-  mutate(parameter = paste0(race, "_", spec_vs_shared)) 
+  mutate(parameter = paste0(race, "_", shared_vs_spec)) 
 
 # set levels for plotting
-shared_unscaled_df$parameter <- factor(shared_unscaled_df$parameter,
-                                       levels = c("1_specific", "both_shared_unscaled", 
-                                                  "2_specific"))
+shared_specific_df$parameter <- factor(shared_specific_df$parameter,
+                                       levels = c("1_psi", "both_phi", "2_psi"))
 
 # labels for facets
-shared_unscaled_labels <- c(
-  m1 = "Unadjusted",
-  m2 = "Adjusted for\n price-to-income ratio",
-  m3 = "Adjusted for PM\u2082.\u2085",
-  "1_specific" = "White-specific\n (\u03C8\u2081)",
-  "both_shared_unscaled" = "Unscaled shared\n (\u03A6)",
-  "2_specific" = "Black-specific\n (\u03C8\u2082)"
+shared_specific_labels <- c(
+  adrd_m1 = "Unadjusted",
+  adrd_m2 = "Adjusted for\n price-to-income ratio",
+  adrd_m3 = "Adjusted for PM\u2082.\u2085",
+  "1_psi" = "White-specific\n (\u03C8\u2081)",
+  "both_phi" = "Shared\n (\u03A6)",
+  "2_psi" = "Black-specific\n (\u03C8\u2082)"
 )
 
 # plot
-shared_unscaled_df |>
-  ggplot() +
-  geom_sf(aes(fill = estimate), lwd = 0.03) + 
-  geom_sf(data = state_sf, fill = NA, col = "black", lwd = 0.1) +
-  theme_map() + 
-  labs(fill = "Median posterior estimate") +
-  facet_grid(parameter ~ model,
-             labeller = as_labeller(shared_unscaled_labels)
-             ) +
-  theme(legend.title = element_text(size = 10),
-        legend.text = element_text(size = 8),
-        legend.position = "bottom",
-        strip.text = element_text(size = 10)) +
-  sc
-```
-
-### Now exclude non-significant counties
-
-```{r}
-# new color scale (since I'm exponentiating)
-# sc <- scale_fill_gradientn(colors = myPalette(100), 
-#                            na.value = "gray70")
-# sc <- scale_fill_gradient2(low = "#000080", mid = "white", high = "#ff6600", na.value = "gray40",
-#                          midpoint = 0)
-sc <- scale_fill_gradient2(high = "#7600bc", mid = "white", low = "#028A0F", na.value = "gray50",
-                         midpoint = 0)
-
-# # psi for white people
-# p1 <- pos_med_sf %>% 
-#   filter(race == 1) %>% 
-#   mutate(specific = ifelse(specific_sig, specific, NA)) %>%
-#   ggplot() +
-#   geom_sf(aes(fill = specific), lwd = 0.03) + 
-#   geom_sf(data = state_sf, fill = NA, col = "black", lwd = 0.1) +
-#   labs(subtitle = expression('White-specific ('*psi[1]*')'),
-#        fill = "Median posterior estimate") +
-#   facet_wrap(~ model,
-#              labeller = as_labeller(model_labels),
-#              nrow = 3
-#              ) +
-#   theme_map() +
-#   theme(legend.title = element_text(size = 10),
-#         legend.text = element_text(size = 8)) +
-#   sc
-# 
-# # shared unscaled (phi)
-# p2 <- pos_med_sf %>% 
-#   mutate(shared_unscaled = ifelse(shared_unscaled_sig, shared_unscaled, NA)) %>%
-#   filter(race == 1) %>% #shared_unscaled is non-race specific, so choose one
-#   ggplot() +
-#   geom_sf(aes(fill = shared_unscaled), lwd = 0.03) + 
-#   geom_sf(data = state_sf, fill = NA, col = "black", lwd = 0.1) +
-#   # geom_sf(data = filter(pos_med_sf, shared_unscaled_outliers == 1), color = "red", lwd = 0.5) + 
-#   # geom_sf(data = filter(pos_med_sf, shared_unscaled_outliers == -1), color = "blue", lwd = 0.5) + 
-#   labs(subtitle = expression('Unscaled shared (\u03A6)'),
-#        fill = "Median posterior estimate") +
-#   facet_wrap(~ model,
-#              labeller = as_labeller(model_labels),
-#              nrow = 3
-#              ) +
-#   theme_map() + 
-#   theme(legend.title = element_text(size = 10),
-#         legend.text = element_text(size = 8)) +
-#   sc
-# 
-# # psi for black people
-# p3 <- pos_med_sf %>% 
-#   filter(race == 2) %>% 
-#   mutate(specific = ifelse(specific_sig, specific, NA)) %>%
-#   ggplot() +
-#   geom_sf(aes(fill = specific), lwd = 0.03) + 
-#   geom_sf(data = state_sf, fill = NA, col = "black", lwd = 0.1) +
-#   labs(subtitle = expression('Black-specific ('*psi[2]*')'),
-#        fill = "Median posterior estimate") +
-#   facet_wrap(~ model,
-#              labeller = as_labeller(model_labels),
-#              nrow = 3
-#              ) +
-#   theme_map() + 
-#   theme(legend.title = element_text(size = 10),
-#         legend.text = element_text(size = 8)) +
-#   sc
-# 
-# # arrange plots
-# ggarrange(p1, p2, p3, 
-#           common.legend = TRUE, 
-#           nrow = 1,
-#           legend = "bottom")
-
-
-# plot
-shared_unscaled_df |>
+shared_specific_df |>
+  # only plot significant counties
   mutate(estimate = ifelse(estimate_sig, estimate, NA)) |>
   ggplot() +
   geom_sf(aes(fill = estimate), lwd = 0.03) + 
+  geom_sf(data = county_sf_zero_b, fill = "gray50", lwd = 0.0) + 
   geom_sf(data = state_sf, fill = NA, col = "black", lwd = 0.1) +
-  theme_map() + 
   labs(fill = "Median posterior estimate") +
-  facet_grid(parameter ~ model,
-             labeller = as_labeller(shared_unscaled_labels)
+  facet_grid(model ~ parameter,
+             labeller = as_labeller(shared_specific_labels)
              ) +
+  theme_map() + 
   theme(legend.title = element_text(size = 10),
         legend.text = element_text(size = 8),
         legend.position = "bottom",
-        strip.text = element_text(size = 10)) +
+        strip.text = element_text(size = 10),
+        strip.background = element_blank()) +
   sc
 ```
-
 
 
 ### Now split shared risk into two scaled maps
 
 ```{r}
-# split phi map into phi*delta and phi/delta
-
-# sc <- scale_fill_gradient2(low = "#000080", mid = "white", high = "#ff6600", na.value = "gray40",
+# # split phi map into phi*delta and phi/delta
+# 
+# # sc <- scale_fill_gradient2(low = "#000080", mid = "white", high = "#ff6600", na.value = "gray40",
+# #                          midpoint = 0)
+# sc <- scale_fill_gradient2(high = "#7600bc", mid = "white", low = "#028A0F", na.value = "gray50",
 #                          midpoint = 0)
-sc <- scale_fill_gradient2(high = "#7600bc", mid = "white", low = "#028A0F", na.value = "gray50",
-                         midpoint = 0)
-
-# # vector of all shared and specific values
-# shared_ <- c(pos_med$shared, pos_med$specific)
-# myPalette <- colorRampPalette(rev(RColorBrewer::brewer.pal(11, "Spectral")))
-# sc <- scale_fill_gradientn(colors = myPalette(100), 
-#                            limits = c(min(shared_), max(shared_)))
-
-# # psi for white people
-# p1 <- pos_med_sf %>% 
-#   filter(race == 1) %>% 
-#   mutate(specific = ifelse(specific_sig, specific, NA)) %>%
-#   ggplot() +
-#   geom_sf(aes(fill = specific), lwd = 0.03) + 
-#   geom_sf(data = state_sf, fill = NA, col = "black", lwd = 0.1) +
-#   theme_map() +
-#   labs(subtitle = expression('White-specific ('*psi[1]*')'),
-#        fill = "Median posterior \nestimate") +
-#   theme(plot.subtitle = element_text(size = 10),
-#         legend.title = element_text(size = 10),
-#         legend.text = element_text(size = 8)) + 
-#   sc
 # 
-# # scaled phi for white people
-# p2 <- pos_med_sf %>% 
-#   filter(race == 1) %>%
-#   mutate(shared = ifelse(shared_sig, shared, NA)) %>%
-#   ggplot() +
-#   geom_sf(aes(fill = shared), lwd = 0.03) + 
-#   geom_sf(data = state_sf, fill = NA, col = "black", lwd = 0.1) +
-#   theme_map() + 
-#   labs(subtitle = expression('Scaled shared for White (\u03A6*\u03B4)'),
-#        fill = "Median posterior \nestimate") +
-#   theme(plot.subtitle = element_text(size = 10),
-#         legend.title = element_text(size = 10),
-#         legend.text = element_text(size = 8)) + 
-#   sc
 # 
-# # scaled phi for black people
-# p3 <- pos_med_sf %>% 
-#   filter(race == 2) %>%
-#   mutate(shared = ifelse(shared_sig, shared, NA)) %>%
-#   ggplot() +
-#   geom_sf(aes(fill = shared), lwd = 0.03) + 
-#   geom_sf(data = state_sf, fill = NA, col = "black", lwd = 0.1) +
-#   theme_map() + 
-#   labs(subtitle = expression('Scaled shared for Black (\u03A6/\u03B4)'),
-#        fill = "Median posterior \nestimate") +
-#   theme(plot.subtitle = element_text(size = 10),
-#         legend.title = element_text(size = 10),
-#         legend.text = element_text(size = 8)) + 
-#   sc
+# shared_df <- adrd_res_sf |>
+#   select(county, geometry, model, race, 
+#          specific, specific_sig,
+#          shared, shared_sig) |>
+#   gather(key = "spec_vs_shared", value = "estimate", specific, shared) %>%
+#   # new sig column for estimate
+#   mutate(estimate_sig = ifelse(spec_vs_shared == "specific", 
+#                                specific_sig, shared_sig)) |>
+#   # remove other sig columns for clarity
+#   select(-c(specific_sig, shared_sig)) |>
+#   mutate(parameter = paste0(race, "_", spec_vs_shared)) 
 # 
-# # psi for black people
-# p4 <- pos_med_sf %>% 
-#   filter(race == 2) %>% 
-#   mutate(specific = ifelse(specific_sig, specific, NA)) %>%
-#   ggplot() +
-#   geom_sf(aes(fill = specific), lwd = 0.03) + 
-#   geom_sf(data = state_sf, fill = NA, col = "black", lwd = 0.1) +
-#   theme_map() + 
-#   labs(subtitle = expression('Black-specific ('*psi[2]*')'),
-#        fill = "Median posterior \nestimate") +
-#   theme(plot.subtitle = element_text(size = 10),
-#         legend.title = element_text(size = 10),
-#         legend.text = element_text(size = 8)) + 
-#   sc
-#   
-# p <- cowplot::plot_grid(
-#   p1 + theme(legend.position = "none"), 
-#   p2 + theme(legend.position = "none"), 
-#   p3  + theme(legend.position = "none"),
-#   p4  + theme(legend.position = "none"),
-#   nrow = 2, 
-#   ncol = 2)
+# # set levels for plotting
+# shared_df$parameter <- factor(shared_df$parameter,
+#                               levels = c("1_specific", "1_shared",
+#                                          "2_shared", "2_specific"))
 # 
-# cowplot::plot_grid(
-#   p, 
-#   cowplot::get_legend(p1), 
-#   ncol = 2, 
-#   rel_widths = c(0.8, 0.2)
+# # labels for facets
+# shared_labels <- c(
+#   m1 = "Unadjusted",
+#   m2 = "Adjusted for PIR",
+#   m3 = "Adjusted for PM2.5",
+#   "1_specific" = "White-specific\n (\u03C8\u2081)",
+#   "1_shared" = "Scaled shared for\n White (\u03A6*\u03B4)",
+#   "2_shared" = "Scaled shared for\n Black (\u03A6/\u03B4)",
+#   "2_specific" = "Black-specific\n (\u03C8\u2082)"
 # )
-
-
-shared_df <- pos_med_sf |>
-  select(county, geometry, model, race, 
-         specific, specific_sig,
-         shared, shared_sig) |>
-  gather(key = "spec_vs_shared", value = "estimate", specific, shared) %>%
-  # new sig column for estimate
-  mutate(estimate_sig = ifelse(spec_vs_shared == "specific", 
-                               specific_sig, shared_sig)) |>
-  # remove other sig columns for clarity
-  select(-c(specific_sig, shared_sig)) |>
-  mutate(parameter = paste0(race, "_", spec_vs_shared)) 
-
-# set levels for plotting
-shared_df$parameter <- factor(shared_df$parameter,
-                              levels = c("1_specific", "1_shared",
-                                         "2_shared", "2_specific"))
-
-# labels for facets
-shared_labels <- c(
-  m1 = "Unadjusted",
-  m2 = "Adjusted for PIR",
-  m3 = "Adjusted for PM2.5",
-  "1_specific" = "White-specific\n (\u03C8\u2081)",
-  "1_shared" = "Scaled shared for\n White (\u03A6*\u03B4)",
-  "2_shared" = "Scaled shared for\n Black (\u03A6/\u03B4)",
-  "2_specific" = "Black-specific\n (\u03C8\u2082)"
-)
-
-# plot
-shared_df |>
-  mutate(estimate = ifelse(estimate_sig, estimate, NA)) |>
-  ggplot() +
-  geom_sf(aes(fill = estimate), lwd = 0.03) + 
-  geom_sf(data = state_sf, fill = NA, col = "black", lwd = 0.1) +
-  theme_map() + 
-  labs(fill = "Median posterior estimate") +
-  facet_grid(parameter ~ model,
-             labeller = as_labeller(shared_labels)
-             ) +
-  theme(legend.title = element_text(size = 10),
-        legend.text = element_text(size = 8),
-        legend.position = "bottom",
-        strip.text = element_text(size = 7)) +
-  sc
+# 
+# # plot
+# shared_df |>
+#   mutate(estimate = ifelse(estimate_sig, estimate, NA)) |>
+#   ggplot() +
+#   geom_sf(aes(fill = estimate), lwd = 0.03) + 
+#   geom_sf(data = state_sf, fill = NA, col = "black", lwd = 0.1) +
+#   theme_map() + 
+#   labs(fill = "Median posterior estimate") +
+#   facet_grid(parameter ~ model,
+#              labeller = as_labeller(shared_labels)
+#              ) +
+#   theme(legend.title = element_text(size = 10),
+#         legend.text = element_text(size = 8),
+#         legend.position = "bottom",
+#         strip.text = element_text(size = 7)) +
+#   sc
 ```
 
 
@@ -827,7 +619,7 @@ shared_df |>
 # dichotomize risk ratio--where is white vs. black risk higher?
 
 # make a table--what % of counties are significantly <1? significantly >1?
-RR_tab <- pos_med_sf %>%
+RR_tab <- adrd_res_sf %>%
   #slice_sample(prop = 0.05) %>%
   filter(race == 2) %>% # same risk ratio for white and black rows
   # select(county, geometry, risk_ratio, risk_ratio_sig) %>%
@@ -848,7 +640,7 @@ RR_tab |> pander()
 
 ```{r}
 # plot dichotomized risk ratio
-pos_med_sf %>% 
+adrd_res_sf %>% 
   mutate(
     risk_ratio = ifelse(risk_ratio_sig, risk_ratio, NA),
     risk_ratio = ifelse(risk_ratio < 1, "Risk ratio < 1", "Risk ratio > 1")
@@ -865,7 +657,8 @@ pos_med_sf %>%
   scale_fill_manual(values = c("Risk ratio < 1" = "#2171b5", 
                                "Risk ratio > 1" = "#fdae6b"),
                     na.value = "gray90") +
-  theme_map()
+  theme_map() +
+  theme(strip.background = element_blank())
 ```
 
 
@@ -878,7 +671,7 @@ pos_med_sf %>%
 # # this works, but the blue doesn't get dark enough
 # sc <- scale_fill_gradientn(colors = rev(paletteer_c("ggthemes::Red-Blue-White Diverging", 
 #                                                     20)[c(1:10, 14)]),
-#                            limits = c(min(pos_med_sf$risk_ratio), max(pos_med_sf$risk_ratio)),
+#                            limits = c(min(adrd_res_sf$risk_ratio), max(adrd_res_sf$risk_ratio)),
 #                            na.value = "gray70")
 
 # # this is blue to brown for some reason
@@ -898,7 +691,7 @@ pos_med_sf %>%
 # sc <- ggplot2::scale_fill_brewer(NULL, palette = "PRGn", direction = -1)
 
 # # map of risk ratios
-# pos_med_sf %>% 
+# adrd_res_sf %>% 
 #   mutate(
 #     risk_ratio = ifelse(risk_ratio_sig, risk_ratio, as.numeric(NA))
 #   ) %>%
@@ -919,7 +712,8 @@ pos_med_sf %>%
 # set boundaries for each discrete bin
 # may need to change!! should be consistent across models and include all RR
 # bin_breaks <- c(0.6, 0.8, 1, 1.2, 1.4, 1.6, 1.8, 2.2, 3)
-bin_breaks <- c(0.6, 0.8, 1, 1.2, 1.4, 1.6, 1.8, 2, 2.2, 2.4, 3.6)
+#bin_breaks <- c(0.6, 0.8, 1, 1.2, 1.4, 1.6, 1.8, 2, 2.2, 2.4, 3.6)
+bin_breaks <- c(0, 0.2, 0.4, 0.6, 0.8, 1, 1.2, 1.4, 1.6, 1.8, 2, 2.2, 2.4, 3.6)
 
 
 # get bin labels from bin breaks (get mean)
@@ -927,7 +721,7 @@ bin_df <- embed(bin_breaks, 2) |> as.data.frame()
 bin_means <- rowMeans(bin_df) |> format(nsmall = 1)
 
 # new column for risk ratio
-pos_med_sf %<>% 
+adrd_res_sf %<>% 
   mutate(
     risk_ratio = ifelse(risk_ratio_sig, risk_ratio, as.numeric(NA)),
     risk_ratio_bins = cut(risk_ratio, 
@@ -940,11 +734,12 @@ pos_med_sf %<>%
 #           "#E6F5D0", "#B8E186", "#7FBC41", "#4D9221", "#276419")
 
 # plot
-pos_med_sf %>% 
+adrd_res_sf %>% 
   select(county, geometry, model, risk_ratio_bins) %>%
   distinct() %>%
   ggplot() +
   geom_sf(aes(fill = risk_ratio_bins), lwd = 0.03) + 
+  geom_sf(data = county_sf_zero_b, fill = "gray40", lwd = 0.0) + 
   geom_sf(data = state_sf, fill = NA, col = "black", lwd = 0.1) +
   labs(fill = "Risk Ratio \n(Black/White)") +
   facet_grid(~ model,
@@ -955,26 +750,24 @@ pos_med_sf %>%
         #legend.justification = "right", 
         #legend.direction = "vertical",
         legend.title = element_text(size = 10),
-        legend.text = element_text(size = 8)) +
+        legend.text = element_text(size = 8),
+        strip.background = element_blank()) +
   scale_fill_manual(
-    # values = c("#07da63",
-    #            "#7ffbb5",
-    #            "#FDE0EF",
-    #            "#fbc8e3",
-    #            "#DE77AE",
-    #            "#C51B7D",
-    #            "#8E0152",
-    #            "#400023"),
     # values = c("#08306b",
     #            "#2171b5",
-    #            "#feedde",
+    #            "#fee6ce",
     #            "#fdd0a2", 
     #            "#fdae6b", 
     #            "#fd8d3c", 
-    #            "#e6550d", 
-    #            "#a63603"),
+    #            "#f16913",
+    #            "#d94801",
+    #            "#a63603", 
+    #            "#7f2704"),
     values = c("#08306b",
+               "#313695",
                "#2171b5",
+               "#74add1",
+               "#abd9e9",
                "#fee6ce",
                "#fdd0a2", 
                "#fdae6b", 
@@ -983,8 +776,8 @@ pos_med_sf %>%
                "#d94801",
                "#a63603", 
                "#7f2704"),
-    na.value = "gray80",
-    breaks = levels(unique(pos_med_sf$risk_ratio_bins))#,
+    na.value = "gray40",
+    breaks = levels(unique(adrd_res_sf$risk_ratio_bins))#,
     #na.translate = F      # makes NA white
   ) +
   guides(fill = guide_legend(
@@ -996,7 +789,7 @@ pos_med_sf %>%
             label.hjust = 0))
 
 # # or change legend to be along the bottom like Matt's
-# pos_med_sf %>% 
+# adrd_res_sf %>% 
 #   select(county, geometry, risk_ratio_bins) %>%
 #   distinct() %>%
 #   ggplot() +
@@ -1021,7 +814,7 @@ pos_med_sf %>%
 #                                "#8E0152", 
 #                                "#400023"),
 #                     na.value = "gray50",
-#                     breaks = levels(unique(pos_med_sf$risk_ratio_bins))) +
+#                     breaks = levels(unique(adrd_res_sf$risk_ratio_bins))) +
 #   guides(fill = guide_legend(
 #     title.position = "top",        
 #     nrow = 1,
@@ -1036,6 +829,10 @@ pos_med_sf %>%
 ## Look at distributions of post-modeling variables across counties
 
 ### In a table
+
+need to make some changes here
+- group by race doesn't actually affect grouping
+- maybe include phi and psi
 
 ```{r}
 # function to get summary statistics
@@ -1076,21 +873,26 @@ summarize_column <- function(df,
 # apply function to get summary stats table
 # note: I don't think the first two can come off of FASSE because they show small counts
 summary_stats <- rbind(
-  # summarize_column(pos_med_sf, 
+  # summarize_column(adrd_res_sf, 
   #                  column_name = person_years,
   #                  param_name = "person years"),
-  # summarize_column(pos_med_sf, 
+  # summarize_column(adrd_res_sf, 
   #                  column_name = observed,
   #                  param_name = "observed"),
-  # summarize_column(df = pos_med_sf, 
+  # summarize_column(df = adrd_res_sf, 
   #                  column_name = y, 
   #                  param_name = "Observed/expected", 
   #                  exp_transform = TRUE),
-  summarize_column(df = pos_med_sf, 
-                   column_name = pos_med_y, 
-                   param_name = "Standardized risk (lambda)", 
+  summarize_column(df = adrd_res_sf, 
+                   column_name = log_lambda_stage1, 
+                   param_name = "Standardized risk (lambda) stage 1", 
+                   exp_transform = TRUE,
+                   group_race = FALSE),
+  summarize_column(df = adrd_res_sf, 
+                   column_name = log_lambda_stage2, 
+                   param_name = "Standardized risk (lambda) stage 2", 
                    exp_transform = TRUE),
-  summarize_column(df = pos_med_sf, 
+  summarize_column(df = adrd_res_sf, 
                    column_name = risk_ratio, 
                    param_name = "Risk ratio",
                    group_race = FALSE)
@@ -1131,13 +933,13 @@ write_rds(summary_stats, file = paste0("results/tables/summary_stats.rds"))
 
 ```{r}
 # plot distribution of lambdas
-pos_med %>% 
-  mutate(model = ifelse(model == "m1", "Unadjusted", model),
-         model = ifelse(model == "m2", "Adjusted for PIR", model),
-         model = ifelse(model == "m3", "Adjusted for PM2.5", model)) %>%
+adrd_res_sf %>% 
+  mutate(model = ifelse(model == "adrd_m1", "Unadjusted", model),
+         model = ifelse(model == "adrd_m2", "Adjusted for PIR", model),
+         model = ifelse(model == "adrd_m3", "Adjusted for PM2.5", model)) %>%
   mutate(model = factor(model, levels = c("Unadjusted", "Adjusted for PIR", "Adjusted for PM2.5"))) %>%
   ggplot() +
-  geom_density(aes(x = pos_med_y, col = model)) +
+  geom_density(aes(x = log_lambda_stage2, col = model)) +
   geom_vline(xintercept = 0, lty = 2) +
   labs(x = expression('Smoothed standardized risk ('*lambda*')'),
        y = "Density",
@@ -1146,18 +948,16 @@ pos_med %>%
   theme_light() +
   theme(strip.background = element_rect(fill = "white"),
         strip.text = element_text(color = "black"),
-        axis.text.y = element_blank(),
-        axis.ticks.y = element_blank(),
         panel.grid = element_blank())
 ```
 
 
 ```{r}
 # plot distributions of risk ratios
-pos_med %>% 
-  mutate(model = ifelse(model == "m1", "Unadjusted", model),
-         model = ifelse(model == "m2", "Adjusted for PIR", model),
-         model = ifelse(model == "m3", "Adjusted for PM2.5", model)) %>%
+adrd_res_sf %>% 
+  mutate(model = ifelse(model == "adrd_m1", "Unadjusted", model),
+         model = ifelse(model == "adrd_m2", "Adjusted for PIR", model),
+         model = ifelse(model == "adrd_m3", "Adjusted for PM2.5", model)) %>%
   mutate(model = factor(model, levels = c("Unadjusted", "Adjusted for PIR", "Adjusted for PM2.5"))) %>%
   ggplot() +
   geom_density(aes(x = risk_ratio, col = model)) +
@@ -1166,9 +966,7 @@ pos_med %>%
        y = "Density",
        col = "") +
   theme_light() +
-  theme(axis.text.y = element_blank(),
-        axis.ticks.y = element_blank(),
-        panel.grid = element_blank())
+  theme(panel.grid = element_blank())
 ```
 
 
@@ -1176,16 +974,16 @@ pos_med %>%
 
 ```{r}
 # load list with all results and bind into df
-ev <- read_rds(paste0("results/tables/empirical_variance.rds"))
+ev <- read_rds(paste0("results/tables/adrd_empirical_variance.rds"))
 ev <- bind_rows(ev, .id = "model")
 
 # spread columns by model
 ev |>
   spread(key = model, value = Estimate) |>
   arrange(Parameter) |>
-  rename(`Model 1` = m1,
-         `Model 2` = m2,
-         `Model 3` = m3) |>
+  rename(`Model 1` = adrd_m1,
+         `Model 2` = adrd_m2,
+         `Model 3` = adrd_m3) |>
   pander()
 ```
 
