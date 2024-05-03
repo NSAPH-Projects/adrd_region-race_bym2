@@ -22,7 +22,7 @@ library(sf)
 # Load data
 
 # load all models in working model directory and select adrd stage1
-all_files <- list.files("results/models/working/")
+all_files <- list.files("results/models/working/", pattern = ".rds")
 stage1_files <- all_files[grep("stage1.*adrd", all_files)]
 
 # read models
