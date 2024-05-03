@@ -17,10 +17,10 @@ library(ggplot2)
 ```{r}
 # load all models in working model directory
 stanfit_list <- lapply(paste0("results/models/working/",
-                            list.files("results/models/working/")), read_rds)
+                            list.files("results/models/working/", pattern = ".rds")), read_rds)
 
 # name list elements
-names(stanfit_list) <- str_remove_all(list.files("results/models/working/"), "stanfit_object_|\\.rds")
+names(stanfit_list) <- str_remove_all(list.files("results/models/working/", pattern = ".rds"), "stanfit_object_|\\.rds")
 
 # just look at stage 1 for now
 stanfit_list <- stanfit_list[str_detect(names(stanfit_list), "stage1")]
