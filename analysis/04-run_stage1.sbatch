@@ -2,7 +2,7 @@
 #SBATCH -p fasse # partition (queue)
 #SBATCH -c 4 # number of cores
 #SBATCH --mem=4GB # memory pool for all cores
-#SBATCH -t 05:00:00 # time (D-HH:MM)
+#SBATCH -t 12:00:00 # time (D-HH:MM)
 #SBATCH -o slurm-stage1-%j.out
 
 # take the first argument as the outcome to run, second as outcome to run

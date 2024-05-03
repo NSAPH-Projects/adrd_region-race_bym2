@@ -68,7 +68,7 @@ paste0("Model time stamp: ", tstamp)
 
 ##  Run parameters
 n_chains <- 4
-n_iter <- 5000
+n_iter <- 20000 # 5000
 n_burnin <- floor(n_iter / 2)
 n_thin <- 40
 verbose_flag <- FALSE
