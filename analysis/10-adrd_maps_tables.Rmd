@@ -424,6 +424,8 @@ stage2_total_risk_df |>
 # now compare raw ratios (observed/expected--unsmoothed) to model results (lambda--smoothed)
 
 # stage 1
+sc <- scale_fill_gradient2(high = "red", mid = "white", low = "blue", na.value = "gray50",
+                         midpoint = 0)
 adrd_res_sf %>%
   mutate(
     res = y - log_lambda_stage1#,
@@ -440,7 +442,8 @@ adrd_res_sf %>%
              ) +
   theme_map() +
   theme(legend.position = "right",
-        strip.background = element_blank())
+        strip.background = element_blank()) +
+  sc
 
 # stage 2
 adrd_res_sf %>%
