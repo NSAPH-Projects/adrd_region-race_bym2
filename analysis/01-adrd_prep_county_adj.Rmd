@@ -10,6 +10,8 @@ knitr::opts_knit$set(root.dir = here())
 library(tidyverse)
 library(magrittr)
 library(sf)
+library(ggthemes)
+library(stringr)
 ```
 
 In this notebook we make sure that the counties match in all objects: the adjacency matrix, geometry, adrd rates, sociodemographic and pollution data.
@@ -21,13 +23,16 @@ In this notebook we make sure that the counties match in all objects: the adjace
 ## read county shp files
 county_sf <- read_sf("data/county/cb_2015_us_county/cb_2015_us_county_20m.shp") %>%
   filter(!STATEFP %in% c("02","15", "66", "72", "60", "69", "78")) %>% 
-  mutate(county = as.numeric(GEOID))
+  mutate(county = as.numeric(GEOID)) %>%
+  arrange(county)
 
 #Oglala Lakota County, SD. Shannon County, SD (FIPS code = 46113) was renamed Oglala Lakota County and assigned anew FIPS code (46102) effective in 2014
 county_sf$county[county_sf$county == 46102] <- 46113 
 
 # get adjacent counties from shapefile
 county_adj_list <-  st_touches(x = county_sf, y = county_sf, sparse = TRUE)
+
+# this will become character. convert back to integer
 names(county_adj_list) <- county_sf$county
 
 # format as dataframe
@@ -38,6 +43,10 @@ county_adj_df <- do.call(rbind, lapply(names(county_adj_list), function(name) {
   )
 }))
 
+# change fips to numeric
+county_adj_df$fips_i <- as.numeric(county_adj_df$fips_i)
+county_adj_df$fips_j <- as.numeric(county_adj_df$fips_j)
+
 # any counties without borders?
 zero_borders <- names(which(lengths(county_adj_list) == 0))
 zero_borders
@@ -46,10 +55,10 @@ zero_borders
 ```{r}
 # inspect counties without borders
 county_sf |> 
-  filter(county %in% c("53055", "25019")) # two island counties
+  filter(county %in% c(53055, 25019)) # two island counties
 
-fips_sanjuan <- zero_borders[1]
-fips_nantucket <- zero_borders[2]
+fips_sanjuan <- zero_borders[1] %>% as.numeric()
+fips_nantucket <- zero_borders[2] %>% as.numeric()
 ```
 
 ```{r}
@@ -57,14 +66,12 @@ fips_nantucket <- zero_borders[2]
 
 # San Juan, WA --> add border with Skagit county
 fips_skagit <- county_sf |> filter(NAME == "Skagit") |>
-  pull(county) |>
-  as.character()
+  pull(county)
 
 # Nantucket, MA --> add border with Dukes county
 # get the fips for this county
 fips_dukes <- county_sf |> filter(NAME == "Dukes") |>
-  pull(county) |>
-  as.character()
+  pull(county)
 
 # make a new df with the new borders
 # two rows for each border--one with county A in fips_i and county B in fips_j, one with county B in fips_i and county A in fips_j
@@ -82,23 +89,23 @@ county_adj_df <- rbind(county_adj_df, new_borders)
 
 # new county column
 county_adj_df %<>%
-  mutate(county = as.numeric(fips_i))
+  mutate(county = fips_i)
 
 # df to link state and county
 fips_to_state <- county_sf %>% 
   st_drop_geometry %>%
   select(county, STATEFP) %>%
-  mutate(fips = as.character(county)) %>%
+  mutate(fips = county) %>%
   select(-county)
 
 # new state columns
 county_adj_df %<>%
   merge(fips_to_state, 
         by.x = "fips_i", by.y = "fips") %>%
-  rename(state_i = STATEFP) %>%
+  rename(state_fips_i = STATEFP) %>%
   merge(fips_to_state,
         by.x = "fips_j", by.y = "fips") %>%
-  rename(state_j = STATEFP)
+  rename(state_fips_j = STATEFP)
 
 
 dim(county_sf)
@@ -111,15 +118,14 @@ counties_shp_ = unique(county_sf$county)
 
 setdiff(counties_shp_, counties_adj_)
 setdiff(counties_adj_, counties_shp_)
-
-write_rds(county_sf, "data/symlinks/scratch/county_sf.rds")
 ```
 
 ## ADRD data
 
 ```{r}
 adrd_county_df <- read_csv("data/symlinks/scratch/adrd_rates.csv") %>% 
-  filter(!state %in% c(2, 15, 66, 72, 60, 69, 78))
+  filter(!state %in% c(2, 15, 66, 72, 60, 69, 78)) %>%
+  arrange(race, county)
 
 counties_adrd_ = unique(adrd_county_df$county)
 
@@ -157,6 +163,7 @@ length(counties_adrd_)
 setdiff(counties_adrd_, counties_adj_)
 setdiff(counties_adj_, counties_adrd_)
 ```
+
 
 ## Sociodemographic
 
@@ -273,8 +280,6 @@ adrd_county_df %<>%
   left_join(
     pollution_county_df %>% select(county, pm25)
   )
-
-write_rds(adrd_county_df, "data/symlinks/scratch/adrd_county_df.rds")
 ```
 
 ```{r}
@@ -311,6 +316,44 @@ lapply(adrd_county_df, summary)
 <!-- ``` -->
 
 ```{r}
+# remove counties with zero black person-years over the whole time period
+# must do this *before* creating c_idx dummies and adjacency for stan
+
+# get counties with zero person-years
+# note: n_enrollees = NA means zero person-years
+county_zero_b <- adrd_county_df %>%
+  group_by(race, county) %>%
+  filter(all(is.na(n_enrollees))) %>%
+  distinct(county) %>%
+  pull(county)
+
+length(county_zero_b)
+
+# save these counties so we can plot them later
+#write_rds(county_zero_b, "data/intermediate/counties_zero_black_person_years.rds")
+```
+
+```{r}
+# remove rows for these counties from ADRD data (both white and black rows)
+adrd_county_df %<>%
+  filter(!county %in% county_zero_b)
+
+# and remove from county adjacency
+county_adj_df %<>%
+  filter(!fips_i %in% county_zero_b & !fips_j %in% county_zero_b)
+length(unique(county_adj_df$county))
+
+# and remove from county_sf, but save the geometry first
+county_sf_zero_b <- county_sf %>%
+  filter(county %in% county_zero_b)
+write_rds(county_sf_zero_b, "data/symlinks/scratch/county_sf_zero_b.rds")
+
+county_sf %<>%
+  filter(!county %in% county_zero_b)
+length(unique(county_sf$county))
+```
+
+```{r}
 ####
 # Create IDs and dummies
 ####
@@ -328,10 +371,11 @@ add_dummy_county_ids <- function(county_adj_df) {
   names(dummies) <- unique(new_adj$fips_i)
   
   ## Then make a dummy for node_i and node_j
+  # need to keep as.character()!
   new_adj$dummy_i <-
-    unlist(dummies[new_adj$fips_i], use.names = FALSE)
+    unlist(dummies[as.character(new_adj$fips_i)], use.names = FALSE)
   new_adj$dummy_j <-
-    unlist(dummies[new_adj$fips_j], use.names = FALSE)
+    unlist(dummies[as.character(new_adj$fips_j)], use.names = FALSE)
   
   return(new_adj)
 }
@@ -344,14 +388,14 @@ add_dummy_state_ids <- function(county_adj_df) {
   new_adj <- dplyr::arrange(county_adj_df, fips_i, fips_j)
   
   ## Make a dummy dictionary that with FIPS as the key and a dummy as value.
-  dummies <- as.list(1:length(unique(new_adj$state_i)))
-  names(dummies) <- unique(new_adj$state_i)
+  dummies <- as.list(1:length(unique(new_adj$state_fips_i)))
+  names(dummies) <- unique(new_adj$state_fips_i)
   
   ## Then make a dummy for node_i and node_j
   new_adj$dummy_state_i <-
-    unlist(dummies[new_adj$state_i], use.names = FALSE)
+    unlist(dummies[new_adj$state_fips_i], use.names = FALSE)
   new_adj$dummy_state_j <-
-    unlist(dummies[new_adj$state_j], use.names = FALSE)
+    unlist(dummies[new_adj$state_fips_j], use.names = FALSE)
   
   return(new_adj)
 }
@@ -372,7 +416,7 @@ county_fips_df <- county_adj_df %>%
     dplyr::select(
         county = county, 
         fipschar = fips_i,
-        fips_st = state_i,
+        fips_st = state_fips_i,
         c_idx = dummy_i,
         s_idx = dummy_state_i
     ) %>%
@@ -489,6 +533,8 @@ check_adj %>%
 
 
 ```{r}
+write_rds(county_sf, "data/symlinks/scratch/county_sf.rds")
+write_rds(adrd_county_df, "data/symlinks/scratch/adrd_county_df.rds")
 write_rds(county_adj_sparse_list, "data/symlinks/scratch/county_adj_sparse_list.rds")
 write_rds(county_fips_df, "data/symlinks/scratch/county_fips_df.rds")
 ```

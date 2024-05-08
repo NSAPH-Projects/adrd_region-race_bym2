@@ -1,0 +1,193 @@
+
+```{r setup, include=FALSE}
+## Set working directory as project root
+library(here)
+knitr::opts_knit$set(root.dir = here())
+```
+
+```{r, message=FALSE, warning=FALSE}
+## Load libraries ----
+library(tidyverse)
+library(magrittr)
+library(bayesplot)
+library(rstan)
+library(ggplot2)
+```
+
+```{r}
+# load all models in working model directory
+stanfit_list <- lapply(paste0("results/models/working/",
+                            list.files("results/models/working/")), read_rds)
+
+# name list elements
+names(stanfit_list) <- str_remove_all(list.files("results/models/working/"), "stanfit_object_|\\.rds")
+
+# just look at stage 1 for now
+stanfit_list <- stanfit_list[str_detect(names(stanfit_list), "stage1")]
+```
+
+```{r}
+# #----- for a specific file!
+# 
+# # stanfit_list <- list(read_rds("results/models/adrd/m1/stage1/model_run_20240405-18/stanfit_object.rds"))
+
+```
+
+```{r}
+# get r hat values (takes a minute)
+rhat_of_draws <- lapply(stanfit_list, rhat)
+```
+
+
+## Plot R hat values for all parameters
+
+```{r}
+# plot r hat values for each model
+rhat_plots <- lapply(rhat_of_draws, mcmc_rhat)
+
+# loop through plots
+for (i in seq_along(rhat_plots)) {
+  
+  # get % of parameters with R < 1.10
+  pct_good <- length(rhat_of_draws[[i]][rhat_of_draws[[i]] < 1.10]) / length(rhat_of_draws[[i]]) * 100
+
+  # get plot title
+  plot_title <- paste0(names(stanfit_list)[i], ": ", round(pct_good), 
+                       "% of params < 1.1")
+  
+  rhat_plots[[i]] <- rhat_plots[[i]] + ggplot2::labs(title = plot_title)
+}
+
+print(rhat_plots)
+
+library(gridExtra)
+
+grid.arrange(rhat_plots[[1]], rhat_plots[[2]], rhat_plots[[3]], rhat_plots[[4]], rhat_plots[[5]], rhat_plots[[6]], nrow = 2)
+```
+
+## Now look at R hat values for specific parameters
+
+```{r}
+lapply(rhat_of_draws, function(x) {
+  mcmc_rhat(x[c('alpha[1]', # white surface intercept
+                'alpha[2]', # black surface intercept
+                'beta[1]',
+                'beta[2]',
+                'delta', # shared surface scaling factor
+                'nu[1]', # state random effect
+                'lp__' # Stan's lp__ variable
+                ) 
+              ] )
+  })
+```
+
+```{r}
+lapply(rhat_of_draws, function(x) {
+  mcmc_rhat(x[c('sigma_u[1]', # SD of CAR part
+                'sigma_u[2]', # SD of CAR part
+                'sigma_u[3]', # SD of CAR part
+                'sigma_v[1]', # SD of iid spatial part
+                'sigma_v[2]', # SD of iid spatial part
+                'sigma_v[3]', # SD of iid spatial part
+                'sigma_s', # SD of state random effect
+                'tau_u[1]', # precision of CAR part
+                'tau_u[2]', # precision of CAR part
+                'tau_u[3]', # precision of CAR part
+                'tau_v[1]', # precision of iid spatial part
+                'tau_v[2]', # precision of iid spatial part
+                'tau_v[3]' # precision of iid spatial part
+                )
+              ])
+  })
+```
+
+```{r}
+# phi
+lapply(rhat_of_draws, function(x) {
+  mcmc_rhat(x[grep('phi', names(x))])
+  })
+```
+
+```{r}
+# psi (white)
+lapply(rhat_of_draws, function(x) {
+  mcmc_rhat(x[grep('psi\\[1', names(x))])
+  })
+```
+
+```{r}
+# psi (black)
+lapply(rhat_of_draws, function(x) {
+  mcmc_rhat(x[grep('psi\\[2', names(x))])
+  })
+```
+
+```{r}
+# nu
+lapply(rhat_of_draws, function(x) {
+  mcmc_rhat(x[grep('nu', names(x))])
+  })
+```
+
+```{r}
+# beta
+lapply(rhat_of_draws, function(x) {
+  # only for models that contain beta
+  if(any(grepl("beta", names(x)))) {
+    mcmc_rhat(x[grep('beta', names(x))])
+  }
+  })
+```
+
+
+## Look at effective sample size
+
+```{r}
+# get summary information, including effective sample size
+summary_info <- lapply(stanfit_list, summary)
+
+# extract the effective sample size for each parameter 
+ess_list <- lapply(summary_info, function(x) {
+  x$summary[, "n_eff"]
+})
+
+# get into df for plotting
+ess_df <- data.frame(ess = unlist(ess_list),
+                     model = rep(names(stanfit_list), times = sapply(ess_list, length)))
+
+#ess = unlist(ess_list)
+
+# plot histogram of each ESS values for each model
+ess_df |>
+  ggplot() + 
+  geom_histogram(aes(ess)) +
+  labs(x = "Effective sample size",
+       y = "Count") +
+  facet_wrap(~ model) +
+  theme_bw() +
+  theme(strip.background = element_rect(fill = "white"))
+
+
+# aim for min to be around 1,000
+```
+
+
+## Trace plots
+
+```{r}
+# get parameters with highest R hat values from each model
+high_rhat <- lapply(rhat_of_draws, function(x){
+  sorted <- sort(x, decreasing = TRUE)
+  names(sorted[1:10])
+})
+
+# trace plots
+trace_list <- list()
+for (i in seq_along(stanfit_list)){
+  trace_list[[i]] <- mcmc_trace(stanfit_list[[i]], pars = high_rhat[[i]])
+}
+
+trace_list
+```
+
+

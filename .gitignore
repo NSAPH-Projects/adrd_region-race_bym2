@@ -1,6 +1,9 @@
 # specific directories
 /results/models/
 /logs/
+/data/intermediate
+/old
+/analysis/old
 
 #### 
 # slurm

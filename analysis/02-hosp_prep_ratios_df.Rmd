@@ -59,6 +59,15 @@ hosp_county_df %<>%
   mutate(n_admissions = n_admissions_hosp - n_admissions_adrd)
 ```
 
+```{r}
+# get basic stats from data 
+# (before rounding but after removing those counties with zero black person-years)
+
+# number of hospitalizations by race
+hosp_county_df %>%
+  group_by(race) %>%
+  summarise(total_hosp = sum(n_admissions, na.rm = TRUE))
+```
 
 ```{r}
 ## Subset ----
@@ -174,7 +183,7 @@ xx %>%
   geom_point(aes(x = age_grp, y = hosp_rate, color = sex)) + 
   labs(title = "hosp reference rates", x = "Age group", y = "hosp rate") + 
   theme_bw()
-ggsave("results/figures/hosp_reference_rates.png")
+#ggsave("results/figures/hosp_reference_rates.png")
 ```
 
 ```{r}
@@ -273,16 +282,77 @@ yy %>%
 ## We just get the standard rate for each sex/age group combination
 ## combining all observations over the time period (over fips).
 exp_df <- hosp_county_df %>%
-    dplyr::group_by(race, sex, age_grp) %>% # race, sex, age_grp
+    dplyr::group_by(sex, age_grp) %>% # race, sex, age_grp
     dplyr::summarize(
         n_admissions = sum(n_admissions),
         n_enrollees = sum(n_enrollees),
         exp_rate = n_admissions / n_enrollees
-    ) %>% 
-  group_by(sex, age_grp) %>% 
-  summarise(exp_rate = mean(exp_rate)) # equal weight to race
-exp_df
+    )
 ```
+
+```{r}
+# make a table of standardized rates
+exp_rates_tab <- exp_df %>%
+  select(-c(n_enrollees, n_admissions)) %>%
+  mutate(sex = ifelse(sex == 1, "Male", "Female"),
+         age_grp = ifelse(age_grp == "[65,75)", "65-74", age_grp),
+         age_grp = ifelse(age_grp == "[75,85)", "75-84", age_grp),
+         age_grp = ifelse(age_grp == ">85", "85+", age_grp),
+         exp_rate = format(round(exp_rate * 100, 1), nsmall = 1)) %>%
+  arrange(age_grp) %>%
+  rename("Sex" = "sex",
+         "Age group" = "age_grp",
+         "National rate (%)" = "exp_rate")
+exp_rates_tab
+
+# save table
+write_rds(exp_rates_tab, file = paste0("results/tables/hosp_expected_rates.rds"))
+```
+
+```{r}
+#---------- use this instead of weighting both races equally
+
+# ## Get the standard rates ----
+# ## We just get the standard rate for each sex/age group combination
+# ## combining all observations over the time period (over fips).
+# exp_df <- hosp_county_df %>%
+#     dplyr::group_by(race, sex, age_grp) %>% # race, sex, age_grp
+#     dplyr::summarize(
+#         n_admissions = sum(n_admissions),
+#         n_enrollees = sum(n_enrollees),
+#         exp_rate = n_admissions / n_enrollees
+#     )
+# 
+# # make a table of standardized rates
+# exp_rates_tab <- exp_df %>%
+#   select(-c(n_enrollees, n_admissions)) %>%
+#   spread(key = "race", value = "exp_rate") %>%
+#   mutate(sex = ifelse(sex == 1, "Male", "Female"),
+#          age_grp = ifelse(age_grp == "[65,75)", "65-74", age_grp),
+#          age_grp = ifelse(age_grp == "[75,85)", "75-85", age_grp),
+#          age_grp = ifelse(age_grp == ">85", "86+", age_grp),
+#          exp_mean = (`1` + `2`)/2,
+#          `1` = format(round(`1`*100, 1), nsmall = 1),
+#          `2` = format(round(`2`*100, 1), nsmall = 1),
+#          exp_mean = format(round(exp_mean*100, 1)), nsmall = 1) %>%
+#   arrange(age_grp) %>%
+#   select(age_grp, sex, `1`, `2`, exp_mean) %>%
+#   rename("Sex" = "sex",
+#          "Age group" = "age_grp",
+#          "Observed rate White (%)" = "1",
+#          "Observed rate Black (%)" = "2",
+#          "Expected rate (%)" = "exp_mean")
+# exp_rates_tab
+# 
+# # save table
+# write_rds(exp_rates_tab, file = paste0("results/tables/hosp_expected_rates.rds"))
+# 
+# exp_df %<>%
+#   group_by(sex, age_grp) %>% 
+#   summarise(exp_rate = mean(exp_rate)) # equal weight to race
+# exp_df
+```
+
 
 ```{r}
 ## Aggregate over years ----
@@ -292,9 +362,9 @@ obs_df <- hosp_county_df %>%
     dplyr::summarize(n_enrollees = sum(n_enrollees),
                      n_admissions = sum(n_admissions), 
                      obs_rate = n_admissions / n_enrollees,
-                     # HPI and PM2.5 are the same across all years --> just take mean
-                     med_house_income = mean(med_house_income),
-                     house_price_income_ratio = mean(house_price_income_ratio),
+                     # HPI and PM2.5 are the same across all years
+                     med_house_income = first(med_house_income),
+                     house_price_income_ratio = first(house_price_income_ratio),
                      pm25 = mean(pm25))
 
 ## fill NAs
@@ -453,12 +523,16 @@ yy %>%
 hosp_ratios_df %<>% 
   mutate(
     black = as.integer(if_else(race == 2, 1, 0)),
-    expected = as.integer(ceiling(expected)), 
-    observed = as.integer(ceiling(observed)), 
-    person_years = as.integer(ceiling(person_years)), 
-    log_expected = log(expected + 0.001)
+    # expected = as.integer(ceiling(expected)), # expected values don't need to be integers!
+    observed = as.integer(round(observed)), # round normally (must be integers)
+    # person_years = as.integer(round(person_years)), # doesn't need to be integers
+    log_expected = log(expected + 0.00001) # to avoid issues with expected = 0
   ) %>% 
   left_join(county_fips_df)
+
+# sort by race and then county
+hosp_ratios_df %<>%
+  arrange(race, county)
 
 sum(is.na(hosp_ratios_df$c_idx))
 sum(is.na(hosp_ratios_df$s_idx))
