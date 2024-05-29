@@ -128,7 +128,7 @@ stan_list  <-
     # population_years
     y = ratios_df$observed,
     # log of expected
-    log_offset = log(ratios_df$expected),
+    log_offset = log(ratios_df$expected_stage2),
     
     # m*s matrix with state indicators
     state_mat_idx = state_mat,
