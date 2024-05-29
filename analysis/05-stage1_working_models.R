@@ -9,10 +9,10 @@
 #----- stage 1 -----#
 
 adrd_stage1 <- paste0("results/models/stage1/adrd/", 
-                       c("m1/model_run_20240503-155911/stanfit_object_stage1_adrd_m1.rds"))
+                       c("m1/model_run_20240506-185054/stanfit_object_stage1_adrd_m1.rds"))
 
 hosp_stage1 <- paste0("results/models/stage1/hosp/",
-                      c("m1/model_run_20240503-155911/stanfit_object_stage1_hosp_m1.rds"))
+                      c("m1/model_run_20240506-185101/stanfit_object_stage1_hosp_m1.rds"))
 
 # get all model names in one vector
 models <- c(adrd_stage1, hosp_stage1)
