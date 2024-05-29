@@ -264,8 +264,8 @@ exp_stage1_df <- adrd_county_df %>%
     dplyr::group_by(race, sex, age_grp) %>% # race, sex, age_grp
     dplyr::summarize(
         n_admissions = sum(n_admissions),
-        n_enrollees = sum(n_enrollees),
-        exp_rate_stage1 = n_admissions / n_enrollees
+        n_enrollee_years = sum(n_enrollees),
+        exp_rate_stage1 = n_admissions / n_enrollee_years
     )
 
 # stage 2
@@ -274,8 +274,8 @@ exp_stage2_df <- adrd_county_df %>%
     dplyr::group_by(sex, age_grp) %>% # sex, age_grp
     dplyr::summarize(
         n_admissions = sum(n_admissions),
-        n_enrollees = sum(n_enrollees),
-        exp_rate_stage2 = n_admissions / n_enrollees
+        n_enrollee_years = sum(n_enrollees),
+        exp_rate_stage2 = n_admissions / n_enrollee_years
     )
 ```
 
@@ -285,42 +285,47 @@ exp_stage2_df <- adrd_county_df %>%
 #----- stage 1 -----#
 
 exp_rates_stage1_tab <- exp_stage1_df %>%
-  select(-c(n_enrollees, n_admissions)) %>%
+  select(-c(n_enrollee_years, n_admissions)) %>%
   spread(key = "race", value = "exp_rate_stage1") %>%
   mutate(sex = ifelse(sex == 1, "Male", "Female"),
          age_grp = ifelse(age_grp == "[65,75)", "65-74", age_grp),
          age_grp = ifelse(age_grp == "[75,85)", "75-84", age_grp),
          age_grp = ifelse(age_grp == ">85", "85+", age_grp),
-         `1` = format(round(`1`*100, 1), nsmall = 1),
-         `2` = format(round(`2`*100, 1), nsmall = 1)) %>%
+         `1` = format(round(`1`, 3), nsmall = 3),
+         `2` = format(round(`2`, 3), nsmall = 3)) %>%
   arrange(age_grp) %>%
   rename("Sex" = "sex",
          "Age group" = "age_grp",
-         "National rate White (%)" = "1",
-         "National rate Black (%)" = "2")
+         "Rate (White)" = "1",
+         "Rate (Black)" = "2")
 exp_rates_stage1_tab
 
 
 #----- stage 2 -----#
 
 exp_rates_stage2_tab <- exp_stage2_df %>%
-  select(-c(n_enrollees, n_admissions)) %>%
+  select(-c(n_enrollee_years, n_admissions)) %>%
   mutate(sex = ifelse(sex == 1, "Male", "Female"),
          age_grp = ifelse(age_grp == "[65,75)", "65-74", age_grp),
          age_grp = ifelse(age_grp == "[75,85)", "75-84", age_grp),
          age_grp = ifelse(age_grp == ">85", "85+", age_grp),
-         exp_rate = format(round(exp_rate_stage2 * 100, 1), nsmall = 1)) %>%
+         exp_rate_stage2 = format(round(exp_rate_stage2, 3), nsmall = 3)) %>%
   arrange(age_grp) %>%
   rename("Sex" = "sex",
          "Age group" = "age_grp",
-         "National rate (%)" = "exp_rate")
+         "Rate (overall)" = "exp_rate_stage2")
 exp_rates_stage2_tab
 
 
+# join tables together (not saving right now)
+exp_rates_tab <- left_join(exp_rates_stage1_tab, exp_rates_stage2_tab)
+
 
 # save tables
-write_rds(exp_rates_stage1_tab, file = paste0("results/tables/adrd_expected_rates_race-specific.rds"))
-write_rds(exp_rates_stage2_tab, file = paste0("results/tables/adrd_expected_rates_overall.rds"))
+write_rds(exp_rates_stage1_tab, 
+          file = paste0("results/tables/adrd_expected_rates_race-specific.rds"))
+write_rds(exp_rates_stage2_tab, 
+          file = paste0("results/tables/adrd_expected_rates_overall.rds"))
 ```
 
 ```{r}
@@ -370,7 +375,7 @@ write_rds(exp_rates_stage2_tab, file = paste0("results/tables/adrd_expected_rate
 
 ```{r}
 ## Aggregate over years ----
-## Just tally up the number of person years and deaths over all years
+## Just tally up the number of person years and hospitalizations over all years
 obs_df <- adrd_county_df %>%
     dplyr::group_by(county, race, sex, age_grp) %>% #county, race, sex, age_grp
     dplyr::summarize(n_enrollees = sum(n_enrollees),
