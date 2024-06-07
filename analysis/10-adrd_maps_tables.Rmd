@@ -70,6 +70,9 @@ adrd_res_sf <- st_transform(adrd_res_sf,
 state_sf <- st_transform(state_sf, 
                            crs = st_crs("+proj=aea +lat_1=29.5 +lat_2=45.5 +lat_0=37.5
                                         +lon_0=-96 +x_0=0 +y_0=0 +datum=NAD83 +units=m +no_defs"))
+county_sf <- st_transform(county_sf,
+                                 crs = st_crs("+proj=aea +lat_1=29.5 +lat_2=45.5 +lat_0=37.5
+                                        +lon_0=-96 +x_0=0 +y_0=0 +datum=NAD83 +units=m +no_defs"))
 county_sf_zero_b <- st_transform(county_sf_zero_b,
                                  crs = st_crs("+proj=aea +lat_1=29.5 +lat_2=45.5 +lat_0=37.5
                                         +lon_0=-96 +x_0=0 +y_0=0 +datum=NAD83 +units=m +no_defs"))
@@ -84,7 +87,7 @@ race_labels <- c(
 
 # model labels for plotting
 model_labels <- c(
-  adrd_m1 = "Unadjusted",
+  adrd_m1 = "Smoothed", # CHANGE IF LOOKING AT ALL MODELS
   adrd_m2 = "Adjusted for\n price-to-income ratio",
   adrd_m3 = "Adjusted for PM\u2082.\u2085"
 )
@@ -384,7 +387,7 @@ stage1_total_risk_df$raw_vs_model <- factor(stage1_total_risk_df$raw_vs_model,
 # labels for facets
 stage1_total_risk_labels <- c(
   raw = "Raw observed/expected",
-  adrd_m1 = "Unadjusted",
+  adrd_m1 = "Smoothed (\u03BB)", # CHANGE IF LOOKING AT COVARIATES
   adrd_m2 = "Adjusted for\n price-to-income ratio",
   adrd_m3 = "Adjusted for PM\u2082.\u2085",
   "1_specific" = "White-specific\n (\u03C8\u2081)",
@@ -406,10 +409,10 @@ stage1_total_risk_df |>
              labeller = as_labeller(stage1_total_risk_labels)
              ) +
   theme_map() + 
-  theme(legend.title = element_text(size = 10),
-        legend.text = element_text(size = 8),
+  theme(legend.title = element_text(size = 12),
+        legend.text = element_text(size = 10),
         legend.position = "bottom",
-        strip.text = element_text(size = 10),
+        strip.text = element_text(size = 14),
         strip.background = element_blank())
 
 ```
@@ -465,7 +468,7 @@ stage2_total_risk_labels <- c(
   `1` = "White",
   `2` = "Black",
   raw = "Raw observed/expected",
-  adrd_m1 = "Unadjusted",
+  adrd_m1 = "Smoothed (\u03BB)",
   adrd_m2 = "Adjusted for\n price-to-income ratio",
   adrd_m3 = "Adjusted for PM\u2082.\u2085",
   "1_specific" = "White-specific\n (\u03C8\u2081)",
@@ -475,6 +478,7 @@ stage2_total_risk_labels <- c(
 
 # plot
 stage2_total_risk_df |>
+  mutate(estimate = ifelse(estimate >= log(3), log(3)-0.001, estimate)) |>
   ggplot() +
   geom_sf(aes(fill = exp(estimate)), lwd = 0.03) + 
   geom_sf(data = county_sf_zero_b, fill = "gray70", lwd = 0.0) + 
@@ -484,14 +488,14 @@ stage2_total_risk_df |>
   facet_grid(race ~ raw_vs_model,
              labeller = as_labeller(stage2_total_risk_labels)
              ) +
-  theme(legend.title = element_text(size = 10),
-        legend.text = element_text(size = 8),
+  theme(legend.title = element_text(size = 14),
+        legend.text = element_text(size = 12),
         legend.position = "bottom",
-        strip.text = element_text(size = 10),
+        strip.text = element_text(size = 16),
         strip.background = element_blank()) +
   # this scale is capping at max in previous plot
   scale_fill_viridis(option = "A", 
-                     na.value = "gray60",
+                     na.value = "gray70",
                      limits = c(0, 3))
 ```
 
@@ -613,7 +617,8 @@ adrd_res_sf %>%
 # first, include non-significant counties
 
 sc <- scale_fill_gradient2(high = "#7600bc", mid = "white", low = "#028A0F", na.value = "gray50",
-                         midpoint = 0)
+                         midpoint = 0,
+                         guide = guide_colorbar(barwidth = 10, barheight = 1))
 
 # gather shared and specific columns
 shared_specific_df <- adrd_res_sf |>
@@ -659,10 +664,10 @@ shared_specific_df |>
              labeller = as_labeller(shared_specific_labels)
              ) +
   theme_map() + 
-  theme(legend.title = element_text(size = 16),
+  theme(legend.title = element_text(size = 12),
         legend.text = element_text(size = 12),
         legend.position = "bottom",
-        strip.text = element_text(size = 18),
+        strip.text = element_text(size = 14),
         strip.background = element_blank()) +
   # theme(legend.title = element_text(size = 14),
   #       legend.text = element_text(size = 14),
@@ -690,10 +695,10 @@ shared_specific_df |>
              labeller = as_labeller(shared_specific_labels)
              ) +
   theme_map() + 
-  theme(legend.title = element_text(size = 16),
+  theme(legend.title = element_text(size = 12),
         legend.text = element_text(size = 12),
         legend.position = "bottom",
-        strip.text = element_text(size = 18),
+        strip.text = element_text(size = 14),
         strip.background = element_blank()) +
   scale_fill_manual(values = c("Low risk" = "#006400", 
                                "High risk" = "#B47EE5"),
@@ -984,16 +989,16 @@ adrd_risk_ratios_map <- adrd_res_sf %>%
   geom_sf(aes(fill = risk_ratio_bins), lwd = 0.03) + 
   geom_sf(data = county_sf_zero_b, fill = "gray40", lwd = 0.0) + 
   geom_sf(data = state_sf, fill = NA, col = "black", lwd = 0.2) +
-  labs(fill = "Risk Ratio (Black/White)",
+  labs(fill = expression('Risk Ratio (' *lambda['2ij']*'/'*lambda['1ij']*', Black/White)'),
        title = "Hospitalization with ADRD") +
   theme_map() +
   theme(legend.position = "bottom", 
         #legend.justification = "right", 
         #legend.direction = "vertical",
-        legend.title = element_text(size = 16),
-        legend.text = element_text(size = 12),
+        legend.title = element_text(size = 14),
+        legend.text = element_text(size = 10),
         strip.background = element_blank(),
-        plot.title = element_text(hjust = 0.5, size = 18)) +
+        plot.title = element_text(hjust = 0.5, size = 14)) +
   scale_fill_manual(
     # values = c("#08306b",
     #            "#2171b5",
@@ -1196,4 +1201,64 @@ ev |>
          `Model 3` = adrd_m3) |>
   pander()
 ```
+
+## Standard deviation in posterior samples of lambda (stage 1)
+
+```{r}
+sd_lambda_stage1 <- read_rds("data/intermediate/lambda_stage1_sd.rds")[[1]]
+sd_phi <- read_rds("data/intermediate/phi_sd.rds")[[1]]
+sd_lambda_white <- read_rds("data/intermediate/lambda_white_sd.rds")[[1]]
+sd_lambda_black <- read_rds("data/intermediate/lambda_black_sd.rds")[[1]]
+sd_psi_white <- read_rds("data/intermediate/psi_white_sd.rds")[[1]]
+sd_psi_black <- read_rds("data/intermediate/psi_black_sd.rds")[[1]]
+
+# bind SDs with county sf
+check_sds <- cbind(county_sf, sd_lambda_stage1, sd_phi, sd_lambda_white, sd_lambda_black,
+                    sd_psi_white, sd_psi_black)
+
+# gather SD columns
+check_sds %<>%
+  select(county, sd_lambda_stage1, sd_phi, sd_lambda_white, sd_lambda_black,
+                    sd_psi_white, sd_psi_black) %>%
+  gather(key = "parameter", value = "sd", -c(county, geometry))
+
+check_sds$parameter <- factor(check_sds$parameter,
+                               levels = c("sd_lambda_stage1", 
+                                          "sd_lambda_white", 
+                                          "sd_lambda_black",
+                                          "sd_phi", 
+                                          "sd_psi_white", 
+                                          "sd_psi_black"))
+
+# labels for plotting
+param_labels <- c(
+  sd_lambda_stage1 = "\u03BB (overall)",
+  sd_lambda_white = "\u03BB\u2081 (White)",
+  sd_lambda_black = "\u03BB\u2082 (Black)",
+  sd_phi = "\u03A6 (shared)",
+  sd_psi_white = "\u03C8\u2081 (White-specific)",
+  sd_psi_black = "\u03C8\u2082 (Black-specific)"
+)
+
+# plot SD
+check_sds %>%
+  ggplot() +
+  geom_sf(aes(fill = sd), lwd = 0.0) +
+  geom_sf(data = county_sf_zero_b, fill = "gray50", lwd = 0.0) +
+  geom_sf(data = state_sf, fill = NA, lwd = 0.3, col = "black") +
+  labs(fill = "Posterior standard deviation") +
+  scale_fill_gradient2(high = "red3", low = "white", na.value = "gray50",
+                       guide = guide_colorbar(barwidth = 12, barheight = 1)) +
+  #scale_fill_viridis(option = "G", direction = -1) +
+  facet_wrap(~parameter, nrow = 2,
+             labeller = as_labeller(param_labels)) +
+  theme_map() +
+  theme(legend.position = "bottom",
+        strip.background = element_blank(),
+        strip.text = element_text(size = 14),
+        legend.title = element_text(size = 12),
+        legend.text = element_text(size = 10),)
+
+```
+
 
