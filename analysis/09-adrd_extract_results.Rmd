@@ -200,6 +200,16 @@ phi <- lapply(phi_mats, post_med_sig_stage1,
                param_name = "phi", check_sig = TRUE, null_value = 0)
 ```
 
+```{r}
+# get sd of posterior samples
+
+lambda_stage1_sd <- lapply(log_lambda_stage1_mats, function(model) apply(model, 2, sd))
+phi_sd <- lapply(phi_mats, function(model) apply(model, 2, sd))
+
+# save
+write_rds(lambda_stage1_sd, "data/intermediate/lambda_stage1_sd.rds")
+write_rds(phi_sd, "data/intermediate/phi_sd.rds")
+```
 
 ```{r}
 # join elements in log_lambda and phi
@@ -446,6 +456,21 @@ for(i in 1:length(stanfit_samples_stage2)){
 }
 
 names(stage2_adrd_model_results) <- names(stanfit_samples_stage2)
+```
+
+```{r}
+# get standard deviation of posterior samples
+
+lambda_white_sd <- lapply(log_lambda_white_mats, function(model) apply(model, 2, sd))
+lambda_black_sd <- lapply(log_lambda_black_mats, function(model) apply(model, 2, sd))
+psi_white_sd <- lapply(psi_white_mats, function(model) apply(model, 2, sd))
+psi_black_sd <- lapply(psi_black_mats, function(model) apply(model, 2, sd))
+
+# save
+write_rds(lambda_white_sd, "data/intermediate/lambda_white_sd.rds")
+write_rds(lambda_black_sd, "data/intermediate/lambda_black_sd.rds")
+write_rds(psi_white_sd, "data/intermediate/psi_white_sd.rds")
+write_rds(psi_black_sd, "data/intermediate/psi_black_sd.rds")
 ```
 
 ```{r}
