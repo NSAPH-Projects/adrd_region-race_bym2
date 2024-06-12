@@ -241,6 +241,9 @@ exp_rates_2 <- read_rds(paste0("results/tables/adrd_expected_rates_overall.rds")
 
 exp_rates_tab <- left_join(exp_rates_1, exp_rates_2)
 
+# get table in latex
+print(xtable(exp_rates_tab, type = "latex"), file = "results/tables/final/adrd_national_rates.tex")
+
 # stripes might be very helpful for male vs. female
 
 # exp_rates_1 %>% pander()
@@ -248,6 +251,7 @@ exp_rates_tab <- left_join(exp_rates_1, exp_rates_2)
 
 library(knitr)
 library(kableExtra)
+library(xtable)
 
 # Create a basic table with kable
 basic_table <- kable(exp_rates_tab, 
@@ -258,10 +262,7 @@ basic_table <- kable(exp_rates_tab,
 # Customize the table appearance with kableExtra
 styled_table <- basic_table %>%
   kable_styling(full_width = FALSE, bootstrap_options = c("striped"))
-
 styled_table
-
-writeLines(as.character(styled_table), "results/tables/final/adrd_national_rates.tex")
 ```
 
 
