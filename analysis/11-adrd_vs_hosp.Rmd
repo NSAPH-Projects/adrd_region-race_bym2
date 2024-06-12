@@ -12,7 +12,14 @@ library(sf)
 library(magrittr)
 library(viridis)
 library(cowplot)
+library(ggpubr)
 ```
+
+```{r}
+# set path for saving figures
+fig_path <- "results/figures/final/"
+```
+
 
 ## Load data for adrd and hosp
 
@@ -510,12 +517,16 @@ pos_med_sf |>
 
 ```{r}
 # get risk ratios for ADRD and hosp in the same plot
-adrd_risk_ratios_map <- read_rds("results/figures/adrd_risk_ratios_map.rds")
-hosp_risk_ratios_map <- read_rds("results/figures/hosp_risk_ratios_map.rds")
+adrd_risk_ratios_map <- read_rds("results/figures/intermediate/adrd_risk_ratios_map.rds")
+hosp_risk_ratios_map <- read_rds("results/figures/intermediate/hosp_risk_ratios_map.rds")
+
+pdf(file = paste0(fig_path, "risk_ratios.pdf"), width = 11, height = 5)
 
 ggarrange(adrd_risk_ratios_map, hosp_risk_ratios_map,
           common.legend = TRUE, 
           legend = "bottom")
+
+dev.off()
 ```
 
 

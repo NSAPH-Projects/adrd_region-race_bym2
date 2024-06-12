@@ -925,7 +925,7 @@ hosp_risk_ratios_map <- hosp_res_sf %>%
             label.hjust = 0))
 
 
-write_rds(hosp_risk_ratios_map, file = "results/figures/hosp_risk_ratios_map.rds")
+write_rds(hosp_risk_ratios_map, file = "results/figures/intermediate/hosp_risk_ratios_map.rds")
 ```
 
 

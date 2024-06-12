@@ -20,6 +20,11 @@ library(data.table)
 library(ggthemes)
 ```
 
+```{r}
+# set path for saving figures
+fig_path <- "results/figures/final/"
+```
+
 ## Load data
 
 ```{r}
@@ -126,6 +131,8 @@ adrd_res_sf %<>%
 ## Understand the data/covariates
 
 ```{r}
+pdf(file = paste0(fig_path, "pct_black_py.pdf"), width = 8, height = 5)
+
 # plot % of person-years contributed by black people in each county
 adrd_res_sf %>%
   filter(model == "adrd_m1") %>%
@@ -133,7 +140,7 @@ adrd_res_sf %>%
   summarise(pct_blk = 100 * (person_years[race == 2] /
                                (person_years[race == 1] + person_years[race == 2]))) %>%
   ggplot() +
-  geom_sf(aes(fill = pct_blk), lwd = 0) +
+  geom_sf(aes(fill = pct_blk), lwd = 0.0) +
   geom_sf(data = county_sf_zero_b, fill = "#440154", lwd = 0.0) + 
   geom_sf(data = state_sf, fill = NA, col = "white", lwd = 0.2) +
   labs(fill = "% of person-years \ncontributed by \nBlack adults") +
@@ -143,6 +150,8 @@ adrd_res_sf %>%
   theme(legend.title = element_text(size = 14),
         legend.text = element_text(size = 14),
         legend.position = "right")
+
+dev.off()
 ```
 
 ```{r}
@@ -476,6 +485,8 @@ stage2_total_risk_labels <- c(
   "2_specific" = "Black-specific\n (\u03C8\u2082)"
 )
 
+pdf(file = paste0(fig_path, "raw_vs_lambda_stage2.pdf"), width = 11, height = 11)
+
 # plot
 stage2_total_risk_df |>
   mutate(estimate = ifelse(estimate >= log(3), log(3)-0.001, estimate)) |>
@@ -497,6 +508,8 @@ stage2_total_risk_df |>
   scale_fill_viridis(option = "A", 
                      na.value = "gray70",
                      limits = c(0, 3))
+
+dev.off()
 ```
 
 ```{r}
@@ -684,6 +697,8 @@ shared_specific_df %<>%
   mutate(estimate_binary = ifelse(estimate > 0, "High risk", "Low risk")) %>%
   mutate(estimate_binary = ifelse(estimate_sig, estimate_binary, NA))
 
+pdf(file = paste0(fig_path, "shared_vs_specific_binary.pdf"), width = 13, height = 5)
+
 # plot
 shared_specific_df |>
   ggplot() +
@@ -704,7 +719,7 @@ shared_specific_df |>
                                "High risk" = "#B47EE5"),
                      na.value = "gray90")
 
-
+dev.off()
 ```
 
 
@@ -1036,7 +1051,7 @@ adrd_risk_ratios_map <- adrd_res_sf %>%
             keyheight = grid::unit(.5, "lines"),
             label.hjust = 0))
 
-write_rds(adrd_risk_ratios_map, file = "results/figures/adrd_risk_ratios_map.rds")
+write_rds(adrd_risk_ratios_map, file = "results/figures/intermediate/adrd_risk_ratios_map.rds")
 ```
 
 
