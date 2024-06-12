@@ -260,6 +260,8 @@ styled_table <- basic_table %>%
   kable_styling(full_width = FALSE, bootstrap_options = c("striped"))
 
 styled_table
+
+writeLines(as.character(styled_table), "results/tables/final/adrd_national_rates.tex")
 ```
 
 
