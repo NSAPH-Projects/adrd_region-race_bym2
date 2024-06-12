@@ -520,7 +520,7 @@ pos_med_sf |>
 adrd_risk_ratios_map <- read_rds("results/figures/intermediate/adrd_risk_ratios_map.rds")
 hosp_risk_ratios_map <- read_rds("results/figures/intermediate/hosp_risk_ratios_map.rds")
 
-pdf(file = paste0(fig_path, "risk_ratios.pdf"), width = 11, height = 5)
+png(file = paste0(fig_path, "risk_ratios.png"), width = 1500, height = 500)
 
 ggarrange(adrd_risk_ratios_map, hosp_risk_ratios_map,
           common.legend = TRUE, 

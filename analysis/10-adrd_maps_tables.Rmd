@@ -131,7 +131,7 @@ adrd_res_sf %<>%
 ## Understand the data/covariates
 
 ```{r}
-pdf(file = paste0(fig_path, "pct_black_py.pdf"), width = 8, height = 5)
+#pdf(file = paste0(fig_path, "pct_black_py.pdf"), width = 8, height = 5)
 
 # plot % of person-years contributed by black people in each county
 adrd_res_sf %>%
@@ -151,7 +151,7 @@ adrd_res_sf %>%
         legend.text = element_text(size = 14),
         legend.position = "right")
 
-dev.off()
+#dev.off()
 ```
 
 ```{r}
@@ -488,7 +488,7 @@ stage2_total_risk_labels <- c(
   "2_specific" = "Black-specific\n (\u03C8\u2082)"
 )
 
-pdf(file = paste0(fig_path, "raw_vs_lambda_stage2.pdf"), width = 11, height = 11)
+png(file = paste0(fig_path, "raw_vs_lambda_stage2.png"), width = 1000, height = 1000)
 
 # plot
 stage2_total_risk_df |>
@@ -700,7 +700,7 @@ shared_specific_df %<>%
   mutate(estimate_binary = ifelse(estimate > 0, "High risk", "Low risk")) %>%
   mutate(estimate_binary = ifelse(estimate_sig, estimate_binary, NA))
 
-pdf(file = paste0(fig_path, "shared_vs_specific_binary.pdf"), width = 13, height = 5)
+png(file = paste0(fig_path, "shared_vs_specific_binary.png"), width = 1200, height = 900)
 
 # plot
 shared_specific_df |>
