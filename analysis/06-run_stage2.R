@@ -112,7 +112,7 @@ stage1_results <- read_rds(paste0("results/models/working/stanfit_object_stage1_
 
 # extract matrix of phis and get column medians (posterior medians)
 # note: these are the raw phis, NOT the transformed phis that are mapped later
-phi_hats <- extract(stage1_results)$phi %>% matrixStats::colMedians()
+phi_hats <- extract(stage1_results)$phi %>% colMeans()
 
 
 ## Get the data in order ----
