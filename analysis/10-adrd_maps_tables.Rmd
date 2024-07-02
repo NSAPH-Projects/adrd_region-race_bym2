@@ -1250,15 +1250,18 @@ check_sds$parameter <- factor(check_sds$parameter,
 
 # labels for plotting
 param_labels <- c(
-  sd_lambda_stage1 = "\u03BB (overall)",
+  sd_lambda_stage1 = "\u03BB (Overall)",
   sd_lambda_white = "\u03BB\u2081 (White)",
   sd_lambda_black = "\u03BB\u2082 (Black)",
-  sd_phi = "\u03A6 (shared)",
+  sd_phi = "\u03A6 (Shared)",
   sd_psi_white = "\u03C8\u2081 (White-specific)",
   sd_psi_black = "\u03C8\u2082 (Black-specific)"
 )
 
 # plot SD
+
+png(file = paste0(fig_path, "posterior_sd.png"), width = 800, height = 60)
+
 check_sds %>%
   ggplot() +
   geom_sf(aes(fill = sd), lwd = 0.0) +
@@ -1277,6 +1280,7 @@ check_sds %>%
         legend.title = element_text(size = 12),
         legend.text = element_text(size = 10),)
 
+dev.off()
 ```
 
 
