@@ -133,6 +133,8 @@ adrd_res_sf %<>%
 ```{r}
 #pdf(file = paste0(fig_path, "pct_black_py.pdf"), width = 8, height = 5)
 
+png(file = paste0(fig_path, "pct_black.png"), width = 800, height = 800)
+
 # plot % of person-years contributed by black people in each county
 adrd_res_sf %>%
   filter(model == "adrd_m1") %>%
@@ -151,7 +153,7 @@ adrd_res_sf %>%
         legend.text = element_text(size = 14),
         legend.position = "right")
 
-#dev.off()
+dev.off()
 ```
 
 ```{r}
@@ -1283,4 +1285,26 @@ check_sds %>%
 dev.off()
 ```
 
+### Expected counts diagram
+
+# map of one county
+
+```{r}
+adrd_res_sf %>%
+  filter(model == "adrd_m1") %>%
+  group_by(county) %>%
+  mutate(county_a = ifelse(county == "32003", "yes", "no")) %>%
+  ggplot() +
+  geom_sf(aes(fill = county_a), lwd = 0.1) +
+  geom_sf(data = county_sf_zero_b, fill = "white", lwd = 0.1) + 
+  geom_sf(data = state_sf, fill = NA, col = "black", lwd = 0.3) +
+  scale_fill_manual(values = c("yes" = "dodgerblue", "no" = "white")) +
+  theme_map() +
+  theme(legend.position = "none")
+```
+
+```{r}
+clark <- adrd_res_sf %>%
+  filter(county == "32003")
+```
 
