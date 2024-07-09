@@ -69,6 +69,37 @@ adrd_county_df %>%
 ```
 
 ```{r}
+# get sex and age distribution of person-years for each race
+
+sex_age_dist_tab <- adrd_county_df %>%
+  group_by(race, sex, age_grp) %>%
+  summarise(total_py = sum(n_enrollees)) %>%
+  ungroup() %>%
+  # group_by(race) %>%
+  # mutate(pct_py = round(100 * total_py / sum(total_py), 1)) %>%
+  spread(key = race, value = total_py) %>%
+  mutate(sex = ifelse(sex == 1, "Male", "Female"),
+         age_grp = ifelse(age_grp == "[65,75)", "65-74", age_grp),
+         age_grp = ifelse(age_grp == "[75,85)", "75-84", age_grp),
+         age_grp = ifelse(age_grp == ">85", "85+", age_grp),
+         white_pct = round(100 * `1` / sum(`1`), 1),
+         black_pct = round(100 * `2` / sum(`2`), 1)) %>%
+  # paste raw and % together
+  mutate(py_white = paste0(round(`1`, 0), " (", white_pct, " %)"),
+         py_black = paste0(round(`2`, 0), " (", black_pct, " %)")) %>%
+  select(-c(`1`, `2`, white_pct, black_pct)) %>%
+  arrange(age_grp) %>%
+  rename("Sex" = "sex",
+         "Age group" = "age_grp",
+         "White person-years" = "py_white",
+         "Black person-years" = "py_black")
+
+write_rds(sex_age_dist_tab, 
+          file = paste0("results/tables/intermediate/sex_age_dist.rds"))
+```
+
+
+```{r}
 ## Plot number of enrollees across years ----
 adrd_county_df %>% 
   mutate(race = as.character(race)) %>% 
