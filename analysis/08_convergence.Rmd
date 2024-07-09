@@ -22,13 +22,14 @@ stanfit_list <- lapply(paste0("results/models/working/",
 # name list elements
 names(stanfit_list) <- str_remove_all(list.files("results/models/working/", pattern = ".rds"), "stanfit_object_|\\.rds")
 
-# just look at stage 1 for now
-stanfit_list <- stanfit_list[str_detect(names(stanfit_list), "stage1")]
+# # just look at stage 1
+# stanfit_list <- stanfit_list[str_detect(names(stanfit_list), "stage1")]
 ```
 
 ```{r}
-# #----- for a specific file!
+# #----- or run this to look at one specific file!
 # 
+# # e.g.
 # # stanfit_list <- list(read_rds("results/models/adrd/m1/stage1/model_run_20240405-18/stanfit_object.rds"))
 
 ```
@@ -60,66 +61,38 @@ for (i in seq_along(rhat_plots)) {
 
 print(rhat_plots)
 
-library(gridExtra)
-
-grid.arrange(rhat_plots[[1]], rhat_plots[[2]], rhat_plots[[3]], rhat_plots[[4]], rhat_plots[[5]], rhat_plots[[6]], nrow = 2)
+# # run something like this (with the correct number of plots) to get them all in one figure
+# library(gridExtra)
+# grid.arrange(rhat_plots[[1]], rhat_plots[[2]], rhat_plots[[3]], rhat_plots[[4]], rhat_plots[[5]], rhat_plots[[6]], nrow = 2)
 ```
 
 ## Now look at R hat values for specific parameters
 
 ```{r}
-lapply(rhat_of_draws, function(x) {
-  mcmc_rhat(x[c('alpha[1]', # white surface intercept
-                'alpha[2]', # black surface intercept
-                'beta[1]',
-                'beta[2]',
-                'delta', # shared surface scaling factor
-                'nu[1]', # state random effect
-                'lp__' # Stan's lp__ variable
-                ) 
-              ] )
-  })
-```
-
-```{r}
-lapply(rhat_of_draws, function(x) {
-  mcmc_rhat(x[c('sigma_u[1]', # SD of CAR part
-                'sigma_u[2]', # SD of CAR part
-                'sigma_u[3]', # SD of CAR part
-                'sigma_v[1]', # SD of iid spatial part
-                'sigma_v[2]', # SD of iid spatial part
-                'sigma_v[3]', # SD of iid spatial part
-                'sigma_s', # SD of state random effect
-                'tau_u[1]', # precision of CAR part
-                'tau_u[2]', # precision of CAR part
-                'tau_u[3]', # precision of CAR part
-                'tau_v[1]', # precision of iid spatial part
-                'tau_v[2]', # precision of iid spatial part
-                'tau_v[3]' # precision of iid spatial part
-                )
-              ])
-  })
-```
-
-```{r}
 # phi
 lapply(rhat_of_draws, function(x) {
-  mcmc_rhat(x[grep('phi', names(x))])
-  })
+  if(any(grepl("phi", names(x)))) {
+    mcmc_rhat(x[grep('phi', names(x))])
+  }
+})
 ```
 
 ```{r}
 # psi (white)
 lapply(rhat_of_draws, function(x) {
-  mcmc_rhat(x[grep('psi\\[1', names(x))])
-  })
+  if(any(grepl("psi1", names(x)))){
+      mcmc_rhat(x[grep('psi1', names(x))])
+  }
+})
 ```
 
 ```{r}
 # psi (black)
 lapply(rhat_of_draws, function(x) {
-  mcmc_rhat(x[grep('psi\\[2', names(x))])
-  })
+  if(any(grepl("psi2", names(x)))) {
+    mcmc_rhat(x[grep('psi2', names(x))])
+  }
+})
 ```
 
 ```{r}
