@@ -4,7 +4,7 @@ library(remotes)
 
 # now install and run INLA
 # note: had version issues with FASSE, so I'm installing an order version
-# also note: this older version seems to have conflicts with other pacakges (possibly rstan)
+# also note: this older version seems to have conflicts with other packages (possibly rstan)
 # I had to delete all other packages in order to install this
 if (!require(INLA)) {
   remotes::install_version("INLA", version = "22.05.07", 
