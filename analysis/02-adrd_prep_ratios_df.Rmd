@@ -96,6 +96,7 @@ sex_age_dist_tab <- adrd_county_df %>%
 
 write_rds(sex_age_dist_tab, 
           file = paste0("results/tables/intermediate/sex_age_dist.rds"))
+# table written to tex in script 10
 ```
 
 
