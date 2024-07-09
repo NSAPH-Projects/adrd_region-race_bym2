@@ -20,6 +20,11 @@ library(data.table)
 library(ggthemes)
 ```
 
+```{r}
+# set path for saving figures
+fig_path <- "results/figures/final/"
+```
+
 ## Load data
 
 ```{r}
@@ -120,132 +125,36 @@ hosp_res_sf %<>%
 ```
 
 
-## Understand the data/covariates
-
-```{r}
-# plot % of person-years contributed by black people in each county
-hosp_res_sf %>%
-  filter(model == "hosp_m1") %>%
-  group_by(county) %>%
-  summarise(pct_blk = 100 * (person_years[race == 2] /
-                               (person_years[race == 1] + person_years[race == 2]))) %>%
-  ggplot() +
-  geom_sf(aes(fill = pct_blk), lwd = 0) +
-  geom_sf(data = county_sf_zero_b, fill = "gray70", lwd = 0.0) + 
-  geom_sf(data = state_sf, fill = NA, col = "white", lwd = 0.1) +
-  labs(fill = "% of person-years \ncontributed by Black \nindividuals") +
-  scale_fill_viridis(option = "D") +
-  theme_map() +
-  theme(legend.title = element_text(size = 10),
-        legend.position = "right")
-```
-
-```{r}
-# map PM2.5, PIR, median household income
-
-hosp_res_sf %>%
-  filter(model == "hosp_m1") %>%
-  ggplot() +
-  geom_sf(data = county_sf_zero_b, fill = "gray70", lwd = 0.0) + 
-  geom_sf(aes(fill = pm25), alpha = 1, lwd = 0.0) +
-  labs(fill = expression('PM'[2.5]*' (\u00B5g/m'^3*')')) +
-  scale_fill_viridis(option = "D") +
-  geom_sf(data = state_sf, fill = NA, col = "white", lwd = 0.1) +
-  theme_map() +
-  theme(legend.position = "right")
-  
-hosp_res_sf %>%
-  filter(model == "hosp_m1") %>%
-  ggplot() +
-  geom_sf(aes(fill = log10(house_price_income_ratio)), alpha = 1, lwd = 0.0) +
-  labs(fill = "log(house price-to- \nincome ratio)") +
-  scale_fill_viridis(option = "D") +
-  geom_sf(data = county_sf_zero_b, fill = "gray70", lwd = 0.0) + 
-  geom_sf(data = state_sf, fill = NA, col = "white", lwd = 0.1) +
-  theme_map() +
-  theme(legend.position = "right")
-
-hosp_res_sf %>%
-  filter(model == "hosp_m1") %>%
-  ggplot() +
-  geom_sf(aes(fill = med_house_income), alpha = 1, lwd = 0.0) +
-  labs(fill = "Median household \nincome") +
-  scale_fill_viridis(option = "D") +
-  geom_sf(data = county_sf_zero_b, fill = "gray70", lwd = 0.0) + 
-  geom_sf(data = state_sf, fill = NA, col = "white", lwd = 0.1) +
-  theme_map() +
-  theme(legend.position = "right")
-```
-
-```{r}
-# number of person-years observed in each county by race
-hosp_res_sf %>%
-  filter(model == "hosp_m1") %>%
-  ggplot() +
-  geom_sf(aes(fill = log(person_years)), alpha = 1, lwd = 0.0) +
-  labs(fill = "log(person-years)") +
-  scale_fill_viridis(option = "D") +
-  geom_sf(data = county_sf_zero_b, fill = "gray70", lwd = 0.0) + 
-  geom_sf(data = state_sf, fill = NA, col = "white", lwd = 0.1) +
-  facet_grid(~race, 
-             labeller = as_labeller(race_labels)) +
-  theme_map() +
-  theme(legend.position = "right",
-        strip.background = element_blank())
-```
-
-```{r}
-# which counties have very few person-years?
-hosp_res_sf %>%
-  filter(model == "hosp_m1" & race == "2") %>%
-  mutate(few_person_years = ifelse(person_years < 100, 1, 0)) %>%
-  mutate(few_person_years = ifelse(person_years > 0, few_person_years, NA)) %>%
-  ggplot() +
-  geom_sf(aes(fill = as.factor(few_person_years)), alpha = 1, lwd = 0.03) +
-  geom_sf(data = state_sf, fill = NA, col = "white", lwd = 0.1) +
-  labs(fill = "< 100 Black person-years") +
-  # facet_grid(~race, 
-  #            labeller = as_labeller(race_labels)) +
-  theme(legend.position = "bottom") +
-  theme_map()
-
-hosp_res_sf %>%
-  filter(model == "hosp_m1" & race == "2") %>%
-  mutate(few_person_years = ifelse(person_years < 100, 1, 0)) %>%
-  mutate(few_person_years = ifelse(person_years > 0, few_person_years, NA)) %>%
-     count(few_person_years)
-```
-
-
 ## Pre-modeling visualizations of observed and expected
 
 ### Expected rates table
 
 ```{r}
-exp_rates_1 <- read_rds(paste0("results/tables/hosp_expected_rates_race-specific.rds"))
-exp_rates_2 <- read_rds(paste0("results/tables/hosp_expected_rates_overall.rds"))
+library(knitr)
+library(kableExtra)
+library(xtable)
+
+exp_rates_1 <- read_rds(paste0("results/tables/intermediate/hosp_expected_rates_race-specific.rds"))
+exp_rates_2 <- read_rds(paste0("results/tables/intermediate/hosp_expected_rates_overall.rds"))
 
 exp_rates_tab <- left_join(exp_rates_1, exp_rates_2)
 
-# stripes might be very helpful for male vs. female
+# get table in latex
+print(xtable(exp_rates_tab, type = "latex"), file = "results/tables/final/hosp_national_rates.tex")
 
 # exp_rates_1 %>% pander()
 # exp_rates_2 %>% pander()
 
-library(knitr)
-library(kableExtra)
-
-# Create a basic table with kable
-basic_table <- kable(exp_rates_tab, 
-                     format = "html", 
-                     align = "c", 
-                     caption = "Age- and sex- standardized national rates of hospitalization without diagnosis codes related to ADRD (# of hospitaliztions per person-year).")
-
-# Customize the table appearance with kableExtra
-styled_table <- basic_table %>%
-  kable_styling(full_width = FALSE, bootstrap_options = c("striped"))
-
-styled_table
+# # Create a basic table with kable
+# basic_table <- kable(exp_rates_tab, 
+#                      format = "html", 
+#                      align = "c", 
+#                      caption = "Age- and sex- standardized national rates of hospitalization without diagnosis codes related to ADRD (# of hospitalizations per person-year).")
+# 
+# # Customize the table appearance with kableExtra
+# styled_table <- basic_table %>%
+#   kable_styling(full_width = FALSE, bootstrap_options = c("striped"))
+# styled_table
 ```
 
 
@@ -256,10 +165,10 @@ styled_table
 # alternatively, could restrict this to counties with a certain number of person-years observed
 hosp_res_sf %>%
   filter(model == "hosp_m1") %>%
-  mutate(hosp_rate_obs = ifelse(hosp_rate_obs > 0.12, 0.12, hosp_rate_obs)) |>
+  mutate(hosp_rate_obs = ifelse(hosp_rate_obs > 0.5, 0.5, hosp_rate_obs)) |>
   ggplot() +
   geom_sf(aes(fill = hosp_rate_obs * 100), alpha = 1, lwd = 0.0) +
-  labs(fill = "Rate of hosp. \nwith hosp (%)") +
+  labs(fill = "Rate of hosp. \nwithout ADRD (%)") +
   scale_fill_viridis(option = "D") +
   geom_sf(data = county_sf_zero_b, fill = "gray70", lwd = 0.0) + 
   geom_sf(data = state_sf, fill = NA, col = "white", lwd = 0.1) +

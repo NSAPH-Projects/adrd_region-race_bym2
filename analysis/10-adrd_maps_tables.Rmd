@@ -92,7 +92,7 @@ race_labels <- c(
 
 # model labels for plotting
 model_labels <- c(
-  adrd_m1 = "Smoothed", # CHANGE IF LOOKING AT ALL MODELS
+  adrd_m1 = "Unadjusted",
   adrd_m2 = "Adjusted for\n price-to-income ratio",
   adrd_m3 = "Adjusted for PM\u2082.\u2085"
 )
@@ -133,7 +133,7 @@ adrd_res_sf %<>%
 ```{r}
 #pdf(file = paste0(fig_path, "pct_black_py.pdf"), width = 8, height = 5)
 
-png(file = paste0(fig_path, "pct_black.png"), width = 800, height = 800)
+png(file = paste0(fig_path, "pct_black.png"), width = 800, height = 500)
 
 # plot % of person-years contributed by black people in each county
 adrd_res_sf %>%
@@ -238,33 +238,31 @@ adrd_res_sf %>%
 ### Expected rates table
 
 ```{r}
-exp_rates_1 <- read_rds(paste0("results/tables/adrd_expected_rates_race-specific.rds"))
-exp_rates_2 <- read_rds(paste0("results/tables/adrd_expected_rates_overall.rds"))
+library(knitr)
+library(kableExtra)
+library(xtable)
+
+exp_rates_1 <- read_rds(paste0("results/tables/intermediate/adrd_expected_rates_race-specific.rds"))
+exp_rates_2 <- read_rds(paste0("results/tables/intermediate/adrd_expected_rates_overall.rds"))
 
 exp_rates_tab <- left_join(exp_rates_1, exp_rates_2)
 
 # get table in latex
 print(xtable(exp_rates_tab, type = "latex"), file = "results/tables/final/adrd_national_rates.tex")
 
-# stripes might be very helpful for male vs. female
-
 # exp_rates_1 %>% pander()
 # exp_rates_2 %>% pander()
 
-library(knitr)
-library(kableExtra)
-library(xtable)
-
-# Create a basic table with kable
-basic_table <- kable(exp_rates_tab, 
-                     format = "html", 
-                     align = "c", 
-                     caption = "Age- and sex- standardized national rates of hospitalization with diagnosis codes related to ADRD (# of hospitaliztions per person-year).")
-
-# Customize the table appearance with kableExtra
-styled_table <- basic_table %>%
-  kable_styling(full_width = FALSE, bootstrap_options = c("striped"))
-styled_table
+# # Create a basic table with kable
+# basic_table <- kable(exp_rates_tab, 
+#                      format = "html", 
+#                      align = "c", 
+#                      caption = "Age- and sex- standardized national rates of hospitalization with diagnosis codes related to ADRD (# of hospitalizations per person-year).")
+# 
+# # Customize the table appearance with kableExtra
+# styled_table <- basic_table %>%
+#   kable_styling(full_width = FALSE, bootstrap_options = c("striped"))
+# styled_table
 ```
 
 
@@ -702,7 +700,7 @@ shared_specific_df %<>%
   mutate(estimate_binary = ifelse(estimate > 0, "High risk", "Low risk")) %>%
   mutate(estimate_binary = ifelse(estimate_sig, estimate_binary, NA))
 
-png(file = paste0(fig_path, "shared_vs_specific_binary.png"), width = 1200, height = 900)
+png(file = paste0(fig_path, "shared_vs_specific_binary.png"), width = 1200, height = 600)
 
 # plot
 shared_specific_df |>
@@ -1209,7 +1207,7 @@ adrd_res_sf %>%
 
 ```{r}
 # load list with all results and bind into df
-ev <- read_rds(paste0("results/tables/adrd_empirical_variance.rds"))
+ev <- read_rds(paste0("results/tables/intermediate/adrd_empirical_variance.rds"))
 ev <- bind_rows(ev, .id = "model")
 
 # spread columns by model
@@ -1221,6 +1219,18 @@ ev |>
          `Model 3` = adrd_m3) |>
   pander()
 ```
+
+
+## Sex and age distribution of person-years by race
+
+```{r}
+sex_age_dist <- read_rds(file = "results/tables/intermediate/sex_age_dist.rds")
+
+# get table in latex
+print(xtable(sex_age_dist, type = "latex"), file = "results/tables/final/sex_age_dist.tex")
+```
+
+
 
 ## Standard deviation in posterior samples of lambda (stage 1)
 
