@@ -56,7 +56,7 @@ get_random_seed <-
 
 ## Modeling parameters ----
 ##  Naming
-tstamp <- format(Sys.time(), format = "%Y%m%d-%H%M%S")
+tstamp <- format(Sys.time(), format = "%Y%m%d-%H%M")
 
 # make directories to store the results
 mkdir_p(paste0(path_mod, 'model_run_', tstamp))
@@ -68,7 +68,7 @@ paste0("Model time stamp: ", tstamp)
 
 ##  Run parameters
 n_chains <- 4
-n_iter <- 5000
+n_iter <- 20000 # 5000
 n_burnin <- floor(n_iter / 2)
 n_thin <- 40
 verbose_flag <- FALSE
@@ -105,12 +105,12 @@ scaling_factor <- read_rds("data/intermediate/scaling_factor.rds")
 
 # get a new dataframe for combined white & black
 ratios_df_comb <- ratios_df %>%
-  select(county, person_years, expected, observed,
+  select(county, person_years, expected_stage1, observed,
          c_idx, s_idx,
          house_price_income_ratio, pm25) %>%
   group_by(county) %>%
   summarise(person_years_total = sum(person_years),
-            expected_total = sum(expected),
+            expected_stage1_total = sum(expected_stage1),
             observed_total = sum(observed),
             c_idx = first(c_idx),
             s_idx = first(s_idx),
@@ -129,7 +129,7 @@ stan_list  <-
     # population_years
     y = ratios_df_comb$observed_total,
     # log of expected (note: must take log after adding black + white!)
-    log_offset = log(ratios_df_comb$expected_total),
+    log_offset = log(ratios_df_comb$expected_stage1_total),
     
     # n*s matrix with state indicators
     state_mat_idx = state_mat,

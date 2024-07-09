@@ -12,7 +12,14 @@ library(sf)
 library(magrittr)
 library(viridis)
 library(cowplot)
+library(ggpubr)
 ```
+
+```{r}
+# set path for saving figures
+fig_path <- "results/figures/final/"
+```
+
 
 ## Load data for adrd and hosp
 
@@ -47,14 +54,14 @@ hosp_res_df <- hosp_res %>%
 
 # make a new column for log(observed/expected) separated by race
 adrd_res_df %<>%
-  mutate(y = log(observed/expected))
+  mutate(y = log(observed/expected_stage2))
 hosp_res_df %<>%
-  mutate(y = log(observed/expected))
+  mutate(y = log(observed/expected_stage2))
 # make a new column for log(observed/expected) combined race
 adrd_res_df %<>%
-  mutate(y_total = log(observed_total/expected_total))
+  mutate(y_stage1_total = log(observed_total/expected_stage1_total))
 hosp_res_df %<>%
-  mutate(y_total = log(observed_total/expected_total))
+  mutate(y_stage1_total = log(observed_total/expected_stage1_total))
 
 # join adrd and hosp
 pos_med <- merge(adrd_res_df, hosp_res_df, all = TRUE, 
@@ -80,6 +87,9 @@ state_sf %<>%
       distinct(STATEFP, s_idx)
   ) %>% 
   filter(!is.na(s_idx))
+
+# load counties with zero Black person-years
+county_sf_zero_b <- read_rds("data/symlinks/scratch/county_sf_zero_b.rds")
 ```
 
 ```{r}
@@ -88,6 +98,10 @@ pos_med_sf <- st_transform(pos_med_sf,
                            crs = st_crs("+proj=aea +lat_1=29.5 +lat_2=45.5 +lat_0=37.5
                                         +lon_0=-96 +x_0=0 +y_0=0 +datum=NAD83 +units=m +no_defs"))
 state_sf <- st_transform(state_sf, 
+                           crs = st_crs("+proj=aea +lat_1=29.5 +lat_2=45.5 +lat_0=37.5
+                                        +lon_0=-96 +x_0=0 +y_0=0 +datum=NAD83 +units=m +no_defs"))
+
+county_sf <- st_transform(county_sf, 
                            crs = st_crs("+proj=aea +lat_1=29.5 +lat_2=45.5 +lat_0=37.5
                                         +lon_0=-96 +x_0=0 +y_0=0 +datum=NAD83 +units=m +no_defs"))
 ```
@@ -105,9 +119,9 @@ race_labels <- c(
 # and expected rate of hospitalization (expected/person-years)
 pos_med_sf %<>% 
   mutate(rate_obs_adrd = observed_adrd/person_years,
-         rate_exp_adrd = expected_adrd/person_years,
+         rate_exp_adrd = expected_stage2_adrd/person_years,
          rate_obs_hosp = observed_hosp/person_years,
-         rate_exp_hosp = expected_hosp/person_years)
+         rate_exp_hosp = expected_stage2_hosp/person_years)
 ```
 
 
@@ -184,8 +198,86 @@ param_dist |>
 ```{r}
 # look at white vs. black person years
 pos_med_sf %>%
+  st_drop_geometry() %>%
   group_by(race) %>%
   summarise(q25_py = quantile(person_years, 0.25))
+```
+
+```{r}
+# another plot of person-years
+pos_med_sf %>%
+  mutate(race = factor(ifelse(race == 1, "White", "Black"),
+                       levels = c("White", "Black"))) %>% 
+  ggplot() +
+  geom_density(aes(person_years, col = as.factor(race))) +
+  scale_x_log10(labels = scales::comma) +
+  labs(x = "Person-years contributed in each county", 
+       y = "Density",
+       color = "") +
+  theme_light()
+
+```
+
+```{r}
+# total black vs. white person-years
+adrd_res_df %>%
+  group_by(race) %>%
+  summarise(total_py = sum(person_years))
+```
+
+
+```{r}
+# counties with zero Black person-years
+pos_med_sf %>%
+  ggplot() +
+  geom_sf(fill = "white", lwd = 0.1) +
+  geom_sf(data = county_sf_zero_b, fill = "#FF7F50") +
+  geom_sf(data = state_sf, fill = NA, lwd = 0.3) +
+  theme_map() +
+  theme(legend.position = "none")
+```
+
+
+```{r}
+# counties with < 10 observed ADRD hosp
+pos_med_sf %>%
+  mutate(obs0 = ifelse(person_years < 100, 1, 0)) %>%
+  filter(race == 2) %>%
+  ggplot() +
+  geom_sf(aes(fill = as.factor(obs0)), lwd = 0.1) +
+  geom_sf(data = county_sf_zero_b, fill = "skyblue3", lwd = 0.1) +
+  geom_sf(data = state_sf, fill = NA, lwd = 0.3) +
+  scale_fill_manual(values = c("1" = "skyblue3", "0" = "white")) +
+  theme_map() +
+  theme(legend.position = "none")
+```
+
+```{r}
+# plot # of neighbors
+
+# load # of border for each county (from adjacency matrix)
+n_borders <- read_rds("data/symlinks/scratch/county_adj_sparse_list.rds")$D_sparse
+
+# bind with county sf
+check_adj <- cbind(county_sf, n_borders)
+
+
+library(RColorBrewer)
+
+# plot number of borders
+check_adj %>%
+  ggplot() +
+  geom_sf(aes(fill = as.factor(n_borders)), lwd = 0.1) +
+  #geom_sf(aes(fill = n_borders), lwd = 0.1) +
+  geom_sf(data = county_sf_zero_b, fill = "gray50", lwd = 0.1) +
+  geom_sf(data = state_sf, fill = NA, lwd = 0.3, col = "black") +
+  labs(fill = "Number of \nneighbors") +
+  #scale_fill_gradient2(high = "darkgreen", low = "white", na.value = "gray50") +
+  scale_fill_viridis_d(option = "G", direction = -1) +
+  theme_map() +
+  theme(legend.position = "right",
+        legend.title = element_text(size = 10))
+
 ```
 
 
@@ -422,4 +514,19 @@ pos_med_sf |>
   theme_map()
 
 ```
+
+```{r}
+# get risk ratios for ADRD and hosp in the same plot
+adrd_risk_ratios_map <- read_rds("results/figures/intermediate/adrd_risk_ratios_map.rds")
+hosp_risk_ratios_map <- read_rds("results/figures/intermediate/hosp_risk_ratios_map.rds")
+
+png(file = paste0(fig_path, "risk_ratios.png"), width = 1300, height = 500)
+
+ggarrange(adrd_risk_ratios_map, hosp_risk_ratios_map,
+          common.legend = TRUE, 
+          legend = "bottom")
+
+dev.off()
+```
+
 
