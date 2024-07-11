@@ -938,7 +938,7 @@ summary_stats <- summary_stats |>
 summary_stats |> pander()
 
 # save table
-write_rds(summary_stats, file = paste0("results/tables/summary_stats.rds"))
+write_rds(summary_stats, file = paste0("results/tables/intermediate/summary_stats.rds"))
 ```
 
 ### In a figure
@@ -986,7 +986,7 @@ hosp_res_sf %>%
 
 ```{r}
 # load list with all results and bind into df
-ev <- read_rds(paste0("results/tables/hosp_empirical_variance.rds"))
+ev <- read_rds(paste0("results/tables/intermediate/hosp_empirical_variance.rds"))
 ev <- bind_rows(ev, .id = "model")
 
 # spread columns by model

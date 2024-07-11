@@ -345,9 +345,9 @@ exp_rates_tab <- left_join(exp_rates_stage1_tab, exp_rates_stage2_tab)
 
 # save tables
 write_rds(exp_rates_stage1_tab, 
-          file = paste0("results/tables/hosp_expected_rates_race-specific.rds"))
+          file = paste0("results/tables/intermediate/hosp_expected_rates_race-specific.rds"))
 write_rds(exp_rates_stage2_tab, 
-          file = paste0("results/tables/hosp_expected_rates_overall.rds"))
+          file = paste0("results/tables/intermediate/hosp_expected_rates_overall.rds"))
 # tables joined and written to tex in script 10
 ```
 
