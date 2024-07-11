@@ -4,7 +4,7 @@ library(magrittr)
 library(rstan)
 
 # in command line, run something like:
-# sbatch analysis/03-run_stage1.sbatch adrd m2
+# sbatch analysis/04-run_stage1.sbatch adrd m2
 # (with appropriate outcome and model)
 
 # Parse command-line arguments (specifies which outcome and model to run)
