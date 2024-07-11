@@ -500,19 +500,32 @@ pos_med_sf |>
 
 # new column to compare RRs
 pos_med_sf %<>%
-  mutate(RR_comp = ifelse(risk_ratio_adrd > 1 & risk_ratio_hosp > 1, "black_worse_both", NA)) %>%
-  mutate(RR_comp = ifelse(risk_ratio_adrd < 1 & risk_ratio_hosp < 1, "white_worse_both", RR_comp)) %>%
+  mutate(RR_comp = ifelse(risk_ratio_adrd > 1 & risk_ratio_hosp > 1, 
+                          "black_worse_both", NA)) %>%
+  mutate(RR_comp = ifelse(risk_ratio_adrd < 1 & risk_ratio_hosp < 1, 
+                          "white_worse_both", RR_comp)) %>%
   mutate(RR_comp = ifelse(risk_ratio_adrd < 1 & risk_ratio_hosp > 1 |
-                            risk_ratio_adrd > 1 & risk_ratio_hosp < 1, "different", RR_comp))
+                            risk_ratio_adrd > 1 & risk_ratio_hosp < 1, NA, RR_comp))
+
+png(file = paste0(fig_path, "rr_hosp_vs_adrd.png"), width = 600, height = 400)
 
 pos_med_sf |>
   filter(race == 1) %>%
   ggplot() +
   geom_sf(aes(fill = RR_comp), lwd = 0.1) +
-  geom_sf(data = state_sf, fill = NA, lwd = 0.1) +
-  labs(fill = "ADRD vs. hosp risk ratios") +
-  theme_map()
+  geom_sf(data = county_sf_zero_b, fill = "white", lwd = 0.0) + 
+  geom_sf(data = state_sf, fill = NA, lwd = 0.1, col = "black") +
+  labs(fill = "") +
+  scale_fill_manual(values = c("black_worse_both" = "#fd8d3c", 
+                               "white_worse_both" = "#2171b5"),
+                    labels = c("black_worse_both" = "Black risk > White risk for both outcomes", 
+                               "white_worse_both" = "White risk > Black risk for both outcomes"),
+                    na.value = "gray90") +
+  theme_map() +
+  theme(legend.position = "bottom") +
+  guides(fill = guide_legend(ncol = 1, byrow = TRUE))
 
+dev.off()
 ```
 
 ```{r}
