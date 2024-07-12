@@ -486,8 +486,7 @@ for(i in 1:length(stanfit_list_stage2)){
                                    by = "county")
 }
 
-#names(adrd_model_results) <- c("adrd_m1", "adrd_m2", "adrd_m3")
-names(adrd_model_results) <- c("adrd_m1")
+names(adrd_model_results) <- names(stage1_adrd_model_results)
 
 # save results
 write_rds(adrd_model_results, "data/intermediate/adrd_model_results.rds")
@@ -497,19 +496,19 @@ write_rds(adrd_model_results, "data/intermediate/adrd_model_results.rds")
 ##### Empirical variance table #####
 
 ```{r}
-# function to get median, mean, 2.5 percentile, 97.5 percentile
-# as_data_frame() is now deprecated, but as.data.frame() doesn't work here
-# this gives us the median, 2.5 percentile, and 97.5 percentile of a vector
-quick_summarize <- function(x) {
-    new_df <- x %>%
-        dplyr::as_data_frame() %>%
-        dplyr::summarize(
-            median = stats::median(value),
-            p025 = stats::quantile(value, .025),
-            p975 = stats::quantile(value, .975)
-        )
-    return(new_df)
-}
+# # function to get median, mean, 2.5 percentile, 97.5 percentile
+# # as_data_frame() is now deprecated, but as.data.frame() doesn't work here
+# # this gives us the median, 2.5 percentile, and 97.5 percentile of a vector
+# quick_summarize <- function(x) {
+#     new_df <- x %>%
+#         dplyr::as_data_frame() %>%
+#         dplyr::summarize(
+#             median = stats::median(value),
+#             p025 = stats::quantile(value, .025),
+#             p975 = stats::quantile(value, .975)
+#         )
+#     return(new_df)
+# }
 ```
 
 ```{r}
