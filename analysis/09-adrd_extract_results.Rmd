@@ -486,7 +486,7 @@ for(i in 1:length(stanfit_list_stage2)){
                                    by = "county")
 }
 
-names(adrd_model_results) <- names(stage1_adrd_model_results)
+names(adrd_model_results) <- sub("stage1_", "", names(stage1_adrd_model_results))
 
 # save results
 write_rds(adrd_model_results, "data/intermediate/adrd_model_results.rds")

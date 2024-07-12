@@ -461,7 +461,7 @@ for(i in 1:length(stanfit_list_stage2)){
                                    by = "county")
 }
 
-names(hosp_model_results) <- names(stage1_hosp_model_results)
+names(hosp_model_results) <- sub("stage1_", "", names(stage1_hosp_model_results))
 
 # save results
 write_rds(hosp_model_results, "data/intermediate/hosp_model_results.rds")
