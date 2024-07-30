@@ -13,6 +13,9 @@ library(magrittr)
 library(viridis)
 library(cowplot)
 library(ggpubr)
+library(knitr)
+library(kableExtra)
+library(xtable)
 ```
 
 ```{r}
@@ -530,10 +533,10 @@ dev.off()
 
 ```{r}
 # get risk ratios for ADRD and hosp in the same plot
-adrd_risk_ratios_map <- read_rds("results/figures/intermediate/adrd_risk_ratios_map.rds")
-hosp_risk_ratios_map <- read_rds("results/figures/intermediate/hosp_risk_ratios_map.rds")
+adrd_risk_ratios_map <- read_rds("results/figures/intermediate/adrd_risk_ratios_map_1m.rds")
+hosp_risk_ratios_map <- read_rds("results/figures/intermediate/hosp_risk_ratios_map_1m.rds")
 
-png(file = paste0(fig_path, "risk_ratios.png"), width = 1300, height = 500)
+png(file = paste0(fig_path, "risk_ratios_1m.png"), width = 1300, height = 500)
 
 ggarrange(adrd_risk_ratios_map, hosp_risk_ratios_map,
           common.legend = TRUE, 
@@ -542,4 +545,147 @@ ggarrange(adrd_risk_ratios_map, hosp_risk_ratios_map,
 dev.off()
 ```
 
+```{r}
+# same but for all three models
+adrd_risk_ratios_map <- read_rds("results/figures/intermediate/adrd_risk_ratios_map_3m.rds")
+hosp_risk_ratios_map <- read_rds("results/figures/intermediate/hosp_risk_ratios_map_3m.rds")
+
+png(file = paste0(fig_path, "risk_ratios_3m.png"), width = 1300, height = 500)
+
+ggarrange(adrd_risk_ratios_map, hosp_risk_ratios_map,
+          nrow = 2,
+          common.legend = TRUE, 
+          legend = "bottom")
+
+dev.off()
+```
+
+# Hospitalization rates table
+
+```{r}
+# get ADRD table
+adrd_exp_rates_1 <- read_rds(paste0("results/tables/intermediate/adrd_expected_rates_race-specific.rds"))
+adrd_exp_rates_2 <- read_rds(paste0("results/tables/intermediate/adrd_expected_rates_overall.rds"))
+adrd_exp_rates <- left_join(adrd_exp_rates_1, adrd_exp_rates_2) |>
+  rename("ADRD rate (White)" = `Rate (White)`,
+         "ADRD rate (Black)" = `Rate (Black)`,
+         "ADRD rate (overall)" = `Rate (overall)`)
+
+# get hosp table
+hosp_exp_rates_1 <- read_rds(paste0("results/tables/intermediate/hosp_expected_rates_race-specific.rds"))
+hosp_exp_rates_2 <- read_rds(paste0("results/tables/intermediate/hosp_expected_rates_overall.rds"))
+hosp_exp_rates <- left_join(hosp_exp_rates_1, hosp_exp_rates_2) |>
+  rename("Non-ADRD rate (White)" = `Rate (White)`,
+         "Non-ADRD rate (Black)" = `Rate (Black)`,
+         "Non-ADRD rate (overall)" = `Rate (overall)`)
+
+# join ADRD and hosp
+exp_rates_tab <- left_join(adrd_exp_rates, hosp_exp_rates)
+
+# change col names (can have duplicates)
+names(exp_rates_tab) <- c("Sex", "Age group", 
+                          "White", "Black", "Overall",
+                          "White", "Black", "Overall")
+
+# format in kable with header over cols
+exp_rates_tab_latex <- kable(exp_rates_tab, "latex", 
+      booktabs = TRUE) %>%
+  add_header_above(c(" " = 2, "ADRD rate" = 3, "Non-ADRD rate" = 3))
+
+writeLines(exp_rates_tab_latex, "results/tables/final/national_rates.tex")
+# note: remove \addlinespace from the resulting table
+# also need to add begin table and end table and centering
+
+```
+
+
+# Covariate effects (beta) table
+
+```{r}
+# read adrd + hosp tables
+adrd_beta <- read_rds(paste0("results/tables/intermediate/adrd_beta_df.rds"))
+hosp_beta <- read_rds(paste0("results/tables/intermediate/hosp_beta_df.rds"))
+
+names(adrd_beta)[2] <- paste0(names(adrd_beta)[2], " ADRD")
+names(hosp_beta)[2] <- paste0(names(hosp_beta)[2], " Non-ADRD")
+
+# join
+beta_tab <- left_join(adrd_beta, hosp_beta)
+
+# change col names (can have duplicates)
+names(beta_tab) <- c("Parameter", "ADRD", "Non-ADRD")
+
+# format in kable with header over cols
+beta_tab_latex <- kable(beta_tab, "latex", booktabs = TRUE, escape = FALSE) %>%
+  add_header_above(c(" " = 1, "Estimate (95% CI)" = 2))
+# don't escape % in header with kable
+
+writeLines(beta_tab_latex, "results/tables/final/betas.tex")
+# note: remove \addlinespace from the resulting table
+# also need to add begin table and end table and centering
+
+```
+
+# Empirical variance table (adrd + hosp)
+
+```{r}
+# load list with ADRD all results and bind into df
+adrd_ev <- read_rds(paste0("results/tables/intermediate/adrd_empirical_variance.rds"))
+adrd_ev <- bind_rows(adrd_ev, .id = "model")
+
+# spread columns by model
+adrd_ev <- adrd_ev |>
+  spread(key = model, value = Estimate) |>
+  arrange(Parameter) #|>
+  # rename(`Unadjusted` = adrd_m1,
+  #        `Adjusted for PIR` = adrd_m2,
+  #        `Adjusted for PM2.5` = adrd_m3)
+
+# load list with hosp all results and bind into df
+hosp_ev <- read_rds(paste0("results/tables/intermediate/hosp_empirical_variance.rds"))
+hosp_ev <- bind_rows(hosp_ev, .id = "model")
+
+# spread columns by model
+hosp_ev <- hosp_ev |>
+  spread(key = model, value = Estimate) |>
+  arrange(Parameter) #|>
+  # rename(`Unadjusted` = hosp_m1,
+  #        `Adjusted for PIR` = hosp_m2,
+  #        `Adjusted for PM2.5` = hosp_m3)
+
+# join adrd + hosp
+ev <- left_join(adrd_ev, hosp_ev)
+
+# change col names (can have duplicates)
+names(ev) <- c("Race", "Parameter", rep(c("Unadjusted", 
+                                          "Adjusted for PIR", 
+                                          "Adjusted for PM2.5"), times = 2))
+
+# format in kable with header over cols
+ev_tab <- kable(ev, "latex", booktabs = TRUE, escape = FALSE) %>%
+  add_header_above(c(" " = 2, "ADRD" = 3, "Non-ADRD" = 3))
+# don't escape % in header with kable
+
+writeLines(ev_tab, "results/tables/final/empirical_variance.tex")
+
+# print(xtable(ev, type = "latex"),
+#       include.rownames = FALSE,
+#       file = "results/tables/final/empirical_variance.tex")
+
+```
+
+# Posterior standard deviation map (ADRD + hosp)
+
+```{r}
+adrd_sd <- read_rds("results/figures/intermediate/adrd_sd.rds")
+hosp_sd <- read_rds("results/figures/intermediate/hosp_sd.rds")
+
+png(file = paste0(fig_path, "posterior_sd.png"), width = 1300, height = 500)
+
+ggarrange(adrd_sd, hosp_sd,
+          common.legend = TRUE, 
+          legend = "bottom")
+
+dev.off()
+```
 
