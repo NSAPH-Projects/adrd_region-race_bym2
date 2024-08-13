@@ -91,8 +91,8 @@ model {
   // spatial random effects
   psi1 ~ icar_normal_lpdf(W_n, W_adj1, W_adj2);
   psi2 ~ icar_normal_lpdf(W_n, W_adj1, W_adj2);
-  logit_rho1 ~ normal(0, 1);
-  logit_rho2 ~ normal(0, 1);
+  logit_rho1 ~ normal(-1.472219, 0.751132);
+  logit_rho2 ~ normal(-1.472219, 0.751132);
   sigma1 ~ normal(0, 1);
   sigma2 ~ normal(0, 1);
 }
