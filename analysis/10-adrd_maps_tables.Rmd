@@ -1423,7 +1423,7 @@ print(xtable(summary_stats,
              type = "latex",
              label = "tab:summary_stats",
              caption = "Distribution of parameters for White and Black individuals across the three models of hospitalization with ADRD."), 
-      file = "results/tables/final/summary_stats.tex", 
+      file = "results/tables/final/summary_stats_adrd.tex", 
       sanitize.text.function = identity,
       include.rownames = FALSE)
 ```
