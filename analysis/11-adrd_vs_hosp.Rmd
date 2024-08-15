@@ -144,9 +144,9 @@ param_dist <- pos_med_sf |>
   gather(key = "parameter", value = "value", 
          c(person_years, 
            observed_adrd,
-           observed_hosp,
-           exp_y_adrd,
-           exp_y_hosp#,
+           observed_hosp#,
+           #exp_y_adrd,
+           #exp_y_hosp#,
            #exp_pos_med_y_adrd,
            #exp_pos_med_y_hosp
            )) |>
@@ -165,8 +165,9 @@ param_dist %<>%
 
 # set order of plots
 param_dist$parameter <- factor(param_dist$parameter,
-                               levels = c("person_years", "observed_adrd", "observed_hosp", 
-                                          "exp_y_adrd", "exp_y_hosp"))
+                               levels = c("person_years", "observed_adrd", "observed_hosp"#, 
+                                          #"exp_y_adrd", "exp_y_hosp"
+                                          ))
 
 # plot
 param_dist |>
@@ -180,7 +181,7 @@ param_dist |>
        col = "") +
   scale_x_log10(labels = scales::comma) +
   facet_wrap(~parameter, scales = "free", 
-             nrow = 3,
+             ncol = 3,
              labeller = as_labeller(c(person_years = "Person years",
                                       observed_adrd = "Observed hosp. w/ ADRD",
                                       observed_hosp = "Observed hosp. w/o ADRD",
@@ -208,17 +209,27 @@ pos_med_sf %>%
 
 ```{r}
 # another plot of person-years
+
+png(file = paste0(fig_path, "py_density.png"), width = 500, height = 300)
+
 pos_med_sf %>%
   mutate(race = factor(ifelse(race == 1, "White", "Black"),
                        levels = c("White", "Black"))) %>% 
   ggplot() +
-  geom_density(aes(person_years, col = as.factor(race))) +
-  scale_x_log10(labels = scales::comma) +
+  geom_histogram(aes(person_years, fill = as.factor(race)), 
+                 alpha = 0.3, 
+                 #fill = "gray", 
+                 position = "identity") +
+  scale_x_log10(labels = scales::comma, expand = c(0, 0)) +
+  scale_y_continuous(expand = c(0, 0)) +
+  scale_fill_manual(values = c("#0072B2", "#E69F00"),
+                    labels = c("White", "Black")) +
   labs(x = "Person-years contributed in each county", 
-       y = "Density",
-       color = "") +
-  theme_light()
+       y = "Frequency",
+       fill = "") +
+  theme_classic()
 
+dev.off()
 ```
 
 ```{r}
@@ -503,14 +514,25 @@ pos_med_sf |>
 
 # new column to compare RRs
 pos_med_sf %<>%
-  mutate(RR_comp = ifelse(risk_ratio_adrd > 1 & risk_ratio_hosp > 1, 
+  mutate(RR_comp = ifelse(risk_ratio_adrd > 1 & risk_ratio_hosp > 1 & 
+                            risk_ratio_sig_adrd & risk_ratio_sig_hosp, 
                           "black_worse_both", NA)) %>%
-  mutate(RR_comp = ifelse(risk_ratio_adrd < 1 & risk_ratio_hosp < 1, 
-                          "white_worse_both", RR_comp)) %>%
-  mutate(RR_comp = ifelse(risk_ratio_adrd < 1 & risk_ratio_hosp > 1 |
-                            risk_ratio_adrd > 1 & risk_ratio_hosp < 1, NA, RR_comp))
+  mutate(RR_comp = ifelse(risk_ratio_adrd < 1 & risk_ratio_hosp < 1 & 
+                            risk_ratio_sig_adrd & risk_ratio_sig_hosp, 
+                          "white_worse_both", RR_comp)) #%>%
+  # mutate(RR_comp = ifelse(risk_ratio_adrd < 1 & risk_ratio_hosp > 1 |
+  #                           risk_ratio_adrd > 1 & risk_ratio_hosp < 1, NA, RR_comp))
 
-png(file = paste0(fig_path, "rr_hosp_vs_adrd.png"), width = 600, height = 400)
+
+# get counts of RR_comp
+pos_med_sf %>%
+  filter(race == 1) %>%
+  count(RR_comp)
+```
+
+
+```{r}
+#png(file = paste0(fig_path, "rr_hosp_vs_adrd.png"), width = 600, height = 400)
 
 pos_med_sf |>
   filter(race == 1) %>%
@@ -525,24 +547,31 @@ pos_med_sf |>
                                "white_worse_both" = "White risk > Black risk for both outcomes"),
                     na.value = "gray90") +
   theme_map() +
-  theme(legend.position = "bottom") +
+  theme(legend.position = "bottom",
+        plot.background = element_rect(fill = "white", color = NA)) +
   guides(fill = guide_legend(ncol = 1, byrow = TRUE))
 
-dev.off()
+ggsave(paste0(fig_path, "rr_hosp_vs_adrd.png"), width = 6, height = 4, dpi = 300)
+
+#dev.off()
 ```
 
 ```{r}
 # get risk ratios for ADRD and hosp in the same plot
-adrd_risk_ratios_map <- read_rds("results/figures/intermediate/adrd_risk_ratios_map_1m.rds")
-hosp_risk_ratios_map <- read_rds("results/figures/intermediate/hosp_risk_ratios_map_1m.rds")
+adrd_risk_ratios_map_1m <- read_rds("results/figures/intermediate/adrd_risk_ratios_map_1m.rds")
+hosp_risk_ratios_map_1m <- read_rds("results/figures/intermediate/hosp_risk_ratios_map_1m.rds")
 
-png(file = paste0(fig_path, "risk_ratios_1m.png"), width = 1300, height = 500)
+#png(file = paste0(fig_path, "risk_ratios_1m.png"), width = 1300, height = 500)
 
-ggarrange(adrd_risk_ratios_map, hosp_risk_ratios_map,
-          common.legend = TRUE, 
-          legend = "bottom")
+rr_maps <- ggarrange(adrd_risk_ratios_map_1m, hosp_risk_ratios_map_1m,
+                     common.legend = TRUE, legend = "bottom") +
+  theme(plot.background = element_rect(fill = "white", color = NA))
 
-dev.off()
+rr_maps
+
+ggsave(paste0(fig_path, "risk_ratios_1m.png"), width = 7, height = 3.5, dpi = 300)
+
+#dev.off()
 ```
 
 ```{r}
@@ -550,7 +579,7 @@ dev.off()
 adrd_risk_ratios_map <- read_rds("results/figures/intermediate/adrd_risk_ratios_map_3m.rds")
 hosp_risk_ratios_map <- read_rds("results/figures/intermediate/hosp_risk_ratios_map_3m.rds")
 
-png(file = paste0(fig_path, "risk_ratios_3m.png"), width = 1300, height = 500)
+png(file = paste0(fig_path, "risk_ratios_3m.png"), width = 700, height = 500)
 
 ggarrange(adrd_risk_ratios_map, hosp_risk_ratios_map,
           nrow = 2,

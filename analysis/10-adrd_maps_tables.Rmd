@@ -134,9 +134,7 @@ adrd_res_sf %<>%
 ## Understand the data/covariates
 
 ```{r}
-#pdf(file = paste0(fig_path, "pct_black_py.pdf"), width = 8, height = 5)
-
-png(file = paste0(fig_path, "pct_black.png"), width = 800, height = 500)
+#png(file = paste0(fig_path, "pct_black.png"), width = 800, height = 500)
 
 # plot % of person-years contributed by black people in each county
 adrd_res_sf %>%
@@ -154,27 +152,33 @@ adrd_res_sf %>%
   theme_map() +
   theme(legend.title = element_text(size = 14),
         legend.text = element_text(size = 14),
-        legend.position = "right")
+        legend.position = "right",
+        plot.background = element_rect(fill = "white", color = NA))
 
-dev.off()
+ggsave(paste0(fig_path, "pct_black.png"), width = 8, height = 5, dpi = 300)
+
+#dev.off()
 ```
 
 ```{r}
-# map PM2.5, PIR, median household income
+# map PM2.5, HPIR, median household income
   
-png(file = paste0(fig_path, "covariate_maps.png"), width = 800, height = 500)
+#png(file = paste0(fig_path, "covariate_maps.png"), width = 800, height = 500)
 
 pir_plot <- adrd_res_sf %>%
   filter(model == "adrd_m1") %>%
   ggplot() +
   geom_sf(aes(fill = log10(house_price_income_ratio)), alpha = 1, lwd = 0.0) +
-  labs(fill = "log (House price-to- \nincome ratio)") +
+  labs(fill = "log (HPIR)") +
   scale_fill_viridis(option = "D",
                      guide = guide_colorbar(barwidth = 10, barheight = 1)) +
   geom_sf(data = county_sf_zero_b, fill = "gray70", lwd = 0.0) + 
   geom_sf(data = state_sf, fill = NA, col = "white", lwd = 0.1) +
   theme_map() +
-  theme(legend.position = "bottom")
+  theme(legend.position = "bottom",
+        plot.background = element_rect(fill = "white", color = NA),
+        panel.background = element_blank(),
+        plot.margin = margin(0, 0, 0, 0))
 
 # adrd_res_sf %>%
 #   filter(model == "adrd_m1") %>%
@@ -197,11 +201,24 @@ pm25_plot <- adrd_res_sf %>%
                      guide = guide_colorbar(barwidth = 10, barheight = 1)) +
   geom_sf(data = state_sf, fill = NA, col = "white", lwd = 0.1) +
   theme_map() +
-  theme(legend.position = "bottom")
+  theme(legend.position = "bottom",
+        plot.background = element_rect(fill = "white", color = NA),
+        panel.background = element_blank(),
+        plot.margin = margin(0, 0, 0, 0))
 
-ggarrange(pir_plot, pm25_plot)
+cov_maps <- ggarrange(pir_plot, pm25_plot) +
+  theme(plot.background = element_rect(fill = "white", color = NA))
 
-dev.off()
+cov_maps
+
+#ggarrange(pir_plot, pm25_plot)
+
+# library(gridExtra)
+# grid.arrange(pir_plot, pm25_plot)
+
+ggsave(paste0(fig_path, "covariate_maps.png"), width = 8, height = 3, dpi = 300)
+
+#dev.off()
 ```
 
 ```{r}
@@ -276,21 +293,28 @@ print(xtable(exp_rates_tab, type = "latex"), file = "results/tables/final/adrd_n
 ### Observed rate of hospitalization with ADRD (observed/person-years)
 
 ```{r}
-# try capping at 50%--otherwise we're just seeing really small counties
+# try capping at 12%--otherwise we're just seeing really small counties
 # alternatively, could restrict this to counties with a certain number of person-years observed
+
+png(file = paste0(fig_path, "adrd_rate_obs.png"), width = 900, height = 400)
+
 adrd_res_sf %>%
   filter(model == "adrd_m1") %>%
   mutate(adrd_rate_obs = ifelse(adrd_rate_obs > 0.12, 0.12, adrd_rate_obs)) |>
+  mutate(adrd_rate_obs = ifelse(observed <= 10, NA, adrd_rate_obs)) |>
   ggplot() +
   geom_sf(aes(fill = adrd_rate_obs * 100), alpha = 1, lwd = 0.0) +
   labs(fill = "Rate of hosp. \nwith ADRD (%)") +
-  scale_fill_viridis(option = "D") +
+  scale_fill_viridis(option = "D", na.value = "gray70") +
   geom_sf(data = county_sf_zero_b, fill = "gray70", lwd = 0.0) + 
   geom_sf(data = state_sf, fill = NA, col = "white", lwd = 0.1) +
   facet_grid(~race, labeller = as_labeller(race_labels)) +
   theme_map() +
   theme(legend.position = "bottom",
-        strip.background = element_blank())
+        strip.background = element_blank(),
+        strip.text = element_text(size = 14))
+
+dev.off()
 
 # could also try lumping together white and black (this just tells us where there are more ADRD hospitalizations)
 ```
@@ -494,14 +518,14 @@ stage2_total_risk_df$raw_vs_model <- factor(stage2_total_risk_df$raw_vs_model,
 stage2_total_risk_1m_labels <- c(
   `1` = "White",
   `2` = "Black",
-  raw = "Raw observed/expected",
-  adrd_m1 = "Smoothed (\u03BB)",
+  raw = "Raw\n observed/expected",
+  adrd_m1 = "Smoothed\n observed/expected (\u03BB)",
   "1_specific" = "White-specific\n (\u03C8\u2081)",
   "both_shared_unscaled" = "Unscaled shared\n (\u03A6)",
   "2_specific" = "Black-specific\n (\u03C8\u2082)"
 )
 
-png(file = paste0(fig_path, "adrd_raw_vs_lambda_stage2_1m.png"), width = 700, height = 400)
+#png(file = paste0(fig_path, "adrd_raw_vs_lambda_stage2_1m.png"), width = 700, height = 400)
 
 # plot
 stage2_total_risk_df |>
@@ -516,18 +540,71 @@ stage2_total_risk_df |>
   facet_grid(race ~ raw_vs_model,
              labeller = as_labeller(stage2_total_risk_1m_labels)
              ) +
+  theme(legend.title = element_text(size = 12, vjust = 0.8),
+        legend.text = element_text(size = 9),
+        legend.position = "bottom",
+        strip.text = element_text(size = 12),
+        strip.background = element_blank(),
+        plot.background = element_rect(fill = "white", color = NA)) +
+  # this scale is capping at max in previous plot
+  scale_fill_viridis(option = "A", 
+                     na.value = "gray70",
+                     limits = c(0, 3),
+                     labels = c("0", "1", "2", "3+"),
+                     guide = guide_colorbar(ticks = FALSE,
+                                            barwidth = 12, barheight = 0.5))
+
+ggsave(paste0(fig_path, "adrd_raw_vs_lambda_stage2_1m.png"), width = 6, height = 4, dpi = 300)
+
+#dev.off()
+```
+
+```{r}
+# same thing but remove raw maps (not needed for clinical audience)
+
+# labels for facets
+stage2_no_raw_labels <- c(
+  `1` = "White",
+  `2` = "Black",
+  raw = "Raw observed/expected",
+  adrd_m1 = "Smoothed (\u03BB)",
+  "1_specific" = "White-specific\n (\u03C8\u2081)",
+  "both_shared_unscaled" = "Unscaled shared\n (\u03A6)",
+  "2_specific" = "Black-specific\n (\u03C8\u2082)"
+)
+
+png(file = paste0(fig_path, "adrd_lambda_stage2_1m.png"), width = 700, height = 300)
+
+# plot
+stage2_total_risk_df |>
+  filter(raw_vs_model == "raw" | raw_vs_model == "adrd_m1" | raw_vs_model == "raw") |>
+  mutate(estimate = ifelse(estimate >= log(3), log(3)-0.001, estimate)) |>
+  ggplot() +
+  geom_sf(aes(fill = exp(estimate)), lwd = 0.03) + 
+  geom_sf(data = county_sf_zero_b, fill = "gray70", lwd = 0.0) + 
+  geom_sf(data = state_sf, fill = NA, col = "white", lwd = 0.1) +
+  theme_map() + 
+  labs(fill = expression('Standardized risk')) +
+  facet_grid(~race,
+             labeller = as_labeller(stage2_no_raw_labels)
+             ) +
   theme(legend.title = element_text(size = 14),
         legend.text = element_text(size = 12),
         legend.position = "bottom",
-        strip.text = element_text(size = 12),
+        strip.text = element_text(size = 16),
         strip.background = element_blank()) +
   # this scale is capping at max in previous plot
   scale_fill_viridis(option = "A", 
                      na.value = "gray70",
-                     limits = c(0, 3))
+                     limits = c(0, 3),
+                     labels = c("0", "1", "2", "3+")) + 
+  guides(fill = guide_colorbar(title.position = "top", barwidth = 10))
 
 dev.off()
+
 ```
+
+
 
 ```{r}
 #--- figure with all three models
@@ -567,7 +644,8 @@ stage2_total_risk_df |>
   # this scale is capping at max in previous plot
   scale_fill_viridis(option = "A", 
                      na.value = "gray70",
-                     limits = c(0, 3))
+                     limits = c(0, 3),
+                     labels = c("0", "1", "2", "3+"))
 
 dev.off()
 ```
@@ -719,12 +797,12 @@ sc <- scale_fill_gradient2(high = "#7600bc", mid = "white", low = "#028A0F", na.
 
 # labels for facets
 shared_specific_labels_1m <- c(
-  #"1_psi" = "White-specific\n (\u03C8\u2081)",
-  "1_psi" = "White-specific",
-  #"both_phi" = "Shared\n (\u03A6)",
-  "both_phi" = "Shared",
-  #"2_psi" = "Black-specific\n (\u03C8\u2082)"
-  "2_psi" = "Black-specific"
+  "1_psi" = "White-specific\n (\u03C8\u2081)",
+  #"1_psi" = "White-specific",
+  "both_phi" = "Shared\n (\u03A6)",
+  #"both_phi" = "Shared",
+  "2_psi" = "Black-specific\n (\u03C8\u2082)"
+  #"2_psi" = "Black-specific"
 )
 
 # plot
@@ -814,8 +892,6 @@ shared_specific_df %<>%
 ```{r}
 # just unadjusted model
 
-png(file = paste0(fig_path, "adrd_shared_vs_specific_binary_1m.png"), width = 700, height = 200)
-
 # plot
 shared_specific_df |>
   filter(model == "adrd_m1") |>
@@ -828,17 +904,17 @@ shared_specific_df |>
              labeller = as_labeller(shared_specific_labels_1m)
              ) +
   theme_map() + 
-  theme(legend.title = element_text(size = 12),
-        legend.text = element_text(size = 12),
+  theme(legend.title = element_text(size = 10),
+        legend.text = element_text(size = 10),
         legend.position = "bottom",
-        strip.text = element_text(size = 10),
-        strip.background = element_blank()) +
+        strip.text = element_text(size = 12),
+        strip.background = element_blank(),
+        plot.background = element_rect(fill = "white", color = NA)) +
   scale_fill_manual(values = c("Low risk" = "#006400", 
                                "High risk" = "#B47EE5"),
                      na.value = "gray90")
 
-dev.off()
-
+ggsave(paste0(fig_path, "adrd_shared_vs_specific_binary_1m.png"), width = 7, height = 2.5, dpi = 300)
 ```
 
 ```{r}
@@ -1000,15 +1076,16 @@ adrd_risk_ratios_map_1m <- adrd_res_sf %>%
   geom_sf(aes(fill = risk_ratio_bins), lwd = 0.03) + 
   geom_sf(data = county_sf_zero_b, fill = "gray40", lwd = 0.0) + 
   geom_sf(data = state_sf, fill = NA, col = "black", lwd = 0.2) +
-  labs(fill = expression('Risk Ratio (' *lambda['2ij']*'/'*lambda['1ij']*', Black/White)'),
+  labs(fill = expression('Risk Ratio (' *lambda[' 2ij']*'/'*lambda[' 1ij']*', Black/White)'),
        title = "Hospitalization with ADRD") +
   theme_map() +
   theme(legend.position = "bottom", 
         #legend.justification = "right", 
         #legend.direction = "vertical",
-        legend.title = element_text(size = 14),
+        legend.title = element_text(size = 12),
         legend.text = element_text(size = 10),
         strip.background = element_blank(),
+        plot.background = element_rect(fill = "white", color = NA),
         plot.title = element_text(hjust = 0.5, size = 14)) +
   scale_fill_manual(
     # values = c("#08306b",
@@ -1071,7 +1148,8 @@ adrd_risk_ratios_map_3m <- adrd_res_sf %>%
         legend.title = element_text(size = 14),
         legend.text = element_text(size = 10),
         strip.background = element_blank(),
-        plot.title = element_text(hjust = 0.5, size = 14)) +
+        plot.title = element_text(hjust = 0.5, size = 14),
+        plot.background = element_rect(fill = "white", color = NA)) +
   scale_fill_manual(
     # values = c("#08306b",
     #            "#2171b5",
@@ -1215,9 +1293,7 @@ write_rds(adrd_risk_ratios_map_3m, file = "results/figures/intermediate/adrd_ris
 
 ### In a table
 
-need to make some changes here
-- group by race doesn't actually affect grouping
-- maybe include phi and psi
+group by race doesn't actually affect grouping
 
 ```{r}
 # function to get summary statistics
@@ -1265,72 +1341,104 @@ summary_stats <- rbind(
   # summarize_column(adrd_res_sf, 
   #                  column_name = observed,
   #                  param_name = "observed"),
+  summarize_column(df = adrd_res_sf,
+                   column_name = y_stage2,
+                   param_name = "Raw observed/expected",
+                   exp_transform = TRUE),
   # summarize_column(df = adrd_res_sf, 
-  #                  column_name = y, 
-  #                  param_name = "Observed/expected", 
+  #                  column_name = log_lambda_stage1, 
+  #                  param_name = "Standardized risk (lambda) stage 1", 
   #                  exp_transform = TRUE),
   summarize_column(df = adrd_res_sf, 
-                   column_name = log_lambda_stage1, 
-                   param_name = "Standardized risk (lambda) stage 1", 
-                   exp_transform = TRUE),
-  summarize_column(df = adrd_res_sf, 
                    column_name = log_lambda_stage2, 
-                   param_name = "Standardized risk (lambda) stage 2", 
+                   param_name = "Standardized risk ($\\lambda$)", 
                    exp_transform = TRUE),
   summarize_column(df = adrd_res_sf, 
                    column_name = phi, 
-                   param_name = "Shared risk (phi)"),
+                   param_name = "Shared risk ($\\phi_{ij}$)"),
   summarize_column(df = adrd_res_sf, 
                    column_name = psi, 
-                   param_name = "Race-specific risk (psi)"),
+                   param_name = "Race-specific risk ($\\psi_{dij}$)"),
   summarize_column(df = adrd_res_sf, 
                    column_name = risk_ratio, 
-                   param_name = "Risk ratio")
+                   param_name = "Risk ratio ($\\lambda_{2ij}/\\lambda_{1ij}$)")
   )
 
-# make certain parameters a single row (same for both races)
-summary_stats %<>%
-  filter(!(param == "Risk ratio" & race == 2)) %>%
-  filter(!(param == "Standardized risk (lambda) stage 1" & race == 2)) %>%
-  mutate(race = ifelse(param %in% c("Risk ratio", "Standardized risk (lambda) stage 1"), 
-                       "--", race),
-         model = str_remove(model, "adrd_"))
+# set order of parameters
+summary_stats$param <- factor(summary_stats$param,
+                              levels = c("Raw observed/expected",
+                                         "Standardized risk ($\\lambda$)", 
+                                         "Shared risk ($\\phi_{ij}$)",
+                                         "Race-specific risk ($\\psi_{dij}$)", 
+                                         "Risk ratio ($\\lambda_{2ij}/\\lambda_{1ij}$)"))
 
-# change race values to white and black
+
+# make certain parameters a single row (same for both races) and arrange
+summary_stats %<>%
+  filter(!(param %in% c("Shared risk ($\\phi_{ij}$)", 
+                                    "Standardized risk (lambda) stage 1",
+                                    "Risk ratio ($\\lambda_{2ij}/\\lambda_{1ij}$)") 
+           & race == 2)) %>%
+  mutate(race = ifelse(param %in% c("Shared risk ($\\phi_{ij}$)", 
+                                    "Standardized risk (lambda) stage 1",
+                                    "Risk ratio ($\\lambda_{2ij}/\\lambda_{1ij}$)"),
+                       "--", race),
+         model = str_remove(model, "adrd_")) %>%
+  arrange(param, race, model)
+
+# change race and model values
 summary_stats %<>%
   mutate(race = ifelse(race == 1, "White", race)) %>%
   mutate(race = ifelse(race == 2, "Black", race)) %>%
+  mutate(model = ifelse(model == "adrd_m1", "Unadjusted", model)) %>%
+  mutate(model = ifelse(model == "adrd_m2", "Adjusted for HPIR", model)) %>%
+  mutate(model = ifelse(model == "adrd_m3", "Adjusted for $PM_{2.5}$", model)) %>%
   select(c(param, everything()))
 
 # display without scientific notation
 summary_stats[] <- lapply(summary_stats, function(x) if(is.numeric(x)) format(x, scientific = FALSE) else x)
-
 
 # rename columns
 summary_stats <- summary_stats |>
   rename(Parameter = param,
          Model = model,
             Race = race,
-            Minimum = min,
-            `25th percentile` = p250,
-            `50th percentile` = p500,
-            `75th percentile` = p750,
-            Maximum = max)
-summary_stats |> pander()
+            `Min.` = min,
+            `25th` = p250,
+            `Median` = p500,
+            `75th` = p750,
+            `Max.` = max)
 
-# save table
-write_rds(summary_stats, file = paste0("results/tables/summary_stats.rds"))
+# # unadjusted model only (don't run this if I want all models)
+# summary_stats <- summary_stats %>%
+#   filter(model == "Unadjusted") %>%
+#   select(-Model)
+
+summary_stats |> pander()
+```
+
+```{r}
+# save table for latex
+print(xtable(summary_stats, 
+             type = "latex",
+             label = "tab:summary_stats",
+             caption = "Distribution of parameters for White and Black individuals across the three models of hospitalization with ADRD."), 
+      file = "results/tables/final/summary_stats.tex", 
+      sanitize.text.function = identity,
+      include.rownames = FALSE)
 ```
 
 ### In a figure
+
+the most interesting figure is really shared vs. specific since this is where the covariates can change things
 
 ```{r}
 # plot distribution of lambdas
 adrd_res_sf %>% 
   mutate(model = ifelse(model == "adrd_m1", "Unadjusted", model),
-         model = ifelse(model == "adrd_m2", "Adjusted for PIR", model),
+         model = ifelse(model == "adrd_m2", "Adjusted for HPIR", model),
          model = ifelse(model == "adrd_m3", "Adjusted for PM2.5", model)) %>%
-  mutate(model = factor(model, levels = c("Unadjusted", "Adjusted for PIR", "Adjusted for PM2.5"))) %>%
+  mutate(model = factor(model, levels = c("Unadjusted", "Adjusted for HPIR", "Adjusted for PM2.5"))) %>%
   ggplot() +
   geom_density(aes(x = log_lambda_stage2, col = model)) +
   geom_vline(xintercept = 0, lty = 2) +
@@ -1346,18 +1454,37 @@ adrd_res_sf %>%
 
 
 ```{r}
+# plot distributions of shared and race-specific risk from the models
+shared_specific_df %>% 
+  mutate(model = ifelse(model == "adrd_m1", "Unadjusted", model),
+         model = ifelse(model == "adrd_m2", "Adjusted for HPIR", model),
+         model = ifelse(model == "adrd_m3", "Adjusted for PM2.5", model)) %>%
+  mutate(model = factor(model, levels = c("Unadjusted", "Adjusted for HPIR", "Adjusted for PM2.5"))) %>%
+  ggplot() +
+  geom_density(aes(x = estimate, col = model)) +
+  labs(x = "",
+       y = "Density",
+       col = "") +
+  facet_wrap(~parameter, labeller = as_labeller(shared_specific_labels_1m), 
+             nrow = 3, scales = "free") +
+  theme_bw() +
+  theme(strip.background = element_rect(fill = "gray90"))
+```
+
+
+```{r}
 # plot distributions of risk ratios
 adrd_res_sf %>% 
   mutate(model = ifelse(model == "adrd_m1", "Unadjusted", model),
-         model = ifelse(model == "adrd_m2", "Adjusted for PIR", model),
+         model = ifelse(model == "adrd_m2", "Adjusted for HPIR", model),
          model = ifelse(model == "adrd_m3", "Adjusted for PM2.5", model)) %>%
-  mutate(model = factor(model, levels = c("Unadjusted", "Adjusted for PIR", "Adjusted for PM2.5"))) %>%
+  mutate(model = factor(model, levels = c("Unadjusted", "Adjusted for HPIR", "Adjusted for PM2.5"))) %>%
   ggplot() +
   geom_density(aes(x = risk_ratio, col = model)) +
-  geom_vline(xintercept = 1, lty = 2) +
   labs(x = "Risk Ratio (Black/White)",
        y = "Density",
        col = "") +
+  geom_vline(xintercept = 1, lty = 2) +
   theme_light() +
   theme(panel.grid = element_blank())
 ```

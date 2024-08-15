@@ -854,15 +854,16 @@ hosp_risk_ratios_map_1m <- hosp_res_sf %>%
   geom_sf(aes(fill = risk_ratio_bins), lwd = 0.03) + 
   geom_sf(data = county_sf_zero_b, fill = "gray40", lwd = 0.0) + 
   geom_sf(data = state_sf, fill = NA, col = "black", lwd = 0.2) +
-  labs(fill = expression('Risk Ratio (' *lambda['2ij']*'/'*lambda['1ij']*', Black/White)'),
+  labs(fill = expression('Risk Ratio (' *lambda[' 2ij']*'/'*lambda[' 1ij']*', Black/White)'),
        title = "Hospitalization without ADRD") +
   theme_map() +
   theme(legend.position = "bottom", 
         #legend.justification = "right", 
         #legend.direction = "vertical",
-        legend.title = element_text(size = 14),
+        legend.title = element_text(size = 12),
         legend.text = element_text(size = 10),
         strip.background = element_blank(),
+        plot.background = element_rect(fill = "white", color = NA),
         plot.title = element_text(hjust = 0.5, size = 14)) +
   scale_fill_manual(
     # values = c("#08306b",
@@ -1013,63 +1014,101 @@ summarize_column <- function(df,
   return(result)
 }
 
+
 # apply function to get summary stats table
 # note: I don't think the first two can come off of FASSE because they show small counts
 summary_stats <- rbind(
-  # summarize_column(hosp_res_sf, 
+  # summarize_column(adrd_res_sf, 
   #                  column_name = person_years,
   #                  param_name = "person years"),
-  # summarize_column(hosp_res_sf, 
+  # summarize_column(adrd_res_sf, 
   #                  column_name = observed,
   #                  param_name = "observed"),
+  summarize_column(df = hosp_res_sf,
+                   column_name = y_stage2,
+                   param_name = "Raw observed/expected",
+                   exp_transform = TRUE),
   # summarize_column(df = hosp_res_sf, 
-  #                  column_name = y, 
-  #                  param_name = "Observed/expected", 
+  #                  column_name = log_lambda_stage1, 
+  #                  param_name = "Standardized risk (lambda) stage 1", 
   #                  exp_transform = TRUE),
   summarize_column(df = hosp_res_sf, 
-                   column_name = log_lambda_stage1, 
-                   param_name = "Standardized risk (lambda) stage 1", 
-                   exp_transform = TRUE,
-                   group_race = FALSE),
-  summarize_column(df = hosp_res_sf, 
                    column_name = log_lambda_stage2, 
-                   param_name = "Standardized risk (lambda) stage 2", 
+                   param_name = "Standardized risk ($\\lambda$)", 
                    exp_transform = TRUE),
   summarize_column(df = hosp_res_sf, 
+                   column_name = phi, 
+                   param_name = "Shared risk ($\\phi_{ij}$)"),
+  summarize_column(df = hosp_res_sf, 
+                   column_name = psi, 
+                   param_name = "Race-specific risk ($\\psi_{dij}$)"),
+  summarize_column(df = hosp_res_sf, 
                    column_name = risk_ratio, 
-                   param_name = "Risk ratio",
-                   group_race = FALSE)
+                   param_name = "Risk ratio ($\\lambda_{2ij}/\\lambda_{1ij}$)")
   )
 
-# make risk ratio a single row (same for both races)
-summary_stats %<>%
-  filter(!(param == "Risk ratio" & race == 2)) %>%
-  mutate(race = ifelse(param == "Risk ratio", "Both", race))
+# set order of parameters
+summary_stats$param <- factor(summary_stats$param,
+                              levels = c("Raw observed/expected",
+                                         "Standardized risk ($\\lambda$)", 
+                                         "Shared risk ($\\phi_{ij}$)",
+                                         "Race-specific risk ($\\psi_{dij}$)", 
+                                         "Risk ratio ($\\lambda_{2ij}/\\lambda_{1ij}$)"))
 
-# change race values to white and black
+
+# make certain parameters a single row (same for both races) and arrange
+summary_stats %<>%
+  filter(!(param %in% c("Shared risk ($\\phi_{ij}$)", 
+                                    "Standardized risk (lambda) stage 1",
+                                    "Risk ratio ($\\lambda_{2ij}/\\lambda_{1ij}$)") 
+           & race == 2)) %>%
+  mutate(race = ifelse(param %in% c("Shared risk ($\\phi_{ij}$)", 
+                                    "Standardized risk (lambda) stage 1",
+                                    "Risk ratio ($\\lambda_{2ij}/\\lambda_{1ij}$)"),
+                       "--", race),
+         model = str_remove(model, "hosp_")) %>%
+  arrange(param, race, model)
+
+# change race and model values
 summary_stats %<>%
   mutate(race = ifelse(race == 1, "White", race)) %>%
   mutate(race = ifelse(race == 2, "Black", race)) %>%
+  mutate(model = ifelse(model == "hosp_m1", "Unadjusted", model)) %>%
+  mutate(model = ifelse(model == "hosp_m2", "Adjusted for HPIR", model)) %>%
+  mutate(model = ifelse(model == "hosp_m3", "Adjusted for $PM_{2.5}$", model)) %>%
   select(c(param, everything()))
 
 # display without scientific notation
 summary_stats[] <- lapply(summary_stats, function(x) if(is.numeric(x)) format(x, scientific = FALSE) else x)
-
 
 # rename columns
 summary_stats <- summary_stats |>
   rename(Parameter = param,
          Model = model,
             Race = race,
-            Minimum = min,
-            `25th percentile` = p250,
-            `50th percentile` = p500,
-            `75th percentile` = p750,
-            Maximum = max)
-summary_stats |> pander()
+            `Min.` = min,
+            `25th` = p250,
+            `Median` = p500,
+            `75th` = p750,
+            `Max.` = max)
 
-# save table
-write_rds(summary_stats, file = paste0("results/tables/intermediate/summary_stats.rds"))
+# # unadjusted model only (don't run this if I want all models)
+# summary_stats <- summary_stats %>%
+#   filter(model == "Unadjusted") %>%
+#   select(-Model)
+
+summary_stats |> pander()
+```
+
+```{r}
+# save table for latex
+print(xtable(summary_stats, 
+             type = "latex",
+             label = "tab:summary_stats_hosp",
+             caption = "Distribution of parameters for White and Black individuals across the three models of hospitalization without ADRD."), 
+      file = "results/tables/final/summary_stats_hosp.tex", 
+      sanitize.text.function = identity,
+      include.rownames = FALSE)
 ```
 
 ### In a figure
