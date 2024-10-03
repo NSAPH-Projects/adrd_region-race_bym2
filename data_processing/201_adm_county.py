@@ -92,3 +92,4 @@ if __name__ == '__main__':
 
 # python data_processing/201_adm_county.py --nom_prefix data/symlinks/scratch/adrd_nom --output_file data/symlinks/scratch/adrd_county.csv
 # python data_processing/201_adm_county.py --nom_prefix data/symlinks/scratch/hosp_nom --output_file data/symlinks/scratch/hosp_county.csv
+# python data_processing/201_adm_county.py --nom_prefix data/symlinks/scratch/cvd_nom --output_file data/symlinks/scratch/cvd_county.csv
