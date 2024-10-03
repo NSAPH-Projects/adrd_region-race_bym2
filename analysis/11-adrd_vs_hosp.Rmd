@@ -11,6 +11,7 @@ library(tidyverse)
 library(sf)
 library(magrittr)
 library(viridis)
+library(data.table)
 library(cowplot)
 library(ggpubr)
 library(knitr)
@@ -312,7 +313,8 @@ pos_med_sf %<>%
 # get total ADRD hosp by race
 # and total other hosp by race
 
-pos_med %>%
+pos_med_sf %>%
+  st_drop_geometry() %>%
   group_by(race) %>%
   summarise(total_adrd = sum(observed_adrd),
             total_hosp = sum(observed_hosp)) %>%
@@ -320,20 +322,22 @@ pos_med %>%
 ```
 
 
+
 ```{r}
-# # look at distribution of this variable for white vs. black at county-level
-# pos_med_sf |>
-#   mutate(race = factor(ifelse(race == 1, "White", "Black"),
-#                        levels = c("White", "Black"))) %>% 
-#   ggplot() +
-#   geom_density(aes(adrd_pct, col = as.factor(race))) +
-#   labs(x = "% of all hospitalizations with ADRD code",
-#        y = "Density",
-#        col = "") +
-#   theme_bw() +
-#   theme(axis.text.y = element_blank(),
-#         axis.ticks.y = element_blank(),
-#         panel.grid = element_blank())
+# look at distribution of this variable for white vs. black at county-level
+pos_med_sf |>
+  mutate(race = factor(ifelse(race == 1, "White", "Black"),
+                       levels = c("White", "Black"))) %>%
+  ggplot() +
+  geom_histogram(aes(adrd_pct, fill = as.factor(race)), 
+                 alpha = 0.3, position = "identity") +
+  labs(x = "% of all hospitalizations with ADRD code",
+       y = "Frequency (number of counties)",
+       fill = "") +
+  scale_y_continuous(expand = c(0, 0)) +
+  scale_fill_manual(values = c("#0072B2", "#E69F00"),
+                    labels = c("White", "Black")) +
+  theme_minimal()
 ```
 
 
@@ -374,6 +378,37 @@ a = pos_med_sf %>%
 # Aroostook, ME
 b = pos_med_sf %>%
   filter(county == 23003)
+```
+
+
+```{r}
+##### get stats for presub inquiry
+
+#--- % of counties with ADRD hosp > a certain % (by race)
+
+pos_med_sf %>%
+  st_drop_geometry() %>%
+  group_by(race) %>%
+  summarise(n_50 = sum(adrd_pct > 50, na.rm = TRUE),
+            n_75 = sum(adrd_pct > 75, na.rm = TRUE),
+            n_90 = sum(adrd_pct > 90, na.rm = TRUE))
+
+
+```
+
+
+```{r}
+# visualize counties where 100% of hospitalizations are hosp with ADRD
+
+hund <- pos_med_sf %>% filter(adrd_pct == 100)
+
+hund %>%
+  ggplot() +
+  geom_bar(aes(x = as.factor(observed_adrd))) + 
+  labs(x = "Number of hospitalizations",
+       y = "Count") +
+  theme_minimal()
+
 ```
 
 
@@ -573,6 +608,48 @@ ggsave(paste0(fig_path, "risk_ratios_1m.png"), width = 7, height = 3.5, dpi = 30
 
 #dev.off()
 ```
+
+```{r}
+# same but with allc!!!
+
+allc_risk_ratios_map_1m <- read_rds("results/figures/intermediate/allc_risk_ratios_map_1m.rds")
+
+#png(file = paste0(fig_path, "risk_ratios_1m.png"), width = 1300, height = 500)
+
+rr_maps <- ggarrange(adrd_risk_ratios_map_1m, hosp_risk_ratios_map_1m, allc_risk_ratios_map_1m,
+                     common.legend = TRUE, legend = "bottom", nrow = 1) +
+  theme(plot.background = element_rect(fill = "white", color = NA))
+
+rr_maps
+
+ggsave(paste0(fig_path, "risk_ratios_1m_allc.png"), width = 7, height = 3.5, dpi = 300)
+
+#dev.off()
+```
+
+
+```{r}
+# get risk ratios for ADRD and hosp in the same plot
+
+# 700 py
+
+
+adrd_risk_ratios_map_1m <- read_rds("results/figures/intermediate/adrd_risk_ratios_map_1m_700py.rds")
+hosp_risk_ratios_map_1m <- read_rds("results/figures/intermediate/hosp_risk_ratios_map_1m_700py.rds")
+
+#png(file = paste0(fig_path, "risk_ratios_1m.png"), width = 1300, height = 500)
+
+rr_maps <- ggarrange(adrd_risk_ratios_map_1m, hosp_risk_ratios_map_1m,
+                     common.legend = TRUE, legend = "bottom") +
+  theme(plot.background = element_rect(fill = "white", color = NA))
+
+rr_maps
+
+#ggsave(paste0(fig_path, "risk_ratios_1m.png"), width = 7, height = 3.5, dpi = 300)
+
+#dev.off()
+```
+
 
 ```{r}
 # same but for all three models
