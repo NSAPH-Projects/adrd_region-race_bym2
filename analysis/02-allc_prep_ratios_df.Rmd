@@ -1,0 +1,563 @@
+
+```{r setup, include=FALSE}
+## Set working directory as project root
+library(here)
+knitr::opts_knit$set(root.dir = here())
+```
+
+```{r, message=FALSE, warning=FALSE}
+## Load libraries ----
+library(tidyverse)
+library(magrittr)
+library(ggplot2)
+library(sf)
+#library(feather)
+#library(cowplot)
+library(RColorBrewer)
+library(viridis)
+library(ggthemes)
+```
+
+```{r}
+## Read data ----
+hosp_county_df <- read_rds("data/symlinks/scratch/hosp_county_df.rds")
+county_sf <- read_rds("data/symlinks/scratch/county_sf.rds")
+county_fips_df <- read_rds("data/symlinks/scratch/county_fips_df.rds")
+
+length(unique(hosp_county_df$county))
+length(unique(county_sf$county))
+length(unique(county_fips_df$county))
+
+counties_shp_ = unique(county_sf$county)
+counties_hosp_ = unique(hosp_county_df$county)
+counties_ = unique(county_fips_df$county)
+
+setdiff(counties_shp_, counties_hosp_)
+setdiff(counties_hosp_, counties_shp_)
+setdiff(counties_, counties_shp_)
+setdiff(counties_shp_, counties_)
+```
+
+```{r}
+# # subtract ADRD from number of hosp admissions
+# 
+# # read in ADRD data
+# adrd_county_df <- read_rds("data/symlinks/scratch/adrd_county_df.rds") %>%
+#   select(-c("n_enrollees", "state", "med_house_income", "house_price_income_ratio", "pm25")) %>%
+#   rename("n_admissions_adrd" = "n_admissions")
+# 
+# # rename n_admissions for clarity
+# hosp_county_df %<>%
+#   rename("n_admissions_hosp" = "n_admissions")
+# 
+# # merge with all-cause hosp data
+# hosp_county_df <- merge(hosp_county_df, adrd_county_df, 
+#                    by = c("county", "year", "race", "sex", "age_grp"))
+# 
+# # subtract out # of ADRD admissions to get new n_admissions for all-cause hosp minus ADRD
+# hosp_county_df %<>%
+#   mutate(n_admissions = n_admissions_hosp - n_admissions_adrd)
+```
+
+```{r}
+## Subset ----
+##  Subset to population of interest --
+hosp_county_df %<>%
+    filter(age_grp %in% c("[65,75)", "[75,85)", ">85"))
+
+##  Replace NA with 0 --
+hosp_county_df$n_enrollees[is.na(hosp_county_df$n_enrollees)] <- 0 
+hosp_county_df$n_admissions[is.na(hosp_county_df$n_admissions)] <- 0 
+
+sum(hosp_county_df$n_enrollees)
+sum(hosp_county_df$n_admissions)
+
+counties_shp_ = unique(county_sf$county)
+counties_hosp_ = unique(hosp_county_df$county)
+
+setdiff(counties_shp_, counties_hosp_)
+setdiff(counties_hosp_, counties_shp_)
+```
+
+```{r}
+# get basic stats from data 
+# (before rounding but after removing those counties with zero black person-years)
+
+# number of hospitalizations by race
+hosp_county_df %>%
+  group_by(race) %>%
+  summarise(total_hosp = sum(n_admissions, na.rm = TRUE))
+```
+
+```{r}
+## Plot number of enrollees across years ----
+hosp_county_df %>% 
+  mutate(race = as.character(race)) %>% 
+  group_by(year, race) %>% 
+  summarise(n_enrollees = sum(n_enrollees)) %>% 
+  ggplot() + 
+  geom_line(aes(x = year, y = n_enrollees, color = race))
+```
+
+```{r}
+## Plot number of hosp admissions across years ----
+hosp_county_df %>% 
+  mutate(race = as.character(race)) %>% 
+  group_by(year, race) %>% 
+  summarise(n_admissions = sum(n_admissions)) %>% 
+  ggplot() + 
+  geom_line(aes(x = year, y = n_admissions, color = race))
+```
+
+```{r}
+## Number of enrollees by county-sex-age_grp split by race group ----
+hosp_county_df %>% 
+  mutate(race = as.character(race)) %>% 
+  ggplot() + 
+  geom_density(aes(x = n_enrollees, color = race))
+```
+
+```{r}
+## Number of enrollees by county-sex-age_grp split by race group ----
+hosp_county_df %>% 
+  filter(n_enrollees < 500) %>% 
+  mutate(race = as.character(race)) %>% 
+  ggplot() + 
+  geom_histogram(aes(x = n_enrollees, color = race)) +
+  facet_grid(~race)
+```
+
+```{r}
+## hosp blind-to-counties rates for each race-sex-age_grp----
+hosp_county_df %>% 
+  group_by(race, sex, age_grp) %>% 
+  summarise(n_enrollees = sum(n_enrollees), 
+            n_admissions = sum(n_admissions),
+            hosp_rate = n_admissions / n_enrollees * 1e5) %>% 
+  mutate(race_sex = paste(race, sex, sep = "_")) %>% 
+  ggplot() +
+  geom_boxplot(aes(x = age_grp, y = hosp_rate)) + 
+  geom_jitter(aes(x = age_grp, y = hosp_rate, col = race_sex))
+```
+
+```{r}
+## hosp county rates for each race-sex-age_grp ----
+hosp_county_df %>% 
+  group_by(county, race, sex, age_grp) %>% 
+  summarise(n_enrollees = sum(n_enrollees), 
+            n_admissions = sum(n_admissions),
+            hosp_rate = n_admissions / n_enrollees * 1e5) %>% 
+  mutate(race_sex = paste(race, sex, sep = "_")) %>% 
+  ggplot() +
+  geom_boxplot(aes(x = age_grp, y = hosp_rate)) + 
+  geom_jitter(aes(x = age_grp, y = hosp_rate, col = race_sex)) + 
+  facet_wrap(~race)
+```
+
+```{r}
+hosp_county_df %>% 
+  group_by(race, sex, age_grp) %>% 
+  summarise(n_enrollees = sum(n_enrollees), 
+            n_admissions = sum(n_admissions),
+            hosp_rate = n_admissions / n_enrollees * 100) %>% 
+  group_by(sex, age_grp) %>% 
+  summarise(hosp_rate = mean(hosp_rate))
+```
+
+```{r}
+xx <- hosp_county_df
+
+xx$sex[hosp_county_df$sex == 1] = "male"
+xx$sex[hosp_county_df$sex == 2] = "female"
+
+## Reference hosp rates for each sex/age_grp blind to race ----
+xx %>% 
+  mutate(race = as.character(race)) %>% 
+  group_by(race, sex, age_grp) %>% 
+  summarise(n_enrollees = sum(n_enrollees), 
+            n_admissions = sum(n_admissions),
+            hosp_rate = n_admissions / n_enrollees * 100) %>% 
+  group_by(sex, age_grp) %>% 
+  summarise(hosp_rate = mean(hosp_rate)) %>%  
+  ggplot() + 
+  geom_point(aes(x = age_grp, y = hosp_rate, color = sex)) + 
+  labs(title = "hosp reference rates", x = "Age group", y = "hosp rate") + 
+  theme_bw()
+#ggsave("results/figures/hosp_reference_rates.png")
+```
+
+```{r}
+## look at proportions of enrollees by race
+prettyNum(prop.table(tapply(hosp_county_df$n_enrollees, hosp_county_df$race, sum)))
+```
+
+```{r}
+xx <- hosp_county_df
+
+## Observed county-level hosp counts
+xx$race[xx$race == 1] = "white"
+xx$race[xx$race == 2] = "black"
+
+xx %<>% 
+  group_by(county, race) %>% 
+  summarise(n_admissions = sum(n_admissions))
+
+counties_shp_ = unique(county_sf$county)
+counties_xx_w_ = unique(xx$county[xx$race == "white"])
+counties_xx_b_ = unique(xx$county[xx$race == "black"])
+
+setdiff(counties_shp_, counties_xx_w_)
+setdiff(counties_xx_w_, counties_shp_)
+setdiff(counties_shp_, counties_xx_b_)
+setdiff(counties_xx_b_, counties_shp_)
+```
+
+```{r}
+length(unique(xx$county))
+sum(is.na(xx$race))
+```
+
+```{r}
+yy <- county_sf %>% 
+  select(county) %>% 
+  left_join(xx) 
+
+length(unique(yy$county))
+sum(is.na(yy$race))
+sum(is.na(yy$n_admissions))
+```
+
+```{r}
+yy %>%
+  filter(race == "white") %>% 
+  st_simplify() %>%
+  ggplot() +
+  geom_sf(aes(fill = n_admissions), alpha = 1, lwd = 0.0)
+
+yy %>%
+  filter(race == "black") %>% 
+  st_simplify() %>%
+  ggplot() +
+  geom_sf(aes(fill = n_admissions), alpha = 1, lwd = 0.0)
+```
+
+```{r}
+n_admissions_ <- yy$n_admissions
+myPalette <- colorRampPalette(rev(RColorBrewer::brewer.pal(11, "Spectral")))
+sc <- scale_fill_gradientn(colors = myPalette(10), 
+                           limits = c(min(n_admissions_, na.rm = TRUE), max(n_admissions_, na.rm = TRUE)))
+
+yy  %>% 
+  ggplot() + 
+  geom_sf(aes(fill = n_admissions), alpha = 1, lwd = 0.0) +
+  facet_wrap(~race, ncol = 2) + 
+  labs(title = "Observed") + 
+  guides(fill = guide_legend(title = "hosp counts")) + 
+  theme_classic() + 
+  theme(legend.position = "bottom") + 
+  sc
+#the yellow looks like white, try another visualization package
+```
+
+```{r}
+yy %>% 
+  ggplot() + 
+  geom_sf(aes(fill = n_admissions), alpha = 1, lwd = 0.0) +
+  facet_wrap(~race, ncol = 2) + 
+  labs(title = "Observed") + 
+  guides(fill = guide_legend(title = "hosp counts")) + 
+  theme_classic() + 
+  scale_fill_viridis(name = "n_admissions", option = "D")
+```
+
+* hosp hospitalizations entangle prevalence and severity, specially in "small" counties 
+* biased measurement error? noise systematically affects certain groups
+* even if not affecting certain groups, measurement error decreases the power of the model
+* variance of the inference, will not detect statistical differences in the output
+
+## Observed vs expected
+
+```{r}
+# stage 1
+# get race-specific national rates for each sex/age combination 
+exp_stage1_df <- hosp_county_df %>%
+    dplyr::group_by(race, sex, age_grp) %>% # race, sex, age_grp
+    dplyr::summarize(
+        n_admissions = sum(n_admissions),
+        n_enrollee_years = sum(n_enrollees),
+        exp_rate_stage1 = n_admissions / n_enrollee_years
+    )
+
+# stage 2
+# get overall national rates for each sex/age combination 
+exp_stage2_df <- hosp_county_df %>%
+    dplyr::group_by(sex, age_grp) %>% # sex, age_grp
+    dplyr::summarize(
+        n_admissions = sum(n_admissions),
+        n_enrollee_years = sum(n_enrollees),
+        exp_rate_stage2 = n_admissions / n_enrollee_years
+    )
+```
+
+
+
+```{r}
+# make tables of standardized rates
+
+#----- stage 1 -----#
+
+exp_rates_stage1_tab <- exp_stage1_df %>%
+  select(-c(n_enrollee_years, n_admissions)) %>%
+  spread(key = "race", value = "exp_rate_stage1") %>%
+  mutate(sex = ifelse(sex == 1, "Male", "Female"),
+         age_grp = ifelse(age_grp == "[65,75)", "65-74", age_grp),
+         age_grp = ifelse(age_grp == "[75,85)", "75-84", age_grp),
+         age_grp = ifelse(age_grp == ">85", "85+", age_grp),
+         `1` = format(round(`1`, 3), nsmall = 3),
+         `2` = format(round(`2`, 3), nsmall = 3)) %>%
+  arrange(age_grp) %>%
+  rename("Sex" = "sex",
+         "Age group" = "age_grp",
+         "Rate (White)" = "1",
+         "Rate (Black)" = "2")
+exp_rates_stage1_tab
+
+
+#----- stage 2 -----#
+
+exp_rates_stage2_tab <- exp_stage2_df %>%
+  select(-c(n_enrollee_years, n_admissions)) %>%
+  mutate(sex = ifelse(sex == 1, "Male", "Female"),
+         age_grp = ifelse(age_grp == "[65,75)", "65-74", age_grp),
+         age_grp = ifelse(age_grp == "[75,85)", "75-84", age_grp),
+         age_grp = ifelse(age_grp == ">85", "85+", age_grp),
+         exp_rate_stage2 = format(round(exp_rate_stage2, 3), nsmall = 3)) %>%
+  arrange(age_grp) %>%
+  rename("Sex" = "sex",
+         "Age group" = "age_grp",
+         "Rate (overall)" = "exp_rate_stage2")
+exp_rates_stage2_tab
+
+
+# join tables together (not saving right now)
+exp_rates_tab <- left_join(exp_rates_stage1_tab, exp_rates_stage2_tab)
+
+
+# save tables
+write_rds(exp_rates_stage1_tab, 
+          file = paste0("results/tables/intermediate/allc_expected_rates_race-specific.rds"))
+write_rds(exp_rates_stage2_tab, 
+          file = paste0("results/tables/intermediate/allc_expected_rates_overall.rds"))
+# tables joined and written to tex in script 10
+```
+
+
+```{r}
+## Aggregate over years ----
+## Just tally up the number of person years and hospitalizations over all years
+obs_df <- hosp_county_df %>%
+    dplyr::group_by(county, race, sex, age_grp) %>% #county, race, sex, age_grp
+    dplyr::summarize(n_enrollees = sum(n_enrollees),
+                     n_admissions = sum(n_admissions), 
+                     obs_rate = n_admissions / n_enrollees,
+                     # HPI and PM2.5 are the same across all years
+                     med_house_income = first(med_house_income),
+                     house_price_income_ratio = first(house_price_income_ratio),
+                     pm25 = mean(pm25))
+
+## fill NAs
+obs_df %>% 
+  filter(n_enrollees == 0) 
+
+obs_df$obs_rate[is.na(obs_df$obs_rate)] <- 0
+```
+
+```{r}
+## Merge with exp_df ----
+hosp_ratios_df <- obs_df %>%
+    dplyr::left_join(exp_stage1_df %>%
+                         dplyr::select(race, sex, age_grp, exp_rate_stage1),
+                     by = c("race", "sex", "age_grp")) %>%
+    dplyr::left_join(exp_stage2_df %>%
+                         dplyr::select(sex, age_grp, exp_rate_stage2),
+                     by = c("sex", "age_grp"))
+
+## Now aggregate age ----
+hosp_ratios_df %<>% 
+  mutate(
+    expected_stage1 = n_enrollees * exp_rate_stage1, 
+    expected_stage2 = n_enrollees * exp_rate_stage2,
+    observed = n_admissions
+  ) %>% 
+  dplyr::group_by(county, race) %>%
+  dplyr::summarize(
+    person_years = sum(n_enrollees),
+    expected_stage1 = sum(expected_stage1), 
+    expected_stage2 = sum(expected_stage2), 
+    observed = sum(observed),
+    # HPI and PM2.5 are the same across all years --> just take mean
+    med_house_income = mean(med_house_income),
+    house_price_income_ratio = mean(house_price_income_ratio),
+    pm25 = mean(pm25)) %>%
+  dplyr::ungroup()
+```
+
+
+```{r}
+hosp_ratios_df %>% 
+  mutate(
+    rel_ratio = observed / expected_stage1,
+    race = as.character(race)
+  ) %>% 
+  ggplot() + 
+  geom_density(aes(x = rel_ratio, color = race))
+
+hosp_ratios_df %>% 
+  mutate(
+    rel_ratio = observed / expected_stage2,
+    race = as.character(race)
+  ) %>% 
+  ggplot() + 
+  geom_density(aes(x = rel_ratio, color = race))
+```
+
+```{r}
+hosp_ratios_df %>% 
+  ggplot() + 
+  geom_point(aes(x = observed, y = expected_stage1, color = as.factor(race)), alpha = 0.5) + 
+  scale_x_sqrt() + 
+  scale_y_sqrt()
+```
+
+```{r}
+hosp_ratios_df %>% 
+  mutate(
+    log_diff = log(observed) - log(expected_stage1),
+    race = as.character(race)
+    ) %>% 
+  ggplot() + 
+  geom_density(aes(x = log_diff, color = race))
+```
+
+```{r}
+xx <- hosp_ratios_df
+xx$race[xx$race == 1] = "white"
+xx$race[xx$race == 2] = "black"
+
+xx %<>% 
+  mutate(
+    log_diff = log(observed/expected_stage1),
+    log_diff = if_else(observed == 0, as.numeric(NA), log_diff)
+    )
+
+counties_shp_ = unique(county_sf$county)
+counties_xx_w_ = unique(xx$county[xx$race == "white"])
+counties_xx_b_ = unique(xx$county[xx$race == "black"])
+
+setdiff(counties_shp_, counties_xx_w_)
+setdiff(counties_xx_w_, counties_shp_)
+setdiff(counties_shp_, counties_xx_b_)
+setdiff(counties_xx_b_, counties_shp_)
+```
+
+```{r}
+length(unique(xx$county))
+sum(is.na(xx$race))
+```
+
+```{r}
+yy <- county_sf %>% 
+  select(county) %>% 
+  left_join(xx) 
+
+length(unique(yy$county))
+sum(is.na(yy$race))
+sum(is.na(yy$log_diff))
+sum(yy$person_years == 0)
+sum(yy$observed == 0)
+```
+
+```{r}
+yy %>% 
+  mutate(person_years = log(person_years)) %>% 
+  ggplot() + 
+  geom_sf(aes(fill = person_years), alpha = 1, lwd = 0.0) +
+  scale_fill_viridis(name = "person_years", option = "D") +
+  facet_wrap(~race, ncol = 2) + 
+  labs(title = "log person years") + 
+  theme(legend.position = "bottom")
+```
+
+```{r}
+## person years is zero
+yy %>%
+  st_simplify() %>%
+  mutate(zero_persons = (person_years == 0)) %>%
+  ggplot() + 
+  geom_sf(aes(fill = zero_persons), alpha = 1, lwd = 0.0) + 
+  facet_grid(~race)
+```
+
+```{r}
+## observed is zero
+yy %>%
+  st_simplify() %>%
+  mutate(zero_observed = (observed == 0)) %>%
+  ggplot() + 
+  geom_sf(aes(fill = zero_observed), alpha = 1, lwd = 0.0) + 
+  facet_grid(~race)
+```
+
+```{r}
+yy %>%
+  filter(race == "white") %>% 
+  st_simplify() %>%
+  ggplot() +
+  geom_sf(aes(fill = log_diff), alpha = 1, lwd = 0.0)
+
+yy %>%
+  filter(race == "black") %>% 
+  st_simplify() %>%
+  ggplot() +
+  geom_sf(aes(fill = log_diff), alpha = 1, lwd = 0.0)
+```
+
+```{r}
+yy %>% 
+  ggplot() + 
+  geom_sf(aes(fill = log_diff), alpha = 1, lwd = 0.0) +
+  scale_fill_viridis(name = "log_diff", option = "D") +
+  facet_wrap(~race, ncol = 2) + 
+  labs(title = "log(observed) - log(expected)") + 
+  theme(legend.position = "bottom")
+```
+
+```{r}
+## Prep data ----
+hosp_ratios_df %<>% 
+  mutate(
+    black = as.integer(if_else(race == 2, 1, 0)),
+    # expected = as.integer(ceiling(expected)), # expected values don't need to be integers!
+    observed = as.integer(round(observed)), # round normally (must be integers)
+    # person_years = as.integer(round(person_years)), # doesn't need to be integers
+    log_expected_stage1 = log(expected_stage1 + 0.00001), # to avoid issues with expected = 0
+    log_expected_stage2 = log(expected_stage2 + 0.00001) # to avoid issues with expected = 0
+  ) %>% 
+  left_join(county_fips_df)
+
+# sort by race and then county
+hosp_ratios_df %<>%
+  arrange(race, county)
+
+sum(is.na(hosp_ratios_df$c_idx))
+sum(is.na(hosp_ratios_df$s_idx))
+sum(is.na(hosp_ratios_df$observed))
+sum(is.na(hosp_ratios_df$expected_stage1))
+sum(is.na(hosp_ratios_df$expected_stage2))
+sum(is.na(hosp_ratios_df$person_years))
+```
+
+
+```{r}
+write_rds(hosp_ratios_df, "data/symlinks/scratch/allc_ratios_df.rds")
+```
