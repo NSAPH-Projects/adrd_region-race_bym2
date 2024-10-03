@@ -682,9 +682,9 @@ extract_beta_info <- function(x){
   if(is.null(x)){
     return(c(NA))
   } else {
-    post_med <- median(x) |> round(3)
-    q5 <- quantile(x, 0.05) |> round(3)
-    q95 <- quantile(x, 0.95) |> round(3)
+    post_med <- median(x) |> exp() |> round(3) 
+    q5 <- quantile(x, 0.05) |> exp() |> round(3)
+    q95 <- quantile(x, 0.95) |> exp() |> round(3)
     #return(c(post_med = post_med, q5, q95))
     return(paste0(post_med, " (", q5, ", ", q95, ")"))
   }
@@ -724,11 +724,11 @@ beta_df <- rbind(beta_white, beta_black) |>
 # write to rds (create adrd + hosp table in script 11)
 write_rds(beta_df, file = paste0("results/tables/intermediate/hosp_beta_df.rds"))
 
-# get table in latex
-print(xtable(beta_df, type = "latex"), 
-      file = "results/tables/final/hosp_betas.tex",
-      sanitize.text.function = identity, # don't escape math symbols
-      include.rownames = FALSE) 
+# # get table in latex
+# print(xtable(beta_df, type = "latex"), 
+#       file = "results/tables/final/hosp_betas.tex",
+#       sanitize.text.function = identity, # don't escape math symbols
+#       include.rownames = FALSE) 
 ```
 
 
