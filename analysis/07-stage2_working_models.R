@@ -18,8 +18,13 @@ hosp_stage2 <- paste0("results/models/stage2/hosp/",
                         "m2/model_run_20240712-0021/stanfit_object_stage2_hosp_m2.rds",
                         "m3/model_run_20240712-0021/stanfit_object_stage2_hosp_m3.rds"))
 
+allc_stage2 <- paste0("results/models/stage2/allc/",
+                      c("m1/model_run_20240910-1927/stanfit_object_stage2_allc_m1.rds",
+                        "m2/model_run_20240910-1927/stanfit_object_stage2_allc_m2.rds",
+                        "m3/model_run_20240910-1927/stanfit_object_stage2_allc_m3.rds"))
+
 # get all model names in one vector
-models <- c(adrd_stage2, hosp_stage2)
+models <- c(adrd_stage2, hosp_stage2, allc_stage2)
 
 # copy all of these models into the working folder
 file.copy(models, "results/models/working", overwrite = TRUE)
