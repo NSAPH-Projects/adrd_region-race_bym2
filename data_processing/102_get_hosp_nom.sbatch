@@ -6,4 +6,4 @@
 #SBATCH -t 0-00:10 # time (D-HH:MM)
 #SBATCH --array=2000-2018
 
-python data_processing/get_hosp_nom.py --year $SLURM_ARRAY_TASK_ID
+python data_processing/102_get_hosp_nom.py --year $SLURM_ARRAY_TASK_ID
