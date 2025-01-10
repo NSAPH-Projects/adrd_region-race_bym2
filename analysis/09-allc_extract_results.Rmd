@@ -399,6 +399,17 @@ names(log_lambda_white_mats) <- names(log_lambda_black_mats) <- names(psi_white_
 ```
 
 ```{r}
+# store risk ratio posterior distribution to compare across outcomes
+rr_post <- risk_ratio_mats[[1]] %>% as.data.frame()
+
+# name columns with counties (must be in the same order!!)
+names(rr_post) <- allc_ratios_df_comb$county
+
+# save matrix
+write_rds(rr_post, "data/intermediate/allc_risk_ratio_post.rds")
+```
+
+```{r}
 # get posterior medians and determine significance
 
 # function to lapply to all these lists
