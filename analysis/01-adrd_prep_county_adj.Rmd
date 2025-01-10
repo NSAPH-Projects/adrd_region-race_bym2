@@ -16,6 +16,16 @@ library(stringr)
 
 In this notebook we make sure that the counties match in all objects: the adjacency matrix, geometry, adrd rates, sociodemographic and pollution data.
 
+```{r}
+########## user input ########## 
+
+# are we incorporating Medicaid eligibility into expected counts?
+
+dual <- TRUE # yes, standardize by age/sex/dual
+#dual <- FALSE # no, standardize by age/sex
+
+```
+
 
 ## Shapefiles
 
@@ -123,9 +133,16 @@ setdiff(counties_adj_, counties_shp_)
 ## ADRD data
 
 ```{r}
-adrd_county_df <- read_csv("data/symlinks/scratch/adrd_rates.csv") %>% 
-  filter(!state %in% c(2, 15, 66, 72, 60, 69, 78)) %>%
-  arrange(race, county)
+
+if(dual){
+  adrd_county_df <- read_csv("data/symlinks/scratch/adrd_rates_dual.csv")
+} else {
+  adrd_county_df <- read_csv("data/symlinks/scratch/adrd_rates.csv")
+}
+
+adrd_county_df <- adrd_county_df %>% 
+    filter(!state %in% c(2, 15, 66, 72, 60, 69, 78)) %>%
+    arrange(race, county)
 
 counties_adrd_ = unique(adrd_county_df$county)
 
@@ -149,11 +166,21 @@ zip_county %>%
 ```{r}
 adrd_county_df$county[adrd_county_df$county == 46102] <- 46113
 
-adrd_county_df %<>% 
-  group_by(county, year, race, sex, age_grp, state) %>% 
-  summarise(n_enrollees = sum(n_enrollees), 
-            n_admissions = sum(n_admissions)) %>% 
+if(dual){
+  adrd_county_df %<>% 
+    group_by(county, year, race, sex, age_grp, dual, state) %>% 
+    summarise(n_enrollees = sum(n_enrollees), 
+              n_admissions = sum(n_admissions)) %>% 
   ungroup()
+} else {
+  adrd_county_df %<>% 
+    group_by(county, year, race, sex, age_grp, state) %>% 
+    summarise(n_enrollees = sum(n_enrollees), 
+              n_admissions = sum(n_admissions)) %>% 
+  ungroup()
+}
+
+
 ```
 
 ```{r}
@@ -536,7 +563,13 @@ check_adj %>%
 
 ```{r}
 write_rds(county_sf, "data/symlinks/scratch/county_sf.rds")
-write_rds(adrd_county_df, "data/symlinks/scratch/adrd_county_df.rds")
 write_rds(county_adj_sparse_list, "data/symlinks/scratch/county_adj_sparse_list.rds")
 write_rds(county_fips_df, "data/symlinks/scratch/county_fips_df.rds")
+
+if(dual){
+  write_rds(adrd_county_df, "data/symlinks/scratch/adrd_county_df_dual.rds")
+} else {
+  write_rds(adrd_county_df, "data/symlinks/scratch/adrd_county_df.rds")
+}
+
 ```

@@ -15,6 +15,17 @@ library(stringr)
 
 In this notebook we make sure that the counties match in all objects: the adjacency matrix, geometry, hosp rates, sociodemographic and pollution data.
 
+```{r}
+########## user input ########## 
+
+# are we incorporating Medicaid eligibility into expected counts?
+
+dual <- TRUE # yes, standardize by age/sex/dual
+#dual <- FALSE # no, standardize by age/sex
+
+```
+
+
 ## Shapefiles
 
 ```{r}
@@ -121,9 +132,16 @@ setdiff(counties_adj_, counties_shp_)
 ## All-cause data
 
 ```{r}
-hosp_county_df <- read_csv("data/symlinks/scratch/hosp_rates.csv") %>% 
-  filter(!state %in% c(2, 15, 66, 72, 60, 69, 78)) %>%
-  arrange(race, county)
+
+if(dual){
+  hosp_county_df <- read_csv("data/symlinks/scratch/hosp_rates_dual.csv")
+} else {
+  hosp_county_df <- read_csv("data/symlinks/scratch/hosp_rates.csv")
+}
+
+hosp_county_df <- hosp_county_df %>% 
+    filter(!state %in% c(2, 15, 66, 72, 60, 69, 78)) %>%
+    arrange(race, county)
 
 counties_hosp_ = unique(hosp_county_df$county)
 
@@ -147,11 +165,19 @@ zip_county %>%
 ```{r}
 hosp_county_df$county[hosp_county_df$county == 46102] <- 46113
 
-hosp_county_df %<>% 
-  group_by(county, year, race, sex, age_grp, state) %>% 
-  summarise(n_enrollees = sum(n_enrollees), 
-            n_admissions = sum(n_admissions)) %>% 
+if(dual){
+  hosp_county_df %<>% 
+    group_by(county, year, race, sex, age_grp, dual, state) %>% 
+    summarise(n_enrollees = sum(n_enrollees), 
+              n_admissions = sum(n_admissions)) %>% 
   ungroup()
+} else {
+  hosp_county_df %<>% 
+    group_by(county, year, race, sex, age_grp, state) %>% 
+    summarise(n_enrollees = sum(n_enrollees), 
+              n_admissions = sum(n_admissions)) %>% 
+  ungroup()
+}
 ```
 
 ```{r}
@@ -296,7 +322,7 @@ county_zero_b <- hosp_county_df %>%
 
 length(county_zero_b)
 
-# remove rows for these counties from ADRD data (both white and black rows)
+# remove rows for these counties from data (both white and black rows)
 hosp_county_df %<>%
   filter(!county %in% county_zero_b)
 
@@ -307,7 +333,10 @@ length(unique(county_adj_df$county))
 
 ```
 
-
 ```{r}
-write_rds(hosp_county_df, "data/symlinks/scratch/hosp_county_df.rds")
+if(dual){
+  write_rds(hosp_county_df, "data/symlinks/scratch/hosp_county_df_dual.rds")
+} else {
+  write_rds(hosp_county_df, "data/symlinks/scratch/hosp_county_df.rds")
+}
 ```
