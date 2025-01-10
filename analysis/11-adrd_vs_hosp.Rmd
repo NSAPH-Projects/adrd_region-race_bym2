@@ -627,6 +627,26 @@ ggsave(paste0(fig_path, "risk_ratios_1m_allc.png"), width = 7, height = 3.5, dpi
 #dev.off()
 ```
 
+```{r}
+# same but with allc and resp!!!
+
+allc_risk_ratios_map_1m <- read_rds("results/figures/intermediate/allc_risk_ratios_map_1m.rds")
+resp_risk_ratios_map_1m <- read_rds("results/figures/intermediate/resp_risk_ratios_map_1m.rds")
+
+#png(file = paste0(fig_path, "risk_ratios_1m.png"), width = 1300, height = 500)
+
+rr_maps <- ggarrange(adrd_risk_ratios_map_1m, hosp_risk_ratios_map_1m, 
+                     allc_risk_ratios_map_1m, resp_risk_ratios_map_1m,
+                     common.legend = TRUE, legend = "bottom") +
+  theme(plot.background = element_rect(fill = "white", color = NA))
+
+rr_maps
+
+ggsave(paste0(fig_path, "risk_ratios_1m_resp.png"), width = 7, height = 3.5, dpi = 300)
+
+#dev.off()
+```
+
 
 ```{r}
 # get risk ratios for ADRD and hosp in the same plot
@@ -794,4 +814,136 @@ ggarrange(adrd_sd, hosp_sd,
 
 dev.off()
 ```
+
+
+
+
+# ADRD vs. non-ADRD risk ratios by state
+
+```{r}
+
+# don't need to run anything above this (except to load packages)
+
+model <- "m1"
+
+# model results
+adrd_res <- read_rds("data/intermediate/adrd_model_results.rds")
+hosp_res <- read_rds("data/intermediate/hosp_model_results.rds")
+allc_res <- read_rds("data/intermediate/allc_model_results.rds")
+
+adrd_res <- adrd_res[[paste0("adrd_", model)]]
+hosp_res <- hosp_res[[paste0("hosp_", model)]]
+allc_res <- allc_res[[paste0("allc_", model)]]
+
+
+## Read non-modeled data ----
+adrd_ratios_df_comb <- read_rds('data/symlinks/scratch/adrd_combined_data.rds')
+hosp_ratios_df_comb <- read_rds('data/symlinks/scratch/hosp_combined_data.rds')
+allc_ratios_df_comb <- read_rds('data/symlinks/scratch/allc_combined_data.rds')
+
+adrd_ratios_df <- read_rds('data/symlinks/scratch/adrd_ratios_df.rds')
+hosp_ratios_df <- read_rds('data/symlinks/scratch/hosp_ratios_df.rds')
+allc_ratios_df <- read_rds('data/symlinks/scratch/allc_ratios_df.rds')
+
+adrd_res_df <- adrd_res %>%
+  right_join(adrd_ratios_df_comb) %>%
+  right_join(adrd_ratios_df)
+hosp_res_df <- hosp_res %>%
+  right_join(hosp_ratios_df_comb) %>%
+  right_join(hosp_ratios_df)
+allc_res_df <- allc_res %>%
+  right_join(allc_ratios_df_comb) %>%
+  right_join(allc_ratios_df)
+
+pos_med <- merge(hosp_res_df, allc_res_df, all = TRUE, 
+                 by = c("county", "race", "black", "c_idx", "s_idx", "person_years", 
+                        "fipschar", "fips_st", "house_price_income_ratio", "pm25",
+                        "med_house_income", "person_years_total"),
+                 suffixes = c("_hosp", "_allc"))
+
+```
+
+```{r}
+
+# load posterior distribution for statistical test
+hosp_rr <- read_rds('data/intermediate/hosp_risk_ratio_post.rds')
+allc_rr <- read_rds('data/intermediate/allc_risk_ratio_post.rds')
+
+# get allc - hosp for each draw for each county
+allc_minus_hosp <- allc_rr - hosp_rr
+
+# get % > 0 for each county
+allc_minus_hosp_num <- sapply(allc_minus_hosp, function(x) mean(x > 0) * 100)
+
+# get into df
+allc_minus_hosp_df <- data.frame(county = names(allc_minus_hosp_num),
+                                     pct_geq0 = allc_minus_hosp_num)
+
+# join with data
+pos_med <- merge(pos_med, allc_minus_hosp_df, by = "county")
+```
+
+```{r}
+# get other stats for paper
+
+# all-cause RR > non-ADRD RR in what % of counties?
+mean(pos_med$risk_ratio_allc > pos_med$risk_ratio_hosp) * 100
+
+# "Moreover, removing hospitalizations with ADRD from all-cause hospitalizations changed Black-White risk ratios from greater than 1.0 to less than 1.0 (indicating greater risk for White versus Black beneficiaries) in XX% of counties." 
+mean(pos_med$risk_ratio_allc > 1 & pos_med$risk_ratio_hosp < 1) * 100
+
+
+```
+
+```{r}
+# group by state and get mean risk ratio for ADRD and hosp
+rr_state <- pos_med %>%
+  st_drop_geometry() %>%
+  filter(race == 1) %>%
+  select(county, fips_st, risk_ratio_hosp, risk_ratio_allc, pct_geq0) %>%
+  group_by(fips_st) %>%
+  summarise(rr_hosp_mean = mean(risk_ratio_hosp),
+            rr_allc_mean = mean(risk_ratio_allc),
+            pct_geq0 = mean(pct_geq0))
+
+# get state abbreviations and join with data
+library(tigris)
+tigris_fips <- tigris::fips_codes %>%
+  select(state, state_code) %>%
+  distinct()
+rr_state <- merge(rr_state, tigris_fips, by.x = "fips_st", by.y = "state_code")
+
+# factor levels by non-adrd
+rr_state$state <- factor(rr_state$state, 
+                         levels = rev(rr_state$state[order(rr_state$rr_allc_mean)]))
+
+```
+
+```{r}
+# plot
+rr_state %>%
+  filter(state != "DC") %>% # remove DC
+  ggplot(aes(x = state)) +
+  geom_point(aes(y = rr_hosp_mean, shape = "Non-ADRD")) +
+  geom_point(aes(y = rr_allc_mean, shape = "All-cause")) +
+  geom_segment(aes(x = state, xend = state, 
+                   y = rr_hosp_mean, yend = rr_allc_mean)) +
+  labs(x = "",
+       y = "Risk ratios",
+       shape = "") +
+  geom_hline(yintercept = 1, lty = 2) +
+  scale_shape_manual(
+    values = c("Non-ADRD" = 19, "All-cause" = 4)
+  ) +
+  theme_minimal()
+```
+
+```{r}
+# print out table
+rr_state %>%
+  select(state, pct_geq0) %>%
+  filter(state != "DC")
+```
+
+
 
