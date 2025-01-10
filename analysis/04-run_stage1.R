@@ -3,6 +3,12 @@ library(tidyverse)
 library(magrittr)
 library(rstan)
 
+
+# incorporating Medicaid eligibility into expected counts?
+dual <- TRUE
+#dual <- FALSE
+
+
 # in command line, run something like:
 # sbatch analysis/04-run_stage1.sbatch adrd m2
 # (with appropriate outcome and model)
@@ -17,11 +23,19 @@ model_to_run <- args[2]
 #outcome_to_run <- "hosp"     # or adrd
 #model_to_run = "m2"          # or m2, m3
 
+# outcome_to_run is adrd if using dual (not adrd-dual)
+
 # print model this is running
 paste0(outcome_to_run)
 paste0(model_to_run)
+paste0("dual = ", dual)
 
-path_mod <- paste0("results/models/stage1/", outcome_to_run, "/", model_to_run, "/")
+if(dual){
+  path_mod <- paste0("results/models/dual/stage1/", outcome_to_run, "/", model_to_run, "/")
+} else {
+  path_mod <- paste0("results/models/stage1/", outcome_to_run, "/", model_to_run, "/")
+}
+
 
 # get correct stan file for this model
 if (model_to_run == "m1") {
@@ -74,7 +88,12 @@ n_thin <- 40
 verbose_flag <- FALSE
 
 ## Load data ----
-ratios_df <- read_rds(paste0("data/symlinks/scratch/", outcome_to_run, "_ratios_df.rds"))
+
+if(dual){
+  ratios_df <- read_rds(paste0("data/symlinks/scratch/", outcome_to_run, "_ratios_df_dual.rds"))
+} else {
+  ratios_df <- read_rds(paste0("data/symlinks/scratch/", outcome_to_run, "_ratios_df.rds"))
+}
 county_adj_sparse_list <- read_rds('data/symlinks/scratch/county_adj_sparse_list.rds')
 
 
@@ -116,7 +135,13 @@ ratios_df_comb <- ratios_df %>%
             s_idx = first(s_idx),
             house_price_income_ratio = first(house_price_income_ratio),
             pm25 = first(pm25))
-write_rds(ratios_df_comb, paste0("data/symlinks/scratch/", outcome_to_run, "_combined_data.rds"))
+if(dual){
+  write_rds(ratios_df_comb, paste0("data/symlinks/scratch/", outcome_to_run, "_combined_data_dual.rds"))
+} else {
+  write_rds(ratios_df_comb, paste0("data/symlinks/scratch/", outcome_to_run, "_combined_data.rds")) 
+}
+
+
 
 ## Get the data in order ----
 # note: covariates will be added in later
@@ -228,10 +253,12 @@ if(model_to_run == "m1"){
   cat("Invalid model name")
 }
 
+
 # write stanfit object
 write_rds(fit, paste0(path_mod, 'model_run_', tstamp, 
                       '/stanfit_object_stage1_', outcome_to_run, 
-                      "_", model_to_run,  '.rds'))
+                      "_", model_to_run, '.rds'))
+
 
 ## Remove the copy of the stan code and the compiled stan model ----
 # temp stan file

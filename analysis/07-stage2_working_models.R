@@ -5,27 +5,51 @@
 
 # get paths to all the current working models
 
+dual = TRUE
+#dual = FALSE
 
-#----- stage 2 -----#
 
-adrd_stage2 <- paste0("results/models/stage2/adrd/", 
-                      c("m1/model_run_20240507-1555/stanfit_object_stage2_adrd_m1.rds",
-                        "m2/model_run_20240712-0021/stanfit_object_stage2_adrd_m2.rds",
-                        "m3/model_run_20240712-0021/stanfit_object_stage2_adrd_m3.rds"))
-
-hosp_stage2 <- paste0("results/models/stage2/hosp/",
-                      c("m1/model_run_20240507-1555/stanfit_object_stage2_hosp_m1.rds",
-                        "m2/model_run_20240712-0021/stanfit_object_stage2_hosp_m2.rds",
-                        "m3/model_run_20240712-0021/stanfit_object_stage2_hosp_m3.rds"))
-
-allc_stage2 <- paste0("results/models/stage2/allc/",
-                      c("m1/model_run_20240910-1927/stanfit_object_stage2_allc_m1.rds",
-                        "m2/model_run_20240910-1927/stanfit_object_stage2_allc_m2.rds",
-                        "m3/model_run_20240910-1927/stanfit_object_stage2_allc_m3.rds"))
-
-# get all model names in one vector
-models <- c(adrd_stage2, hosp_stage2, allc_stage2)
-
-# copy all of these models into the working folder
-file.copy(models, "results/models/working", overwrite = TRUE)
+if(dual){
+  
+  adrd_stage2 <- paste0("results/models/dual/stage2/adrd/", 
+                        c("m1/model_run_20241212-1915/stanfit_object_stage2_adrd_m1.rds"))
+  
+  hosp_stage2 <- paste0("results/models/dual/stage2/hosp/", 
+                        c("m1/model_run_20241219-2054/stanfit_object_stage2_hosp_m1.rds"))
+  
+  # get all model names in one vector
+  models <- c(adrd_stage2, hosp_stage2)
+  
+  # copy all of these models into the working folder
+  file.copy(models, "results/models/dual/working", overwrite = TRUE)
+  
+} else {
+  
+  #----- stage 2 -----#
+  
+  adrd_stage2 <- paste0("results/models/stage2/adrd/", 
+                        c("m1/model_run_20240507-1555/stanfit_object_stage2_adrd_m1.rds",
+                          "m2/model_run_20240712-0021/stanfit_object_stage2_adrd_m2.rds",
+                          "m3/model_run_20240712-0021/stanfit_object_stage2_adrd_m3.rds"))
+  
+  hosp_stage2 <- paste0("results/models/stage2/hosp/",
+                        c("m1/model_run_20240507-1555/stanfit_object_stage2_hosp_m1.rds",
+                          "m2/model_run_20240712-0021/stanfit_object_stage2_hosp_m2.rds",
+                          "m3/model_run_20240712-0021/stanfit_object_stage2_hosp_m3.rds"))
+  
+  allc_stage2 <- paste0("results/models/stage2/allc/",
+                        c("m1/model_run_20240910-1927/stanfit_object_stage2_allc_m1.rds",
+                          "m2/model_run_20240910-1927/stanfit_object_stage2_allc_m2.rds",
+                          "m3/model_run_20240910-1927/stanfit_object_stage2_allc_m3.rds"))
+  
+  resp_stage2 <- paste0("results/models/stage2/resp/",
+                        c("m1/model_run_20241009-0025/stanfit_object_stage2_resp_m1.rds"))
+  
+  # get all model names in one vector
+  models <- c(adrd_stage2, hosp_stage2, allc_stage2, resp_stage2)
+  
+  # copy all of these models into the working folder
+  file.copy(models, "results/models/working", overwrite = TRUE)
+  
+}
 
