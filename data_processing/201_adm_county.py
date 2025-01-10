@@ -78,13 +78,13 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--nom_prefix', 
                         type=str, 
-                        default='data/symlinks/scratch/nom_cvd') # edit name here
+                        default='data/symlinks/scratch/nom_resp') # edit name here
     parser.add_argument('--zip_county_csv', 
                         type=str,
                         default='data/county/zip_county_2015.csv')
     parser.add_argument('--output_file',
                         type=str,
-                        default='data/symlinks/scratch/cvd_county.csv') # edit name here
+                        default='data/symlinks/scratch/resp_county.csv') # edit name here
     args = parser.parse_args()
 
     logging.info(f"## args: {args}")

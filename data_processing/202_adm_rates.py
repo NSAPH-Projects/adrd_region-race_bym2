@@ -63,10 +63,10 @@ if __name__ == '__main__':
                         default='data/symlinks/scratch/bene_county.csv')
     parser.add_argument('--admissions_county_csv', 
                         type=str,
-                        default='data/symlinks/scratch/cvd_county.csv') # edit name here
+                        default='data/symlinks/scratch/resp_county.csv') # edit name here
     parser.add_argument('--output_file',
                         type=str,
-                        default='data/symlinks/scratch/cvd_rates.csv') # edit name here
+                        default='data/symlinks/scratch/resp_rates.csv') # edit name here
     args = parser.parse_args()
 
     logging.info(args)
