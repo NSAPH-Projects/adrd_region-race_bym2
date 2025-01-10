@@ -6,4 +6,4 @@
 #SBATCH -t 0-00:10 # time (D-HH:MM)
 #SBATCH --array=2000-2018
 
-python data_processing/100_get_outcomes_cvd.py --year $SLURM_ARRAY_TASK_ID
+python data_processing/100_get_outcomes_resp.py --year $SLURM_ARRAY_TASK_ID

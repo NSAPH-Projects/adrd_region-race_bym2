@@ -3,7 +3,7 @@ import duckdb
 import argparse
 import logging
 
-def get_cvd_nom_query(mbsf_denom_prefix, medpar_denom_prefix, outcomes_prefix, year):
+def get_resp_nom_query(mbsf_denom_prefix, medpar_denom_prefix, outcomes_prefix, year):
     query = f"""
     WITH adm AS (
         SELECT
@@ -43,8 +43,8 @@ def main(args):
         
         conn = duckdb.connect()
         
-        logging.info("## Preparing cvd nom ----")
-        query = get_cvd_nom_query(
+        logging.info("## Preparing resp nom ----")
+        query = get_resp_nom_query(
              args.mbsf_prefix,
              args.medpar_prefix,
              args.outcomes_prefix,
@@ -56,7 +56,7 @@ def main(args):
         logging.info(df.shape)
         logging.info(df.head())
     
-        logging.info("## Writing cvd nom ----")
+        logging.info("## Writing resp nom ----")
         df = df.set_index(['adm_id'])
     
         output_file = f"{args.output_prefix}_{args.year}.{args.output_format}"
@@ -86,18 +86,18 @@ if __name__ == "__main__":
                        )
     parser.add_argument('--outcomes_prefix', 
                         type=str, 
-                        default='data/symlinks/scratch/outcomes_cvd')
+                        default='data/symlinks/scratch/outcomes_resp')
     parser.add_argument("--output_format", 
                         default = "parquet", 
                         choices=["parquet", "feather", "csv"]
                        )           
     parser.add_argument("--output_prefix", 
-                    default = "data/symlinks/scratch/nom_cvd"
+                    default = "data/symlinks/scratch/nom_resp"
                    )
     args = parser.parse_args()
 
 
-    logging.basicConfig(filename=f"logs/get_cvd_nom_{args.year}.out", level=logging.INFO)
+    logging.basicConfig(filename=f"logs/get_resp_nom_{args.year}.out", level=logging.INFO)
     
     main(args)
 

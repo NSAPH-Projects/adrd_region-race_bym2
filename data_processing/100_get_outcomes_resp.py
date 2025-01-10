@@ -93,7 +93,7 @@ if __name__ == "__main__":
                         type=int
                        )
     parser.add_argument("--icd_yml",
-                        default = "data/icd_codes/icd_codes_cvd.yml"
+                        default = "data/icd_codes/icd_codes_resp.yml"
                         )
     parser.add_argument("--medpar_hospitalizations_prefix", 
                         default = "data/symlinks/mbsf_medpar_denom/medpar_hospitalizations"
@@ -103,11 +103,11 @@ if __name__ == "__main__":
                         choices=["parquet", "feather", "csv"]
                        )           
     parser.add_argument("--output_prefix", 
-                    default = "data/symlinks/scratch/outcomes_cvd"
+                    default = "data/symlinks/scratch/outcomes_resp"
                    )
     args = parser.parse_args()
 
 
-    logging.basicConfig(filename=f"logs/cvd_get_outcomes_{args.year}.out", level=logging.INFO)
+    logging.basicConfig(filename=f"logs/resp_get_outcomes_{args.year}.out", level=logging.INFO)
     
     main(args)
