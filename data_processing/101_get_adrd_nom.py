@@ -86,13 +86,13 @@ if __name__ == "__main__":
                        )
     parser.add_argument('--outcomes_prefix', 
                         type=str, 
-                        default='data/symlinks/scratch/outcomes')
+                        default='data/symlinks/scratch/outcomes_adrd')
     parser.add_argument("--output_format", 
                         default = "parquet", 
                         choices=["parquet", "feather", "csv"]
                        )           
     parser.add_argument("--output_prefix", 
-                    default = "data/symlinks/scratch/adrd_nom"
+                    default = "data/symlinks/scratch/nom_adrd"
                    )
     args = parser.parse_args()
 
@@ -100,4 +100,3 @@ if __name__ == "__main__":
     logging.basicConfig(filename=f"logs/get_adrd_nom_{args.year}.out", level=logging.INFO)
     
     main(args)
-

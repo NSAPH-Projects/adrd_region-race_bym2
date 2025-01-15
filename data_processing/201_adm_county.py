@@ -78,17 +78,18 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--nom_prefix', 
                         type=str, 
-                        default='data/symlinks/scratch/adrd_nom') # 'data/symlinks/scratch/hosp_nom'
+                        default='data/symlinks/scratch/nom_resp') # edit name here
     parser.add_argument('--zip_county_csv', 
                         type=str,
                         default='data/county/zip_county_2015.csv')
     parser.add_argument('--output_file',
                         type=str,
-                        default='data/symlinks/scratch/adrd_county.csv') # 'data/symlinks/scratch/hosp_county.csv'
+                        default='data/symlinks/scratch/resp_county.csv') # edit name here
     args = parser.parse_args()
 
     logging.info(f"## args: {args}")
     main(args)
 
-# python data_processing/201_adm_county.py --nom_prefix data/symlinks/scratch/adrd_nom --output_file data/symlinks/scratch/adrd_county.csv
-# python data_processing/201_adm_county.py --nom_prefix data/symlinks/scratch/hosp_nom --output_file data/symlinks/scratch/hosp_county.csv
+# python data_processing/201_adm_county.py --nom_prefix data/symlinks/scratch/nom_adrd --output_file data/symlinks/scratch/adrd_county.csv
+# python data_processing/201_adm_county.py --nom_prefix data/symlinks/scratch/nom_hosp --output_file data/symlinks/scratch/hosp_county.csv
+# python data_processing/201_adm_county.py --nom_prefix data/symlinks/scratch/nom_cvd --output_file data/symlinks/scratch/cvd_county.csv

@@ -50,5 +50,5 @@ Q_inv <- inla.qinv(Q_pert, constr=list(A = matrix(1,1,N),e=0))
 # Compute the geometric mean of the variances, which are on the diagonal of Q.inv
 scaling_factor <- exp(mean(log(diag(Q_inv))))
 
-# save
+# save scaling factor
 write_rds(scaling_factor, "data/intermediate/scaling_factor.rds")
