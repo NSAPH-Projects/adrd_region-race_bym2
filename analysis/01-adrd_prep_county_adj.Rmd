@@ -5,6 +5,15 @@ library(here)
 knitr::opts_knit$set(root.dir = here())
 ```
 
+Description:
+- Outcome: hospitalizations with ADRD (sex-age standardized & sex-age-dual standardized)
+- Ensure counties match in all objects
+- Merge in geometry
+- Merge in PM2.5 & house-price-to-income ratio data for adjusted models (not presented in paper)
+- Remove counties with zero Black person-years (must do before creating adjacency matrix)
+- Create county adjacency matrix
+
+
 ```{r, message=FALSE, warning=FALSE}
 ## load packages ----
 library(tidyverse)
@@ -14,8 +23,6 @@ library(ggthemes)
 library(stringr)
 ```
 
-In this notebook we make sure that the counties match in all objects: the adjacency matrix, geometry, adrd rates, sociodemographic and pollution data.
-
 ```{r}
 ########## user input ########## 
 
@@ -23,7 +30,6 @@ In this notebook we make sure that the counties match in all objects: the adjace
 
 dual <- TRUE # yes, standardize by age/sex/dual
 #dual <- FALSE # no, standardize by age/sex
-
 ```
 
 
@@ -133,13 +139,14 @@ setdiff(counties_adj_, counties_shp_)
 ## ADRD data
 
 ```{r}
-
+# load data (dual-standardized or not)
 if(dual){
   adrd_county_df <- read_csv("data/symlinks/scratch/adrd_rates_dual.csv")
 } else {
   adrd_county_df <- read_csv("data/symlinks/scratch/adrd_rates.csv")
 }
 
+# filter out states
 adrd_county_df <- adrd_county_df %>% 
     filter(!state %in% c(2, 15, 66, 72, 60, 69, 78)) %>%
     arrange(race, county)
@@ -156,7 +163,7 @@ setdiff(counties_adj_, counties_adrd_)
 ```
 
 ```{r}
-#Shannon County, SD (FIPS code = 46113) was renamed Oglala Lakota County and assigned anew FIPS code (46102) effective in 2014
+# Shannon County, SD (FIPS code = 46113) was renamed Oglala Lakota County and assigned a new FIPS code (46102) effective in 2014
 zip_county <- read.csv("data/county/zip_county_2015.csv")
 
 zip_county %>% 
@@ -164,8 +171,10 @@ zip_county %>%
 ```
 
 ```{r}
+# change fips
 adrd_county_df$county[adrd_county_df$county == 46102] <- 46113
 
+# get # of enrollees and # of admissions by strata
 if(dual){
   adrd_county_df %<>% 
     group_by(county, year, race, sex, age_grp, dual, state) %>% 
@@ -179,8 +188,6 @@ if(dual){
               n_admissions = sum(n_admissions)) %>% 
   ungroup()
 }
-
-
 ```
 
 ```{r}
@@ -192,7 +199,7 @@ setdiff(counties_adj_, counties_adrd_)
 ```
 
 
-## Sociodemographic
+## House-price-to-income ratio data
 
 * year 2000
 
@@ -266,7 +273,7 @@ median_household_df %<>%
 ```
 
 
-## Pollution
+## PM2.5 data
 
 ```{r, echo=FALSE, message=FALSE}
 # full path: "/n/dominici_lab_ro/lab/data/exposures/exposure/pm25/whole_us/annual/counties/county_rm/data/county_pm25_2000.csv"
@@ -315,34 +322,7 @@ adrd_county_df %<>%
 lapply(adrd_county_df, summary)
 ```
 
-<!-- ```{r} -->
-<!-- colorado_sf <- county_sf %>%  -->
-<!--   filter(STATEFP == "08")  -->
-
-<!-- colorado_sf %>%  -->
-<!--   st_simplify() %>% -->
-<!--   ggplot() + -->
-<!--   geom_sf() +  -->
-<!--   geom_sf(data = colorado_sf[!colorado_sf$county %in% counties_adrd_, ], fill="blue") -->
-<!-- ``` -->
-
-<!-- ```{r} -->
-<!-- # county 8014 = CO,08,014,Broomfield County -->
-<!-- # Broomfield county (FIPS 8014) is created out of parts of Adams, Boulder, Jefferson, and Weld counties. The Census Bureau estimates that the resulting population loss was 21,512 for Boulder, 15,870 for Adams, 1,726 for Jefferson, and 69 for Weld county. -->
-<!-- xx <- adrd_county_df[adrd_county_df$county == 8013, ] -->
-<!-- xx$county <- 8014 -->
-<!-- adrd_county_df <- rbind(adrd_county_df, xx) -->
-
-<!-- adrd_county_df <- adrd_county_df[!adrd_county_df$county %in% c(51515, 51560), ] -->
-
-<!-- counties_adrd_ = unique(adrd_county_df$county) -->
-
-<!-- length(counties_adrd_) -->
-<!-- setdiff(counties_adrd_, counties_adj_) -->
-<!-- setdiff(counties_adj_, counties_adrd_) -->
-
-<!-- write_rds(adrd_county_df, "data/intermediate/adrd_county_df.rds") -->
-<!-- ``` -->
+## Remove counties with zero Black person-years
 
 ```{r}
 # remove counties with zero black person-years over the whole time period
@@ -381,6 +361,10 @@ county_sf %<>%
   filter(!county %in% county_zero_b)
 length(unique(county_sf$county))
 ```
+
+
+## Adjacency matrix
+(same for all outcomes--only do this once for ADRD)
 
 ```{r}
 ####
@@ -560,8 +544,8 @@ check_adj %>%
   theme_map()
 ```
 
-
 ```{r}
+# save results
 write_rds(county_sf, "data/symlinks/scratch/county_sf.rds")
 write_rds(county_adj_sparse_list, "data/symlinks/scratch/county_adj_sparse_list.rds")
 write_rds(county_fips_df, "data/symlinks/scratch/county_fips_df.rds")
