@@ -5,15 +5,24 @@ library(here)
 knitr::opts_knit$set(root.dir = here())
 ```
 
+Description:
+- Outcome: hospitalizations without ADRD (sex-age standardized & sex-age-dual standardized)
+- Ensure counties match in all objects
+- Merge in geometry
+- Merge in PM2.5 & house-price-to-income ratio data for adjusted models (not presented in paper)
+- Remove counties with zero Black person-years (must do before creating adjacency matrix)
+- Create county adjacency matrix
+
+
 ```{r, message=FALSE, warning=FALSE}
 ## load packages ----
 library(tidyverse)
 library(magrittr)
 library(sf)
+library(ggthemes)
 library(stringr)
 ```
 
-In this notebook we make sure that the counties match in all objects: the adjacency matrix, geometry, hosp rates, sociodemographic and pollution data.
 
 ```{r}
 ########## user input ########## 
@@ -22,7 +31,6 @@ In this notebook we make sure that the counties match in all objects: the adjace
 
 dual <- TRUE # yes, standardize by age/sex/dual
 #dual <- FALSE # no, standardize by age/sex
-
 ```
 
 
