@@ -1,0 +1,805 @@
+
+```{r setup, include=FALSE}
+## Set working directory as project root
+library(here)
+knitr::opts_knit$set(root.dir = here())
+```
+
+```{r, message=FALSE, warning=FALSE}
+## Load libraries ----
+library(tidyverse)
+library(magrittr)
+library(rstan)
+library(ggthemes)
+library(viridis)
+library(sf)
+library(knitr)
+library(kableExtra)
+library(xtable)
+```
+
+```{r}
+#####----- user input -----#####
+
+# select outcome
+#outcome <- "adrd"
+#outcome <- "hosp"
+outcome <- "allc"
+
+# dual-adjusted?
+#dual <- FALSE
+dual <- TRUE
+```
+
+
+##### STAGE 1 #####
+
+```{r}
+# Load data
+if(dual){
+  model_path <- "results/models/dual/working/"
+} else {
+  model_path <- "results/models/working/"
+}
+
+# load all models in working model directory and select adrd stage1
+all_files <- list.files(model_path, pattern = ".rds")
+stage1_files <- all_files[grep(paste0("stage1.*", outcome), all_files)]
+
+# read models
+stanfit_list_stage1 <- lapply(paste0(model_path, stage1_files), read_rds)
+
+# name list elements
+names(stanfit_list_stage1) <- str_remove_all(stage1_files, "stanfit_object_|\\.rds")
+
+# extract posteriors for all parameters
+stanfit_samples_stage1 <- lapply(stanfit_list_stage1, extract)
+
+# load combined adrd ratios, state indicators, and county fips data
+if(dual){
+  ratios_df_comb <- read_rds(paste0("data/symlinks/scratch/", outcome, "-dual_combined_data.rds"))
+} else {
+  ratios_df_comb <- read_rds(paste0("data/symlinks/scratch/", outcome, "_combined_data.rds"))
+}
+#state_mat_idx <- read_rds("data/symlinks/scratch/state_mat_stage1.rds")
+county_fips_df <- read_rds("data/symlinks/scratch/county_fips_df.rds")
+
+# read scaling factor from previous script
+scaling_factor <- read_rds("data/intermediate/scaling_factor.rds")
+
+# define % of posterior samples for significance
+sig_pct <- 0.95
+```
+
+```{r}
+# see which variables are available in model output
+lapply(stanfit_list_stage1, function(x) x@model_pars)
+```
+
+```{r}
+# # check dimensions of parameters
+# dim(stanfit_samples_stage1[[2]]$alpha)
+# dim(stanfit_samples_stage1[[2]]$nu)
+# dim(stanfit_samples_stage1[[2]]$beta)
+# dim(stanfit_samples_stage1[[2]]$sigma_s)
+# dim(stanfit_samples_stage1[[2]]$phi)
+# dim(stanfit_samples_stage1[[2]]$theta)
+# dim(stanfit_samples_stage1[[2]]$sigma)
+# dim(stanfit_samples_stage1[[2]]$logit_rho)
+# dim(stanfit_samples_stage1[[2]]$rho)
+# dim(stanfit_samples_stage1[[2]]$convolved_re)
+# dim(stanfit_samples_stage1[[2]]$lp__)
+```
+
+```{r}
+# initialize lists for results
+log_lambda_stage1_mats <- list()
+phi_mats <- list()
+
+#-- get set up for storing state random effects (need to repeat for each county per state)
+nu_expanded_stage1 <- list()
+# get number of counties in each state
+nu_counts <- county_fips_df %>%
+  dplyr::group_by(s_idx) %>%
+  dplyr::summarize(count = dplyr::n()) %>%
+  dplyr::mutate(c_sum = cumsum(count))
+
+# loop through models
+for (i in seq_along(stanfit_samples_stage1)){
+
+  # get current model and name (keeps things cleaner)
+  current_mod <- stanfit_samples_stage1[[i]]
+  current_mod_name <- names(stanfit_samples_stage1)[i]
+  
+  ## Initialize a holder for each model
+  # need to repeat the state effect for each county in the state
+  nu_expanded_stage1[[i]] <- matrix(NA,
+                      nrow = length(current_mod$alpha),
+                      ncol = max(nu_counts$c_sum))
+
+  # fill in nu_expanded with state random effects
+  for (s in 1:nrow(nu_counts)) {
+    start_ix <- ifelse(length(nu_counts$c_sum[s - 1]) > 0,
+                       nu_counts$c_sum[s - 1], 0) + 1
+    end_ix <- nu_counts$c_sum[s]
+
+    nu_expanded_stage1[[i]][, start_ix:end_ix] <- current_mod$nu[, s]
+  }
+
+  
+  #----- get scaled phis (need to scale raw phis)
+  
+  # get matrix of raw phis
+  raw_phis <- current_mod$phi
+  
+  # get values to scale by (different for each posterior draw, same for each county)
+  scale_for_phis <- current_mod$sigma * sqrt(1 / scaling_factor)
+  
+  # scale each row/posterior draw of the raw phis by that draw's scale
+  scaled_phis <- matrix(NA, nrow = nrow(raw_phis), ncol = ncol(raw_phis))
+  for(j in 1:ncol(raw_phis)){
+    scaled_phis[,j] <- raw_phis[,j] * scale_for_phis
+  }
+  
+  # save scaled phis
+  phi_mats[[i]] <-  scaled_phis
+  
+  
+  #----- log relative risk
+  if(str_detect(current_mod_name, "m1")){
+    
+    # calculate log lambda
+      log_lambda_stage1_mats[[i]] <- as.vector(current_mod$alpha) + 
+        nu_expanded_stage1[[i]] +
+        current_mod$convolved_re * as.vector(current_mod$sigma)
+    
+  } else if(str_detect(current_mod_name, "m2")) {
+    
+      # get mean-centered HPI
+      centered_hpi <- (ratios_df_comb$house_price_income_ratio -
+                         mean(ratios_df_comb$house_price_income_ratio, na.rm = TRUE))
+      
+      # format covariate as matrix
+      covar_mat <- as.matrix(centered_hpi, ncol = 1)
+      
+      # calculate log lambda
+      log_lambda_stage1_mats[[i]] <- as.vector(current_mod$alpha) + 
+        current_mod$beta %*% t(covar_mat) +
+        nu_expanded_stage1[[i]] +
+        current_mod$convolved_re * as.vector(current_mod$sigma)
+  
+  } else if(str_detect(current_mod_name, "m3")) {
+    
+      # get mean-centered PM2.5
+      centered_pm25 <- (ratios_df_comb$pm25 -
+                          mean(ratios_df_comb$pm25, na.rm = TRUE))
+      
+      # format covariate as matrix and add to stan data list
+      covar_mat <- as.matrix(centered_pm25, ncol = 1)
+      
+      # calculate log lambda
+      log_lambda_stage1_mats[[i]] <- as.vector(current_mod$alpha) + 
+        current_mod$beta %*% t(covar_mat) +
+        nu_expanded_stage1[[i]] +
+        current_mod$convolved_re * as.vector(current_mod$sigma)
+    
+  }
+  
+}
+
+# name lists
+names(log_lambda_stage1_mats) <- names(phi_mats) <- names(stanfit_samples_stage1)
+```
+
+```{r}
+# get posterior means and determine significance
+
+# function to lapply to all these lists
+post_mean_sig_stage1 <- function(posterior_matrix, param_name, 
+                                check_sig = c(FALSE, TRUE), null_value){
+  
+  # set up a data frame for results
+  return_df <- data.frame(county = ratios_df_comb$county)
+  
+  # get column means and add to data frame
+  posterior_means <- colMeans(posterior_matrix)
+  return_df[[param_name]] <- posterior_means
+  
+  # check for significance and add to dataframe
+  if(check_sig){
+    posterior_sig <- (colMeans(posterior_matrix > null_value) > sig_pct) | 
+      (colMeans(posterior_matrix < null_value) > sig_pct)
+      return_df[[paste0(param_name, "_sig")]] <- posterior_sig
+  }
+
+  return(return_df)
+}
+```
+
+
+```{r}
+# apply function to my lists
+log_lambda_stage1 <- lapply(log_lambda_stage1_mats, post_mean_sig_stage1, 
+               param_name = "log_lambda_stage1", check_sig = TRUE, null_value = 0)
+phi <- lapply(phi_mats, post_mean_sig_stage1, 
+               param_name = "phi", check_sig = TRUE, null_value = 0)
+```
+
+```{r}
+# get sd of posterior samples
+
+lambda_stage1_sd <- lapply(log_lambda_stage1_mats, function(model) apply(model, 2, sd))
+phi_sd <- lapply(phi_mats, function(model) apply(model, 2, sd))
+
+# save
+if(dual){
+  write_rds(lambda_stage1_sd, paste0("data/intermediate/", outcome, "-dual_lambda_stage1_sd.rds"))
+  write_rds(phi_sd, paste0("data/intermediate/", outcome, "-dual_phi_sd.rds"))
+} else {
+  write_rds(lambda_stage1_sd, paste0("data/intermediate/", outcome, "_lambda_stage1_sd.rds"))
+  write_rds(phi_sd, paste0("data/intermediate/", outcome, "_phi_sd.rds"))
+}
+```
+
+```{r}
+# join elements in log_lambda and phi
+stage1_model_results <- list()
+
+# loop through models
+for(i in 1:length(stanfit_samples_stage1)){
+  stage1_model_results[[i]] <- merge(log_lambda_stage1[[i]], phi[[i]], by = "county")
+}
+
+names(stage1_model_results) <- names(stanfit_samples_stage1)
+```
+
+
+##### STAGE 2 #####
+
+```{r}
+# Load data
+
+# select stage2
+stage2_files <- all_files[grep(paste0("stage2.*", outcome), all_files)]
+
+# read models
+stanfit_list_stage2 <- lapply(paste0(model_path, stage2_files), read_rds)
+
+# name list elements
+names(stanfit_list_stage2) <- str_remove_all(stage2_files, "stanfit_object_|\\.rds")
+
+# extract posteriors for all parameters
+stanfit_samples_stage2 <- lapply(stanfit_list_stage2, extract)
+```
+
+```{r}
+# see which variables are available in model output
+lapply(stanfit_list_stage2, function(x) x@model_pars)
+```
+
+```{r}
+# # check dimensions of parameters
+# dim(stanfit_samples_stage2[[2]]$alpha1)
+# dim(stanfit_samples_stage2[[2]]$beta1)
+# dim(stanfit_samples_stage2[[2]]$nu)
+# dim(stanfit_samples_stage2[[2]]$sigma_s)
+# dim(stanfit_samples_stage2[[2]]$psi1)
+# dim(stanfit_samples_stage2[[2]]$sigma1)
+# dim(stanfit_samples_stage2[[2]]$logit_rho1)
+# dim(stanfit_samples_stage2[[2]]$rho1)
+# dim(stanfit_samples_stage2[[2]]$convolved_re_sigma)
+# dim(stanfit_samples_stage2[[2]]$lp__)
+```
+
+```{r}
+# initialize lists for results
+log_lambda_white_mats <- list()
+log_lambda_black_mats <- list()
+psi_white_mats <- list()
+psi_black_mats <- list()
+risk_ratio_mats <- list()
+
+beta_white_vecs <- list()
+beta_black_vecs <- list()
+
+#-- get set up for storing state random effects (need to repeat for each county per state)
+nu_expanded_stage2 <- list()
+
+# loop through models
+for (i in seq_along(stanfit_samples_stage2)){
+
+  # get current model and name (keeps things cleaner)
+  current_mod <- stanfit_samples_stage2[[i]]
+  current_mod_name <- names(stanfit_samples_stage2)[i]
+  
+  
+  ## Initialize a holder for each model
+  # need to repeat the state effect for each county in the state
+  nu_expanded_stage2[[i]] <- matrix(NA,
+                      nrow = nrow(current_mod$psi1),
+                      ncol = max(nu_counts$c_sum))
+
+  # fill in nu_expanded with state random effects
+  for (s in 1:nrow(nu_counts)) {
+    start_ix <- ifelse(length(nu_counts$c_sum[s - 1]) > 0,
+                       nu_counts$c_sum[s - 1], 0) + 1
+    end_ix <- nu_counts$c_sum[s]
+
+    nu_expanded_stage2[[i]][, start_ix:end_ix] <- current_mod$nu[, s]
+  }
+  
+  
+  #----- get scaled psis (need to scale raw psis)
+  
+  # get matrices of raw psis
+  raw_psi1s <- current_mod$psi1
+  raw_psi2s <- current_mod$psi2
+  
+  # get values to scale by (different for each posterior draw, same for each county)
+  scale_for_psi1s <- (current_mod$sigma1 / sqrt(scaling_factor)) * sqrt(current_mod$rho1)
+  scale_for_psi2s <- (current_mod$sigma2 / sqrt(scaling_factor)) * sqrt(current_mod$rho2)
+  
+  # scale each row/posterior draw of the raw psis by that draw's scale
+  scaled_psi1s <- matrix(NA, nrow = nrow(raw_psi1s), ncol = ncol(raw_psi1s))
+  for(j in 1:ncol(scaled_psi1s)){
+    scaled_psi1s[,j] <- raw_psi1s[,j] * scale_for_psi1s
+  }
+  scaled_psi2s <- matrix(NA, nrow = nrow(raw_psi2s), ncol = ncol(raw_psi2s))
+  for(j in 1:ncol(scaled_psi2s)){
+    scaled_psi2s[,j] <- raw_psi2s[,j] * scale_for_psi2s
+  }
+  
+  # save scaled psis
+  psi_white_mats[[i]] <-  scaled_psi1s
+  psi_black_mats[[i]] <-  scaled_psi2s
+  
+
+  #----- log relative risk
+  if(str_detect(current_mod_name, "m1")){
+    
+      # calculate log lambda for white and black
+      log_lambda_white_mats[[i]] <- as.vector(current_mod$alpha1) + 
+        nu_expanded_stage2[[i]] +
+        current_mod$convolved_re_sigma[,1:(ncol(current_mod$convolved_re_sigma)/2)] # white only
+      log_lambda_black_mats[[i]] <- as.vector(current_mod$alpha2) + 
+        nu_expanded_stage2[[i]] +
+        current_mod$convolved_re_sigma[,((ncol(current_mod$convolved_re_sigma)/2) + 1):
+                                         ncol(current_mod$convolved_re_sigma)] # black only
+    
+  } else if(str_detect(current_mod_name, "m2")) {
+    
+      # save betas
+      beta_white_vecs[[i]] <- current_mod$beta1[,1]
+      beta_black_vecs[[i]] <- current_mod$beta2[,1]
+    
+      # get mean-centered HPI
+      centered_hpi <- (ratios_df_comb$house_price_income_ratio -
+                         mean(ratios_df_comb$house_price_income_ratio, na.rm = TRUE))
+      
+      # format covariate as matrix
+      covar_mat <- as.matrix(centered_hpi, ncol = 1)
+      
+      # calculate log lambda for white and black
+      log_lambda_white_mats[[i]] <- as.vector(current_mod$alpha1) + 
+        current_mod$beta1 %*% t(covar_mat) +
+        nu_expanded_stage2[[i]] +
+        current_mod$convolved_re_sigma[,1:(ncol(current_mod$convolved_re_sigma)/2)] # white only
+      log_lambda_black_mats[[i]] <- as.vector(current_mod$alpha2) + 
+        current_mod$beta2 %*% t(covar_mat) +
+        nu_expanded_stage2[[i]] +
+        current_mod$convolved_re_sigma[,((ncol(current_mod$convolved_re_sigma)/2) + 1):
+                                         ncol(current_mod$convolved_re_sigma)] # black only
+  
+  } else if(str_detect(current_mod_name, "m3")) {
+    
+      # save betas
+      beta_white_vecs[[i]] <- current_mod$beta1[,1]
+      beta_black_vecs[[i]] <- current_mod$beta2[,1]
+    
+      # get mean-centered PM2.5
+      centered_pm25 <- (ratios_df_comb$pm25 -
+                          mean(ratios_df_comb$pm25, na.rm = TRUE))
+      
+      # format covariate as matrix and add to stan data list
+      covar_mat <- as.matrix(centered_pm25, ncol = 1)
+      
+      # calculate log lambda for white and black
+      log_lambda_white_mats[[i]] <- as.vector(current_mod$alpha1) + 
+        current_mod$beta1 %*% t(covar_mat) +
+        nu_expanded_stage2[[i]] +
+        current_mod$convolved_re_sigma[,1:(ncol(current_mod$convolved_re_sigma)/2)] # white only
+      log_lambda_black_mats[[i]] <- as.vector(current_mod$alpha2) + 
+        current_mod$beta2 %*% t(covar_mat) +
+        nu_expanded_stage2[[i]] +
+        current_mod$convolved_re_sigma[,((ncol(current_mod$convolved_re_sigma)/2) + 1):
+                                         ncol(current_mod$convolved_re_sigma)] # black only
+    
+  }
+  
+  # calculate risk ratios
+  risk_ratio_mats[[i]] <- exp(log_lambda_black_mats[[i]] - log_lambda_white_mats[[i]])
+  
+}
+
+# name lists (betas will be empty if no models with covariates have been run)
+if(length(beta_white_vecs) == 0){
+  names(log_lambda_white_mats) <- names(log_lambda_black_mats) <- names(psi_white_mats) <-   names(psi_black_mats) <- names(risk_ratio_mats) <- names(stanfit_samples_stage2)
+} else {
+  names(log_lambda_white_mats) <- names(log_lambda_black_mats) <- names(psi_white_mats) <- names(psi_black_mats) <- names(risk_ratio_mats) <- names(beta_white_vecs) <- names(beta_black_vecs) <- names(stanfit_samples_stage2)
+}
+```
+
+```{r}
+# store risk ratio posterior distribution to compare across outcomes
+rr_post <- risk_ratio_mats[[1]] %>% as.data.frame()
+
+# name columns with counties (must be in the same order!!)
+names(rr_post) <- ratios_df_comb$county
+
+# save matrix
+if(dual){
+  write_rds(rr_post, paste0("data/intermediate/", outcome, "-dual_risk_ratio_post.rds"))
+} else {
+  write_rds(rr_post, paste0("data/intermediate/", outcome, "_risk_ratio_post.rds"))
+}
+```
+
+```{r}
+# get posterior means and determine significance
+
+# function to lapply to all these lists
+post_mean_sig_stage2 <- function(posterior_matrix, param_name, 
+                                check_sig = c(FALSE, TRUE), null_value, 
+                                race = NULL){
+  
+  # set up a data frame for results
+  return_df <- data.frame(county = ratios_df_comb$county)
+  
+  # get column means and add to data frame
+  posterior_means <- colMeans(posterior_matrix)
+  return_df[[param_name]] <- posterior_means
+  
+  # check for significance and add to dataframe
+  if(check_sig){
+    posterior_sig <- (colMeans(posterior_matrix > null_value) > sig_pct) | 
+      (colMeans(posterior_matrix < null_value) > sig_pct)
+      return_df[[paste0(param_name, "_sig")]] <- posterior_sig
+  }
+  
+  # if race is specified, make a column for race
+  if(!is.null(race)){
+    return_df$race <- race
+  }
+
+  return(return_df)
+}
+```
+
+```{r}
+# apply function to my lists
+log_lambda_white <- lapply(log_lambda_white_mats, post_mean_sig_stage2, 
+               param_name = "log_lambda_stage2", check_sig = TRUE, null_value = 0,
+               race = 1)
+log_lambda_black <- lapply(log_lambda_black_mats, post_mean_sig_stage2, 
+               param_name = "log_lambda_stage2", check_sig = TRUE, null_value = 0,
+               race = 2)
+psi_white <- lapply(psi_white_mats, post_mean_sig_stage2, 
+               param_name = "psi", check_sig = TRUE, null_value = 0,
+               race = 1)
+psi_black <- lapply(psi_black_mats, post_mean_sig_stage2, 
+               param_name = "psi", check_sig = TRUE, null_value = 0,
+               race = 2)
+risk_ratio <- lapply(risk_ratio_mats, post_mean_sig_stage2,
+                     param_name = "risk_ratio", check_sig = TRUE, null_value = 1)
+```
+
+```{r}
+# join elements in lists
+stage2_model_results <- list()
+
+# loop through models
+for(i in 1:length(stanfit_samples_stage2)){
+  
+  # bind rows for two races
+  log_lambda_both <- rbind.data.frame(log_lambda_white[[i]], log_lambda_black[[i]])
+  psi_both <- rbind.data.frame(psi_white[[i]], psi_black[[i]])
+  
+  # now merge results for log lambda and psi
+  stage2_model_results[[i]] <- merge(log_lambda_both, psi_both, 
+                                          by = c("county", "race"))
+  
+  # and join with risk ratios (not race specific)
+  stage2_model_results[[i]] <- merge(stage2_model_results[[i]], risk_ratio[[i]],
+                                          by = "county")
+                                          
+}
+
+names(stage2_model_results) <- names(stanfit_samples_stage2)
+```
+
+```{r}
+# get standard deviation of posterior samples
+
+lambda_white_sd <- lapply(log_lambda_white_mats, function(model) apply(model, 2, sd))
+lambda_black_sd <- lapply(log_lambda_black_mats, function(model) apply(model, 2, sd))
+psi_white_sd <- lapply(psi_white_mats, function(model) apply(model, 2, sd))
+psi_black_sd <- lapply(psi_black_mats, function(model) apply(model, 2, sd))
+
+# save
+if(dual){
+  write_rds(lambda_white_sd, paste0("data/intermediate/", outcome, "-dual_lambda_white_sd.rds"))
+  write_rds(lambda_black_sd, paste0("data/intermediate/", outcome, "-dual_lambda_black_sd.rds"))
+  write_rds(psi_white_sd, paste0("data/intermediate/", outcome, "-dual_psi_white_sd.rds"))
+  write_rds(psi_black_sd, paste0("data/intermediate/", outcome, "-dual_psi_black_sd.rds"))
+} else {
+  write_rds(lambda_white_sd, paste0("data/intermediate/", outcome, "_lambda_white_sd.rds"))
+  write_rds(lambda_black_sd, paste0("data/intermediate/", outcome, "_lambda_black_sd.rds"))
+  write_rds(psi_white_sd, paste0("data/intermediate/", outcome, "_psi_white_sd.rds"))
+  write_rds(psi_black_sd, paste0("data/intermediate/", outcome, "_psi_black_sd.rds"))
+}
+```
+
+```{r}
+# join stage 1 and stage 2 results
+
+# join dfs from stage 1 and stage 2
+
+model_results <- list()
+
+for(i in 1:length(stanfit_list_stage2)){
+  model_results[[i]] <- merge(stage1_model_results[[i]],
+                                   stage2_model_results[[i]],
+                                   by = "county")
+}
+
+names(model_results) <- sub("stage1_", "", names(stage1_model_results))
+
+# save results
+if(dual){
+  write_rds(model_results, paste0("data/intermediate/", outcome, "-dual_model_results.rds"))
+} else {
+  write_rds(model_results, paste0("data/intermediate/", outcome, "_model_results.rds"))
+}
+```
+
+
+##### Empirical variance table #####
+
+# this section works if m1, m2, and m3 exist (otherwise error)
+
+```{r}
+# # function to get median, mean, 2.5 percentile, 97.5 percentile
+# # as_data_frame() is now deprecated, but as.data.frame() doesn't work here
+# # this gives us the median, 2.5 percentile, and 97.5 percentile of a vector
+# quick_summarize <- function(x) {
+#     new_df <- x %>%
+#         dplyr::as_data_frame() %>%
+#         dplyr::summarize(
+#             median = stats::median(value),
+#             p025 = stats::quantile(value, .025),
+#             p975 = stats::quantile(value, .975)
+#         )
+#     return(new_df)
+# }
+```
+
+```{r}
+# # initialize list
+# empiric_vars <- list()
+# 
+# # loop through models
+# for (i in 1:3){
+# 
+#   # get the between-county variance for each posterior sample
+#   # then report the median between-county variance and a CI for that estimate
+# 
+# 
+#   # mini table for total risk stage 1
+#   empiric_var_risks_stage1 <- matrixStats::rowVars(log_lambda_stage1_mats[[i]]) %>%
+#     quick_summarize() %>%
+#     dplyr::mutate(race = "--",
+#                   param = "Total risk stage 1")
+# 
+# 
+#   # mini table for total risk stage 2
+#   empiric_var_risks_stage2 <- rbind(
+#     matrixStats::rowVars(log_lambda_white_mats[[i]]) %>%
+#         quick_summarize() %>%
+#           dplyr::mutate(race = "White"),
+#     matrixStats::rowVars(log_lambda_black_mats[[i]]) %>%
+#         quick_summarize() %>%
+#           dplyr::mutate(race = "Black")
+#   ) %>%
+#       dplyr::mutate(param = "Total risk stage 2")
+# 
+# 
+#   # mini table for shared risk
+#   empiric_var_shared_risk <- matrixStats::rowVars(phi_mats[[i]]) %>%
+#     quick_summarize() %>%
+#     dplyr::mutate(race = "--",
+#                   param = "Shared risk")
+# 
+# 
+#   # mini table for race-specific risk
+#   empiric_var_race_specific <- rbind(
+#     matrixStats::rowVars(psi_white_mats[[i]]) %>%
+#         quick_summarize() %>%
+#           dplyr::mutate(race = "White"),
+#     matrixStats::rowVars(psi_black_mats[[i]]) %>%
+#         quick_summarize() %>%
+#           dplyr::mutate(race = "Black")
+#   ) %>%
+#       dplyr::mutate(param = "Race-specific risk")
+# 
+# 
+#   # # mini table for fraction shared risk
+#   # empiric_shared_var_frac <- rbind(
+#   #     quick_summarize(
+#   #         matrixStats::rowVars(stanfit_samples[[i]]$phi * stanfit_samples[[i]]$delta) /
+#   #             (
+#   #                 matrixStats::rowVars(stanfit_samples[[i]]$phi * stanfit_samples[[i]]$delta) +
+#   #                     matrixStats::rowVars(stanfit_samples[[i]]$psi1)
+#   #             )
+#   #     ) %>%
+#   #         dplyr::mutate(race = "White"),
+#   #     quick_summarize(
+#   #         matrixStats::rowVars(stanfit_samples[[i]]$phi / stanfit_samples[[i]]$delta) /
+#   #             (
+#   #                 matrixStats::rowVars(stanfit_samples[[i]]$phi / stanfit_samples[[i]]$delta) +
+#   #                     matrixStats::rowVars(stanfit_samples[[i]]$psi2)
+#   #             )
+#   #     ) %>%
+#   #         dplyr::mutate(race = "Black")
+#   # ) %>%
+#   #     dplyr::mutate(param = "fraction shared risk")
+# 
+# 
+#   # mini table for state risk
+#   empiric_var_state_vars <- rbind(
+#       quick_summarize(stanfit_samples_stage1[[i]]$sigma_s ^ 2) %>%
+#           dplyr::mutate(
+#               race = "--",
+#               param = "State variance stage 1"
+#           ),
+#       quick_summarize(stanfit_samples_stage2[[i]]$sigma_s ^ 2) %>%
+#           dplyr::mutate(
+#               race = "--",
+#               param = "State variance stage 2"
+#           )
+#   )
+# 
+#   # bind all mini tables together
+#   empiric_vars[[i]] <- rbind(
+#       empiric_var_risks_stage1,
+#       empiric_var_risks_stage2,
+#       empiric_var_state_vars,
+#       empiric_var_shared_risk,
+#       empiric_var_race_specific
+#   ) %>%
+#       dplyr::select(race, param, dplyr::everything()) %>%
+#       dplyr::mutate(
+#           param = factor(
+#               param,
+#               levels =  c(
+#                   "Total risk stage 1",
+#                   "Total risk stage 2",
+#                   "Shared risk",
+#                   "Race-specific risk",
+#                   "State variance stage 1",
+#                   "State variance stage 2"
+#               ),
+#               ordered = TRUE
+#           ),
+#           race = factor(
+#               race,
+#               levels = c("White", "Black", "--"),
+#               ordered = TRUE
+#           )
+#       )
+# 
+#   # sort table
+#   empiric_vars[[i]] <- empiric_vars[[i]] %>%
+#       dplyr::arrange(param, race)
+# 
+#   # new column formatted with posterior median and 95% CI
+#   empiric_vars[[i]]$median_ci <- paste0(format(round(empiric_vars[[i]]$median, 3), 
+#                                                      scientific = FALSE), " (",
+#                                    format(round(empiric_vars[[i]]$p025, 3), 
+#                                                      scientific = FALSE), ", ",
+#                                    format(round(empiric_vars[[i]]$p975, 3), 
+#                                                      scientific = FALSE), ")")
+# 
+#   # rename columns
+#   empiric_vars[[i]] <- empiric_vars[[i]] |>
+#     select(-c(median, p025, p975)) |>
+#     rename(Parameter = param,
+#               Race = race,
+#            Estimate = median_ci)
+# }
+# 
+# # name list elements for clarity
+# #names(empiric_vars) <- c("adrd_m1", "adrd_m2", "adrd_m3")
+# names(empiric_vars) <- sub("stage1_", "", names(stage1_model_results))
+# 
+# # save table with results
+# if(dual){
+#   write_rds(empiric_vars, 
+#           file = paste0("results/tables/intermediate/", outcome, "-dual_empirical_variance.rds"))
+# } else {
+#   write_rds(empiric_vars, 
+#           file = paste0("results/tables/intermediate/", outcome, "_empirical_variance.rds"))
+# }
+```
+
+
+# Get model beta estimates
+
+# this section works if m1, m2, and m3 exist (otherwise error)
+
+```{r}
+
+# # beta_df <- data.frame(matrix(nrow = length(beta_white_vecs)*2, ncol = 5)) |>
+# #   setNames(c("model", "race", "post_mean", "q5", "q95"))
+# # 
+# # beta_df$model <- rep(names(adrd_model_results), times = 2)
+# # beta_df$race <- rep(c("White", "Black"), each = length(names(adrd_model_results)))
+# 
+# # function to get posterior medians & credible intervals from beta lists
+# extract_beta_info <- function(x){
+#   if(is.null(x)){
+#     return(c(NA))
+#   } else {
+#     post_mean <- mean(x) |> exp() |> round(3) 
+#     q5 <- quantile(x, 0.05) |> exp() |> round(3)
+#     q95 <- quantile(x, 0.95) |> exp() |> round(3)
+#     #return(c(post_mean = post_mean, q5, q95))
+#     return(paste0(post_mean, " (", q5, ", ", q95, ")"))
+#   }
+# }
+# 
+# # table with white betas
+# beta_white <- lapply(beta_white_vecs, extract_beta_info) |>
+#   bind_cols() |>
+#   gather(key = "model", value = "estimate") |>
+#   mutate(race = "White")
+# 
+# # table with black betas
+# beta_black <- lapply(beta_black_vecs, extract_beta_info) |>
+#   bind_cols() |>
+#   gather(key = "model", value = "estimate") |>
+#   mutate(race = "Black")
+# 
+# # clean table
+# beta_df <- rbind(beta_white, beta_black) |>
+#   filter(!is.na(estimate)) |>
+#   arrange(model) |>
+#   mutate(parameter = paste0(model, ", ", race)) |>
+#   select(parameter, estimate) |>
+#   mutate(parameter = case_when(
+#     parameter == "stage2_adrd_m2, White" ~ 
+#       "White effect of PIR ($e^{\\beta_{\\text{PIR, 1}}}$)",
+#     parameter == "stage2_adrd_m2, Black" ~ 
+#       "Black effect of PIR ($e^{\\beta_{\\text{PIR, 2}}}$)",
+#     parameter == "stage2_adrd_m3, White" ~ 
+#       "White effect of PM2.5 ($e^{\\beta_{\\text{PM2.5, 1}}}$)",
+#     parameter == "stage2_adrd_m3, Black" ~ 
+#       "Black effect of PM2.5 ($e^{\\beta_{\\text{PM2.5, 2}}}$)"
+#   )) |>
+#   rename(Parameter = parameter,
+#          "Estimate (95\\% CI)" = estimate)
+# 
+# # write to rds (create adrd + hosp table in script 11)
+# if(dual){
+#   write_rds(beta_df, file = paste0("results/tables/intermediate/", outcome, "-dual_beta_df.rds"))
+# } else {
+#   write_rds(beta_df, file = paste0("results/tables/intermediate/", outcome, "_beta_df.rds"))
+# }
+# 
+# # # get table in latex
+# # print(xtable(beta_df, type = "latex"), 
+# #       file = "results/tables/final/adrd_betas.tex",
+# #       sanitize.text.function = identity, # don't escape math symbols
+# #       include.rownames = FALSE) 
+```
+
+
