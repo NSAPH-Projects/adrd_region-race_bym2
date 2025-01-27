@@ -46,7 +46,7 @@ county_fips_df <- read_rds("data/symlinks/scratch/county_fips_df.rds")
 scaling_factor <- read_rds("data/intermediate/scaling_factor.rds")
 
 # define % of posterior samples for significance
-sig_pct <- 0.8
+sig_pct <- 0.95
 ```
 
 ```{r}
@@ -170,7 +170,7 @@ names(log_lambda_stage1_mats) <- names(phi_mats) <- names(stanfit_samples_stage1
 ```
 
 ```{r}
-# get posterior medians and determine significance
+# get posterior means and determine significance
 
 # function to lapply to all these lists
 post_med_sig_stage1 <- function(posterior_matrix, param_name, 
@@ -179,9 +179,9 @@ post_med_sig_stage1 <- function(posterior_matrix, param_name,
   # set up a data frame for results
   return_df <- data.frame(county = adrd_ratios_df_comb$county)
   
-  # get column medians and add to data frame
-  posterior_medians <- matrixStats::colMedians(posterior_matrix)
-  return_df[[param_name]] <- posterior_medians
+  # get column means and add to data frame
+  posterior_means <- colMeans(posterior_matrix)
+  return_df[[param_name]] <- posterior_means
   
   # check for significance and add to dataframe
   if(check_sig){
@@ -401,7 +401,7 @@ names(log_lambda_white_mats) <- names(log_lambda_black_mats) <- names(psi_white_
 ```
 
 ```{r}
-# get posterior medians and determine significance
+# get posterior means and determine significance
 
 # function to lapply to all these lists
 post_med_sig_stage2 <- function(posterior_matrix, param_name, 
@@ -411,9 +411,9 @@ post_med_sig_stage2 <- function(posterior_matrix, param_name,
   # set up a data frame for results
   return_df <- data.frame(county = adrd_ratios_df_comb$county)
   
-  # get column medians and add to data frame
-  posterior_medians <- matrixStats::colMedians(posterior_matrix)
-  return_df[[param_name]] <- posterior_medians
+  # get column means and add to data frame
+  posterior_means <- matrixStats::colMedians(posterior_matrix)
+  return_df[[param_name]] <- posterior_means
   
   # check for significance and add to dataframe
   if(check_sig){

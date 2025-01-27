@@ -24,9 +24,9 @@ library(xtable)
 ```{r}
 # Load data
 
-# load all models in working model directory and select hosp-dual stage1
+# load all models in working model directory and select allc-dual stage1
 all_files <- list.files("results/models/dual/working/", pattern = ".rds")
-stage1_files <- all_files[grep("stage1.*hosp", all_files)]
+stage1_files <- all_files[grep("stage1.*allc", all_files)]
 
 # read models
 stanfit_list_stage1 <- lapply(paste0("results/models/dual/working/", stage1_files), read_rds)
@@ -37,8 +37,8 @@ names(stanfit_list_stage1) <- str_remove_all(stage1_files, "stanfit_object_|\\.r
 # extract posteriors for all parameters
 stanfit_samples_stage1 <- lapply(stanfit_list_stage1, extract)
 
-# load combined hosp-dual ratios, state indicators, and county fips data
-hosp_ratios_df_comb <- read_rds('data/symlinks/scratch/hosp_combined_data_dual.rds')
+# load combined allc-dual ratios, state indicators, and county fips data
+allc_ratios_df_comb <- read_rds('data/symlinks/scratch/allc_combined_data_dual.rds')
 #state_mat_idx <- read_rds("data/symlinks/scratch/state_mat_stage1.rds")
 county_fips_df <- read_rds("data/symlinks/scratch/county_fips_df.rds")
 
@@ -134,8 +134,8 @@ for (i in seq_along(stanfit_samples_stage1)){
   } else if(str_detect(current_mod_name, "m2")) {
     
       # get mean-centered HPI
-      centered_hpi <- (hosp_ratios_df_comb$house_price_income_ratio -
-                         mean(hosp_ratios_df_comb$house_price_income_ratio, na.rm = TRUE))
+      centered_hpi <- (allc_ratios_df_comb$house_price_income_ratio -
+                         mean(allc_ratios_df_comb$house_price_income_ratio, na.rm = TRUE))
       
       # format covariate as matrix
       covar_mat <- as.matrix(centered_hpi, ncol = 1)
@@ -149,8 +149,8 @@ for (i in seq_along(stanfit_samples_stage1)){
   } else if(str_detect(current_mod_name, "m3")) {
     
       # get mean-centered PM2.5
-      centered_pm25 <- (hosp_ratios_df_comb$pm25 -
-                          mean(hosp_ratios_df_comb$pm25, na.rm = TRUE))
+      centered_pm25 <- (allc_ratios_df_comb$pm25 -
+                          mean(allc_ratios_df_comb$pm25, na.rm = TRUE))
       
       # format covariate as matrix and add to stan data list
       covar_mat <- as.matrix(centered_pm25, ncol = 1)
@@ -177,10 +177,10 @@ post_med_sig_stage1 <- function(posterior_matrix, param_name,
                                 check_sig = c(FALSE, TRUE), null_value){
   
   # set up a data frame for results
-  return_df <- data.frame(county = hosp_ratios_df_comb$county)
+  return_df <- data.frame(county = allc_ratios_df_comb$county)
   
   # get column means and add to data frame
-  posterior_means <- matrixStats::colMeans(posterior_matrix)
+  posterior_means <- colMeans(posterior_matrix)
   return_df[[param_name]] <- posterior_means
   
   # check for significance and add to dataframe
@@ -210,20 +210,20 @@ lambda_stage1_sd <- lapply(log_lambda_stage1_mats, function(model) apply(model, 
 phi_sd <- lapply(phi_mats, function(model) apply(model, 2, sd))
 
 # save
-write_rds(lambda_stage1_sd, "data/intermediate/hosp-dual_lambda_stage1_sd.rds")
-write_rds(phi_sd, "data/intermediate/hosp-dual_phi_sd.rds")
+write_rds(lambda_stage1_sd, "data/intermediate/allc-dual_lambda_stage1_sd.rds")
+write_rds(phi_sd, "data/intermediate/allc-dual_phi_sd.rds")
 ```
 
 ```{r}
 # join elements in log_lambda and phi
-stage1_hosp_model_results <- list()
+stage1_allc_model_results <- list()
 
 # loop through models
 for(i in 1:length(stanfit_samples_stage1)){
-  stage1_hosp_model_results[[i]] <- merge(log_lambda_stage1[[i]], phi[[i]], by = "county")
+  stage1_allc_model_results[[i]] <- merge(log_lambda_stage1[[i]], phi[[i]], by = "county")
 }
 
-names(stage1_hosp_model_results) <- names(stanfit_samples_stage1)
+names(stage1_allc_model_results) <- names(stanfit_samples_stage1)
 ```
 
 
@@ -232,8 +232,8 @@ names(stage1_hosp_model_results) <- names(stanfit_samples_stage1)
 ```{r}
 # Load data
 
-# select hosp stage2
-stage2_files <- all_files[grep("stage2.*hosp", all_files)]
+# select allc stage2
+stage2_files <- all_files[grep("stage2.*allc", all_files)]
 
 # read models
 stanfit_list_stage2 <- lapply(paste0("results/models/dual/working/", stage2_files), read_rds)
@@ -346,8 +346,8 @@ for (i in seq_along(stanfit_samples_stage2)){
       beta_black_vecs[[i]] <- current_mod$beta2[,1]
     
       # get mean-centered HPI
-      centered_hpi <- (hosp_ratios_df_comb$house_price_income_ratio -
-                         mean(hosp_ratios_df_comb$house_price_income_ratio, na.rm = TRUE))
+      centered_hpi <- (allc_ratios_df_comb$house_price_income_ratio -
+                         mean(allc_ratios_df_comb$house_price_income_ratio, na.rm = TRUE))
       
       # format covariate as matrix
       covar_mat <- as.matrix(centered_hpi, ncol = 1)
@@ -370,8 +370,8 @@ for (i in seq_along(stanfit_samples_stage2)){
       beta_black_vecs[[i]] <- current_mod$beta2[,1]
     
       # get mean-centered PM2.5
-      centered_pm25 <- (hosp_ratios_df_comb$pm25 -
-                          mean(hosp_ratios_df_comb$pm25, na.rm = TRUE))
+      centered_pm25 <- (allc_ratios_df_comb$pm25 -
+                          mean(allc_ratios_df_comb$pm25, na.rm = TRUE))
       
       # format covariate as matrix and add to stan data list
       covar_mat <- as.matrix(centered_pm25, ncol = 1)
@@ -409,7 +409,7 @@ post_med_sig_stage2 <- function(posterior_matrix, param_name,
                                 race = NULL){
   
   # set up a data frame for results
-  return_df <- data.frame(county = hosp_ratios_df_comb$county)
+  return_df <- data.frame(county = allc_ratios_df_comb$county)
   
   # get column means and add to data frame
   posterior_means <- colMeans(posterior_matrix)
@@ -451,7 +451,7 @@ risk_ratio <- lapply(risk_ratio_mats, post_med_sig_stage2,
 
 ```{r}
 # join elements in lists
-stage2_hosp_model_results <- list()
+stage2_allc_model_results <- list()
 
 # loop through models
 for(i in 1:length(stanfit_samples_stage2)){
@@ -461,16 +461,16 @@ for(i in 1:length(stanfit_samples_stage2)){
   psi_both <- rbind.data.frame(psi_white[[i]], psi_black[[i]])
   
   # now merge results for log lambda and psi
-  stage2_hosp_model_results[[i]] <- merge(log_lambda_both, psi_both, 
+  stage2_allc_model_results[[i]] <- merge(log_lambda_both, psi_both, 
                                           by = c("county", "race"))
   
   # and join with risk ratios (not race specific)
-  stage2_hosp_model_results[[i]] <- merge(stage2_hosp_model_results[[i]], risk_ratio[[i]],
+  stage2_allc_model_results[[i]] <- merge(stage2_allc_model_results[[i]], risk_ratio[[i]],
                                           by = "county")
                                           
 }
 
-names(stage2_hosp_model_results) <- names(stanfit_samples_stage2)
+names(stage2_allc_model_results) <- names(stanfit_samples_stage2)
 ```
 
 ```{r}
@@ -482,10 +482,10 @@ psi_white_sd <- lapply(psi_white_mats, function(model) apply(model, 2, sd))
 psi_black_sd <- lapply(psi_black_mats, function(model) apply(model, 2, sd))
 
 # save
-write_rds(lambda_white_sd, "data/intermediate/hosp-dual_lambda_white_sd.rds")
-write_rds(lambda_black_sd, "data/intermediate/hosp-dual_lambda_black_sd.rds")
-write_rds(psi_white_sd, "data/intermediate/hosp-dual_psi_white_sd.rds")
-write_rds(psi_black_sd, "data/intermediate/hosp-dual_psi_black_sd.rds")
+write_rds(lambda_white_sd, "data/intermediate/allc-dual_lambda_white_sd.rds")
+write_rds(lambda_black_sd, "data/intermediate/allc-dual_lambda_black_sd.rds")
+write_rds(psi_white_sd, "data/intermediate/allc-dual_psi_white_sd.rds")
+write_rds(psi_black_sd, "data/intermediate/allc-dual_psi_black_sd.rds")
 ```
 
 ```{r}
@@ -493,18 +493,18 @@ write_rds(psi_black_sd, "data/intermediate/hosp-dual_psi_black_sd.rds")
 
 # join dfs from stage 1 and stage 2
 
-hosp_model_results <- list()
+allc_model_results <- list()
 
 for(i in 1:length(stanfit_list_stage2)){
-  hosp_model_results[[i]] <- merge(stage1_hosp_model_results[[i]],
-                                   stage2_hosp_model_results[[i]],
+  allc_model_results[[i]] <- merge(stage1_allc_model_results[[i]],
+                                   stage2_allc_model_results[[i]],
                                    by = "county")
 }
 
-names(hosp_model_results) <- sub("stage1_", "", names(stage1_hosp_model_results))
+names(allc_model_results) <- sub("stage1_", "", names(stage1_allc_model_results))
 
 # save results
-write_rds(hosp_model_results, "data/intermediate/hosp-dual_model_results.rds")
+write_rds(allc_model_results, "data/intermediate/allc-dual_model_results.rds")
 ```
 
 
@@ -724,7 +724,7 @@ write_rds(hosp_model_results, "data/intermediate/hosp-dual_model_results.rds")
 <!--   rename(Parameter = parameter, -->
 <!--          "Estimate (95\\% CI)" = estimate) -->
 
-<!-- # write to rds (create resp + hosp table in script 11) -->
+<!-- # write to rds (create resp + allc table in script 11) -->
 <!-- write_rds(beta_df, file = paste0("results/tables/intermediate/resp_beta_df.rds")) -->
 
 <!-- # # get table in latex -->
