@@ -24,6 +24,20 @@ library(xtable)
 ```
 
 ```{r}
+#####----- user input -----#####
+
+# select outcome
+#outcome <- "adrd"
+outcome <- "hosp"
+#outcome <- "allc"
+#outcome <- "adrd-dual"
+#outcome <- "hosp-dual"
+#outcome <- "allc-dual"
+
+```
+
+
+```{r}
 # set path for saving figures
 fig_path <- "results/figures/final/"
 ```
@@ -32,28 +46,30 @@ fig_path <- "results/figures/final/"
 
 ```{r}
 # load list with all model results and bind into df
-hosp_res <- read_rds("data/intermediate/hosp-dual_model_results.rds")
-hosp_res <- bind_rows(hosp_res, .id = "model")
+res <- read_rds(paste0("data/intermediate/", outcome, "_model_results.rds"))
+res <- bind_rows(res, .id = "model")
 
-# # limiting to model 1 for now
-# hosp_res <- hosp_res %>%
-#   filter(model == "hosp_m1")
+# limiting to model 1 for now
+res <- res %>%
+  filter(str_detect(model, "m1"))
+# and make all the model names just m1 (remove outcome)
+res$model <- "m1"
 ```
 
 ```{r}
 ## Read data ----
-hosp_ratios_df_comb <- read_rds('data/symlinks/scratch/hosp_combined_data_dual.rds')
-hosp_ratios_df <- read_rds('data/symlinks/scratch/hosp_ratios_df_dual.rds')
+ratios_df_comb <- read_rds(paste0('data/symlinks/scratch/', outcome, '_combined_data.rds'))
+ratios_df <- read_rds(paste0('data/symlinks/scratch/', outcome, '_ratios_df.rds'))
 county_sf <- read_rds("data/symlinks/scratch/county_sf.rds")
 county_sf_zero_b <- read_rds("data/symlinks/scratch/county_sf_zero_b.rds")
 
-hosp_res_sf <- county_sf %>% 
+res_sf <- county_sf %>% 
   select(county) %>% 
-  right_join(hosp_ratios_df_comb) %>%
-  right_join(hosp_ratios_df) %>%
-  right_join(hosp_res)
+  right_join(ratios_df_comb) %>%
+  right_join(ratios_df) %>%
+  right_join(res)
 
-colnames(hosp_res_sf)
+colnames(res_sf)
 ```
 
 ```{r}
@@ -72,15 +88,18 @@ state_sf %<>%
 ```{r}
 # change projection to Albers Equal Area Conic (good for maps of US)
 
-hosp_res_sf <- st_transform(hosp_res_sf, 
+res_sf <- st_transform(res_sf, 
                            crs = st_crs("+proj=aea +lat_1=29.5 +lat_2=45.5 +lat_0=37.5
                                         +lon_0=-96 +x_0=0 +y_0=0 +datum=NAD83 +units=m +no_defs"))
-state_sf <- st_transform(state_sf, 
-                           crs = st_crs("+proj=aea +lat_1=29.5 +lat_2=45.5 +lat_0=37.5
-                                        +lon_0=-96 +x_0=0 +y_0=0 +datum=NAD83 +units=m +no_defs"))
-county_sf_zero_b <- st_transform(county_sf_zero_b,
+# state_sf <- st_transform(state_sf, 
+#                            crs = st_crs("+proj=aea +lat_1=29.5 +lat_2=45.5 +lat_0=37.5
+#                                         +lon_0=-96 +x_0=0 +y_0=0 +datum=NAD83 +units=m +no_defs"))
+county_sf <- st_transform(county_sf,
                                  crs = st_crs("+proj=aea +lat_1=29.5 +lat_2=45.5 +lat_0=37.5
                                         +lon_0=-96 +x_0=0 +y_0=0 +datum=NAD83 +units=m +no_defs"))
+# county_sf_zero_b <- st_transform(county_sf_zero_b,
+#                                  crs = st_crs("+proj=aea +lat_1=29.5 +lat_2=45.5 +lat_0=37.5
+#                                         +lon_0=-96 +x_0=0 +y_0=0 +datum=NAD83 +units=m +no_defs"))
 ```
 
 ```{r}
@@ -91,33 +110,26 @@ race_labels <- c(
 )
 ```
 
-```{r}
-# add a column for lambda in stage 2
-hosp_res_sf %<>%
-  mutate(y_stage2 = log(observed/expected_stage2))
-```
-
 ## Pre-modeling visualizations of observed and expected
 
 ### Expected rates table
 
 ```{r}
-exp_rates_1 <- read_rds(paste0("results/tables/intermediate/hosp_expected_rates_race-specific_dual.rds"))
-exp_rates_2 <- read_rds(paste0("results/tables/intermediate/hosp_expected_rates_overall_dual.rds"))
-
-exp_rates_tab <- left_join(exp_rates_1, exp_rates_2)
+exp_rates <- read_rds(paste0("results/tables/intermediate/", outcome, "_expected_rates.rds"))
 
 # # get table in latex
-# print(xtable(exp_rates_tab, type = "latex"), file = "results/tables/final/hosp_national_rates.tex")
+# print(xtable(exp_rates_tab, type = "latex"), file = "results/tables/final/adrd_national_rates.tex")
 ```
 
 ## Model results
+
+### Stage 2 raw vs. smoothed lambdas
 
 ```{r}
 # set up data
 
 # gather raw observed/expected and lambdas
-stage2_total_risk_df <- hosp_res_sf |>
+stage2_total_risk_df <- res_sf |>
   mutate(y_stage2 = log(observed/expected_stage2)) |>
   select(county, geometry, model, race,
          y_stage2, log_lambda_stage2) |>
@@ -130,14 +142,14 @@ stage2_total_risk_df <- hosp_res_sf |>
 
 # set levels for plotting
 stage2_total_risk_df$raw_vs_model <- factor(stage2_total_risk_df$raw_vs_model,
-                                       levels = c("raw", "hosp_m1", "hosp_m2", "hosp_m3"))
+                                       levels = c("raw", "m1"))
 
 # labels for facets
-stage2_total_risk_1m_labels <- c(
+stage2_total_risk_labels <- c(
   `1` = "White",
   `2` = "Black",
   raw = "Raw\n observed/expected",
-  hosp_m1 = "Smoothed\n observed/expected (\u03BB)",
+  m1 = "Smoothed\n observed/expected (\u03BB)",
   "1_specific" = "White-specific\n (\u03C8\u2081)",
   "both_shared_unscaled" = "Unscaled shared\n (\u03A6)",
   "2_specific" = "Black-specific\n (\u03C8\u2082)"
@@ -145,7 +157,7 @@ stage2_total_risk_1m_labels <- c(
 
 # plot
 stage2_total_risk_df |>
-  filter(raw_vs_model == "raw" | raw_vs_model == "hosp_m1") |>
+  #filter(raw_vs_model == "raw" | raw_vs_model == "adrd_m1") |>
   mutate(estimate = ifelse(estimate >= log(3), log(3)-0.001, estimate)) |>
   ggplot() +
   geom_sf(aes(fill = exp(estimate)), lwd = 0.03) + 
@@ -154,7 +166,7 @@ stage2_total_risk_df |>
   theme_map() + 
   labs(fill = expression('Relative risk')) +
   facet_grid(race ~ raw_vs_model,
-             labeller = as_labeller(stage2_total_risk_1m_labels)
+             labeller = as_labeller(stage2_total_risk_labels)
              ) +
   theme(legend.title = element_text(size = 12, vjust = 0.8),
         legend.text = element_text(size = 9),
@@ -169,8 +181,8 @@ stage2_total_risk_df |>
                      labels = c("0", "1", "2", "3+"),
                      guide = guide_colorbar(ticks = FALSE,
                                             barwidth = 12, barheight = 0.5))
-#ggsave(paste0(fig_path, "hosp_raw_vs_lambda.pdf"), width = 7, height = 4)
-ggsave(paste0(fig_path, "hosp-dual_raw_vs_lambda.png"), width = 6, height = 4, dpi = 1000)
+#ggsave(paste0(fig_path, "adrd_raw_vs_lambda.pdf"), width = 6, height = 4)
+ggsave(paste0(fig_path, paste0(outcome, "_raw_vs_lambda.png")), width = 6, height = 4, dpi = 1000)
 ```
 
 ### White-specific, Black-specific, and shared risks (three risk surfaces)
@@ -179,14 +191,15 @@ ggsave(paste0(fig_path, "hosp-dual_raw_vs_lambda.png"), width = 6, height = 4, d
 # set up data
 
 # gather shared and specific columns
-shared_specific_df <- hosp_res_sf |>
+shared_specific_df <- res_sf |>
   select(county, geometry, model, race, 
-         phi, phi_sig, psi, psi_sig) |>
+         phi, phi_sig_80, phi_sig_95, psi, psi_sig_80, psi_sig_95) |>
   gather(key = "shared_vs_spec", value = "estimate", phi, psi) %>%
-  # new sig column for estimate
-  mutate(estimate_sig = ifelse(shared_vs_spec == "psi", psi_sig, phi_sig)) |>
+  # new sig columns for estimate
+  mutate(estimate_sig_80 = ifelse(shared_vs_spec == "psi", psi_sig_80, phi_sig_80),
+         estimate_sig_95 = ifelse(shared_vs_spec == "psi", psi_sig_95, phi_sig_95)) |>
   # remove other sig columns for clarity
-  select(-c(phi_sig, psi_sig)) |>
+  select(-c(psi_sig_80, psi_sig_95, phi_sig_80, phi_sig_95)) |>
   # change race for shared rows
   mutate(race = ifelse(shared_vs_spec == "phi", "both", race)) %>%
   distinct() |>
@@ -196,12 +209,8 @@ shared_specific_df <- hosp_res_sf |>
 shared_specific_df$parameter <- factor(shared_specific_df$parameter,
                                        levels = c("1_psi", "both_phi", "2_psi"))
 
-sc <- scale_fill_gradient2(high = "#7600bc", mid = "white", low = "#028A0F", na.value = "gray50",
-                         midpoint = 0,
-                         guide = guide_colorbar(barwidth = 10, barheight = 1))
-
 # labels for facets
-shared_specific_labels_1m <- c(
+shared_specific_labels <- c(
   #"1_psi" = "White-specific\n (\u03C8\u2081)",
   "1_psi" = "White-specific",
   #"both_phi" = "Shared\n (\u03A6)",
@@ -213,23 +222,25 @@ shared_specific_labels_1m <- c(
 # set up data
 shared_specific_df %<>%
   mutate(estimate_binary = ifelse(estimate > 0, "High risk", "Low risk")) %>%
-  mutate(estimate_binary = ifelse(estimate_sig, estimate_binary, NA))
+  mutate(estimate_binary_80 = ifelse(estimate_sig_80, estimate_binary, NA),
+         estimate_binary_95 = ifelse(estimate_sig_95, estimate_binary, NA),
+         estimate_binary_0 = estimate_binary)
 
-sc <- scale_fill_gradient2(high = "#7600bc", mid = "white", low = "#028A0F", na.value = "gray50",
-                         midpoint = 0,
-                         guide = guide_colorbar(barwidth = 10, barheight = 1))
+# choose 80% or 95% for significance
+#sig_shared_specific <- 80
+#sig_shared_specific <- 95
+sig_shared_specific <- 0
 
 # plot
 shared_specific_df |>
-  filter(model == "hosp_m1") |>
+  #filter(model == "adrd_m1") |>
   ggplot() +
-  geom_sf(aes(fill = estimate_binary), lwd = 0.03) + 
-  #geom_sf(aes(fill = estimate), lwd = 0.03) + 
+  geom_sf(aes(fill = !!sym(paste0("estimate_binary_", sig_shared_specific))), lwd = 0.03) + 
   geom_sf(data = county_sf_zero_b, fill = "gray90", lwd = 0.0) + 
   geom_sf(data = state_sf, fill = NA, col = "black", lwd = 0.1) +
   labs(fill = "Risk component:") +
   facet_grid(~ parameter,
-             labeller = as_labeller(shared_specific_labels_1m)
+             labeller = as_labeller(shared_specific_labels)
              ) +
   theme_map() + 
   theme(legend.title = element_text(size = 10),
@@ -238,32 +249,91 @@ shared_specific_df |>
         strip.text = element_text(size = 12),
         strip.background = element_blank(),
         plot.background = element_rect(fill = "white", color = NA)) +
-  #sc
-  scale_fill_manual(values = c("Low risk" = "#006400",
+  scale_fill_manual(values = c("Low risk" = "#006400", 
                                "High risk" = "#B47EE5"),
                      na.value = "gray90")
-ggsave(paste0(fig_path, "hosp-dual_shared_vs_specific.png"), width = 7, height = 2.5, dpi = 1000)
+#ggsave(paste0(fig_path, "adrd_shared_vs_specific.pdf"), width = 7, height = 2.5)
+ggsave(paste0(fig_path, paste0(outcome, "_shared_vs_specific_", sig_shared_specific, ".png")), width = 7, height = 2.5, dpi = 1000)
 
-# franklin <- shared_specific_df %>%
-#   filter(county == "12037" & model == "hosp_m1")
+
+#----- try continuous instead
+
+sc <- scale_fill_gradient2(high = "#7600bc", mid = "white", low = "#028A0F", na.value = "gray50",
+                         #midpoint = 0,
+                         midpoint = 1,
+                         guide = guide_colorbar(barwidth = 10, barheight = 1))
+
+# set up data
+shared_specific_df %<>%
+  mutate(estimate_80 = ifelse(estimate_sig_80, estimate, NA),
+         estimate_95 = ifelse(estimate_sig_95, estimate, NA),
+         estimate_0 = estimate)
+
+shared_specific_df |>
+  mutate(exp_estimate = exp(estimate_80),
+         exp_estimate = ifelse(exp_estimate < 0.7, 0.7, exp_estimate),
+         exp_estimate = ifelse(exp_estimate > 1.6, 1.6, exp_estimate)) %>%
+  #filter(model == "adrd_m1") |>
+  ggplot() +
+  geom_sf(aes(fill = exp_estimate), lwd = 0.03) + 
+  geom_sf(data = county_sf_zero_b, fill = "gray90", lwd = 0.0) + 
+  geom_sf(data = state_sf, fill = NA, col = "black", lwd = 0.1) +
+  labs(fill = "Risk component:") +
+  facet_grid(~ parameter,
+             labeller = as_labeller(shared_specific_labels)
+             ) +
+  theme_map() + 
+  theme(legend.title = element_text(size = 10),
+        legend.text = element_text(size = 10),
+        legend.position = "bottom",
+        strip.text = element_text(size = 12),
+        strip.background = element_blank(),
+        plot.background = element_rect(fill = "white", color = NA)) +
+  sc
+
 ```
 
 ### Risk ratios
 
 ```{r}
+# RR median and RR range
+res_sf %>%
+  filter(race == 1) %>%
+  summarise(rr_median = median(risk_ratio),
+            rr_min = min(risk_ratio),
+            rr_max = max(risk_ratio))
+```
+
+
+```{r}
 # table of risk ratios < 1, > 1, non-significant
 
-hosp_res_sf %>%
-  filter(model == "hosp_m1") %>%
+# for 80%
+res_sf %>%
+  #filter(model == "adrd_m1") %>%
   filter(race == 2) %>% # same risk ratio for white and black rows
   select(-geometry) %>%
   as.data.frame() %>%
   mutate(
-    risk_ratio_direction = ifelse(risk_ratio_sig, risk_ratio, as.numeric(NA)),
+    risk_ratio_direction = ifelse(risk_ratio_sig_80, risk_ratio, as.numeric(NA)),
     risk_ratio_direction = ifelse(risk_ratio_direction < 1, "Risk ratio < 1", "Risk ratio > 1")
   ) %>%
   count(risk_ratio_direction) %>%
   mutate(pcnt = n / sum(n) * 100)
+
+# for 95% 
+res_sf %>%
+  #filter(model == "adrd_m1") %>%
+  filter(race == 2) %>% # same risk ratio for white and black rows
+  select(-geometry) %>%
+  as.data.frame() %>%
+  mutate(
+    risk_ratio_direction = ifelse(risk_ratio_sig_95, risk_ratio, as.numeric(NA)),
+    risk_ratio_direction = ifelse(risk_ratio_direction < 1, "Risk ratio < 1", "Risk ratio > 1")
+  ) %>%
+  count(risk_ratio_direction) %>%
+  mutate(pcnt = n / sum(n) * 100)
+
 ```
 
 ```{r}
@@ -278,17 +348,31 @@ bin_breaks <- c(0, 0.2, 0.4, 0.6, 0.8, 1, 1.2, 1.4, 1.6, 1.8, 2, 2.2, 2.4, 3.6)
 bin_df <- embed(bin_breaks, 2) |> as.data.frame()
 bin_means <- rowMeans(bin_df) |> format(nsmall = 1)
 
-# new column for risk ratio bins
-hosp_res_sf %<>% 
-  mutate(
-    risk_ratio = ifelse(risk_ratio_sig, risk_ratio, as.numeric(NA)),
-    risk_ratio_bins = cut(risk_ratio, 
+# choose 80% or 95% for significance (or show all counties)
+#sig_rr <- 80
+#sig_rr <- 95
+sig_rr <- 0
+
+# new column for risk ratio bins (with significance)
+res_sf <- res_sf %>% 
+  mutate(risk_ratio_sig = case_when(
+    sig_rr == 80 ~ risk_ratio_sig_80,
+    sig_rr == 95 ~ risk_ratio_sig_95,
+    sig_rr == 0 ~ TRUE
+    ),
+    risk_ratio_sig_only = ifelse(risk_ratio_sig, risk_ratio, as.numeric(NA)),
+    risk_ratio_bins = cut(risk_ratio_sig_only, 
                           breaks = bin_breaks,
                           labels = bin_means
                           ))
 
-hosp_risk_ratios <- hosp_res_sf %>% 
-  filter(model == "hosp_m1") |>
+# get title based on outcome
+rr_title <- ifelse(str_detect(outcome, "adrd"), "Hospitalization with ADRD",
+                   ifelse(str_detect(outcome, "hosp"), "Hospitalization without ADRD", 
+                   "All-cause hospitalization"))
+
+risk_ratios <- res_sf %>% 
+  #filter(model == "adrd_m1") |>
   select(county, geometry, model, risk_ratio_bins) %>%
   distinct() %>%
   ggplot() +
@@ -296,7 +380,7 @@ hosp_risk_ratios <- hosp_res_sf %>%
   geom_sf(data = county_sf_zero_b, fill = "gray40", lwd = 0.0) + 
   geom_sf(data = state_sf, fill = NA, col = "black", lwd = 0.2) +
   labs(fill = expression('Risk Ratio (' *lambda[' 2ij']*'/'*lambda[' 1ij']*', Black/White)'),
-       title = "Hospitalization without ADRD") +
+       title = rr_title) +
   theme_map() +
   theme(legend.position = "bottom", 
         #legend.justification = "right", 
@@ -332,7 +416,7 @@ hosp_risk_ratios <- hosp_res_sf %>%
                "#7f2704"),
     na.value = "gray40",
     drop = FALSE,
-    breaks = levels(unique(hosp_res_sf$risk_ratio_bins))#,
+    breaks = levels(unique(res_sf$risk_ratio_bins))#,
     #na.translate = F      # makes NA white
   ) +
   guides(fill = guide_legend(
@@ -342,10 +426,11 @@ hosp_risk_ratios <- hosp_res_sf %>%
             keywidth = grid::unit(2, "lines"),
             keyheight = grid::unit(.5, "lines"),
             label.hjust = 0))
-hosp_risk_ratios
+risk_ratios
 
 # save data for plot, not pdf (combine plots across outcomes in script 11)
-write_rds(hosp_risk_ratios, file = "data/symlinks/scratch/hosp-dual_risk_ratio_maps.rds")
+write_rds(risk_ratios, file = paste0("results/figures/intermediate/", outcome, 
+                                     "_risk_ratio_maps_", sig_rr, ".rds"))
 ```
 
 ## Look at distributions of post-modeling variables across counties
@@ -397,31 +482,31 @@ summarize_column <- function(df,
 # apply function to get summary stats table
 # note: I don't think the first two can come off of FASSE because they show small counts
 summary_stats <- rbind(
-  # summarize_column(hosp_res_sf, 
+  # summarize_column(adrd_res_sf, 
   #                  column_name = person_years,
   #                  param_name = "person years"),
-  # summarize_column(hosp_res_sf, 
+  # summarize_column(adrd_res_sf, 
   #                  column_name = observed,
   #                  param_name = "observed"),
-  summarize_column(df = hosp_res_sf,
-                   column_name = y_stage2,
-                   param_name = "Raw observed/expected",
-                   exp_transform = TRUE),
-  # summarize_column(df = hosp_res_sf, 
+  # summarize_column(df = res_sf,
+  #                  column_name = y_stage2,
+  #                  param_name = "Raw observed/expected",
+  #                  exp_transform = TRUE),
+  # summarize_column(df = adrd_res_sf, 
   #                  column_name = log_lambda_stage1, 
   #                  param_name = "Standardized risk (lambda) stage 1", 
   #                  exp_transform = TRUE),
-  summarize_column(df = hosp_res_sf, 
+  summarize_column(df = res_sf, 
                    column_name = log_lambda_stage2, 
                    param_name = "Standardized risk ($\\lambda$)", 
                    exp_transform = TRUE),
-  summarize_column(df = hosp_res_sf, 
+  summarize_column(df = res_sf, 
                    column_name = phi, 
                    param_name = "Shared risk ($\\phi_{ij}$)"),
-  summarize_column(df = hosp_res_sf, 
+  summarize_column(df = res_sf, 
                    column_name = psi, 
                    param_name = "Race-specific risk ($\\psi_{dij}$)"),
-  summarize_column(df = hosp_res_sf, 
+  summarize_column(df = res_sf, 
                    column_name = risk_ratio, 
                    param_name = "Risk ratio ($\\lambda_{2ij}/\\lambda_{1ij}$)")
   )
@@ -444,17 +529,19 @@ summary_stats %<>%
   mutate(race = ifelse(param %in% c("Shared risk ($\\phi_{ij}$)", 
                                     "Standardized risk (lambda) stage 1",
                                     "Risk ratio ($\\lambda_{2ij}/\\lambda_{1ij}$)"),
-                       "--", race),
-         model = str_remove(model, "hosp_")) %>%
-  arrange(param, race, model)
+                       "--", race)#,
+         #model = str_remove(model, "adrd_")
+         ) %>%
+  #arrange(param, race, model)
+  arrange(param, race)
 
 # change race and model values
 summary_stats %<>%
   mutate(race = ifelse(race == 1, "White", race)) %>%
   mutate(race = ifelse(race == 2, "Black", race)) %>%
-  mutate(model = ifelse(model == "hosp_m1", "Unadjusted", model)) %>%
-  mutate(model = ifelse(model == "hosp_m2", "Adjusted for HPIR", model)) %>%
-  mutate(model = ifelse(model == "hosp_m3", "Adjusted for $PM_{2.5}$", model)) %>%
+  # mutate(model = ifelse(model == "adrd_m1", "Unadjusted", model)) %>%
+  # mutate(model = ifelse(model == "adrd_m2", "Adjusted for HPIR", model)) %>%
+  # mutate(model = ifelse(model == "adrd_m3", "Adjusted for $PM_{2.5}$", model)) %>%
   select(c(param, everything()))
 
 # display without scientific notation
@@ -463,7 +550,7 @@ summary_stats[] <- lapply(summary_stats, function(x) if(is.numeric(x)) format(x,
 # rename columns
 summary_stats <- summary_stats |>
   rename(Parameter = param,
-         Model = model,
+         #Model = model,
             Race = race,
             `Min.` = min,
             `5th` = p050,
@@ -474,9 +561,72 @@ summary_stats <- summary_stats |>
             `Max.` = max)
 
 # unadjusted model only (don't run this if I want all models)
-summary_stats <- summary_stats %>%
-  filter(Model == "m1")
-summary_stats$Model <- NULL
+# summary_stats <- summary_stats %>%
+#   filter(Model == "m1")
+#summary_stats$Model <- NULL
 
 summary_stats
+```
+
+## Standard deviation in posterior samples
+
+```{r}
+# choose model to look at
+model_num <- 1
+
+sd_lambda_stage1 <- read_rds(paste0("data/intermediate/", outcome, "_lambda_stage1_sd.rds"))[[model_num]]
+sd_phi <- read_rds(paste0("data/intermediate/", outcome, "_phi_sd.rds"))[[model_num]]
+sd_lambda_white <- read_rds(paste0("data/intermediate/", outcome, "_lambda_white_sd.rds"))[[model_num]]
+sd_lambda_black <- read_rds(paste0("data/intermediate/", outcome, "_lambda_black_sd.rds"))[[model_num]]
+sd_psi_white <- read_rds(paste0("data/intermediate/", outcome, "_psi_white_sd.rds"))[[model_num]]
+sd_psi_black <- read_rds(paste0("data/intermediate/", outcome, "_psi_black_sd.rds"))[[model_num]]
+
+# bind SDs with county sf
+check_sds <- cbind(county_sf, sd_lambda_stage1, sd_phi, sd_lambda_white, sd_lambda_black,
+                    sd_psi_white, sd_psi_black)
+
+# gather SD columns
+check_sds %<>%
+  select(county, sd_lambda_stage1, sd_phi, sd_lambda_white, sd_lambda_black,
+                    sd_psi_white, sd_psi_black) %>%
+  gather(key = "parameter", value = "sd", -c(county, geometry))
+
+check_sds$parameter <- factor(check_sds$parameter,
+                               levels = c("sd_lambda_stage1", 
+                                          "sd_lambda_white", 
+                                          "sd_lambda_black",
+                                          "sd_phi", 
+                                          "sd_psi_white", 
+                                          "sd_psi_black"))
+
+# labels for plotting
+param_labels <- c(
+  sd_lambda_stage1 = "\u03BB (Overall)",
+  sd_lambda_white = "\u03BB\u2081 (White)",
+  sd_lambda_black = "\u03BB\u2082 (Black)",
+  sd_phi = "\u03A6 (Shared)",
+  sd_psi_white = "\u03C8\u2081 (White-specific)",
+  sd_psi_black = "\u03C8\u2082 (Black-specific)"
+)
+
+# plot SD
+check_sds %>%
+  ggplot() +
+  geom_sf(aes(fill = sd), lwd = 0.0) +
+  geom_sf(data = county_sf_zero_b, fill = "gray50", lwd = 0.0) +
+  geom_sf(data = state_sf, fill = NA, lwd = 0.3, col = "black") +
+  labs(fill = "Posterior standard deviation") +
+  scale_fill_gradient2(high = "red3", low = "white", na.value = "gray50",
+                       guide = guide_colorbar(barwidth = 12, barheight = 1)) +
+  #scale_fill_viridis(option = "G", direction = -1) +
+  facet_wrap(~parameter, nrow = 2,
+             labeller = as_labeller(param_labels)) +
+  theme_map() +
+  theme(legend.position = "bottom",
+        strip.background = element_blank(),
+        strip.text = element_text(size = 14),
+        legend.title = element_text(size = 12),
+        legend.text = element_text(size = 10),
+        plot.background = element_rect(fill = "white", color = NA))
+ggsave(file = paste0(fig_path, paste0(outcome, "_posterior_sd.png")), width = 8, height = 5, dpi = 1000)
 ```
