@@ -15,10 +15,13 @@ if(dual){
                         c("m1/model_run_20241212-1704/stanfit_object_stage1_adrd_m1.rds"))
   
   hosp_stage1 <- paste0("results/models/dual/stage1/hosp/", 
-                        c("m1/model_run_20241219-1636/stanfit_object_stage1_hosp_m1.rds"))
+                        c("m1/model_run_20250124-2220/stanfit_object_stage1_hosp_m1.rds"))
+  
+  allc_stage1 <- paste0("results/models/dual/stage1/allc/", 
+                        c("m1/model_run_20250123-1856/stanfit_object_stage1_allc_m1.rds"))
   
   # get all model names in one vector
-  models <- c(adrd_stage1, hosp_stage1)
+  models <- c(adrd_stage1, hosp_stage1, allc_stage1)
   
   # copy all of these models into the working folder
   file.copy(models, "results/models/dual/working", overwrite = TRUE)
@@ -33,7 +36,8 @@ if(dual){
                           "m3/model_run_20240711-1959/stanfit_object_stage1_adrd_m3.rds"))
   
   hosp_stage1 <- paste0("results/models/stage1/hosp/",
-                        c("m1/model_run_20240506-185101/stanfit_object_stage1_hosp_m1.rds",
+                        c(#"m1/model_run_20240506-185101/stanfit_object_stage1_hosp_m1.rds",
+                          "m1/model_run_20250118-0250/stanfit_object_stage1_hosp_m1.rds",
                           "m2/model_run_20240711-2000/stanfit_object_stage1_hosp_m2.rds",
                           "m3/model_run_20240711-2000/stanfit_object_stage1_hosp_m3.rds"))
   

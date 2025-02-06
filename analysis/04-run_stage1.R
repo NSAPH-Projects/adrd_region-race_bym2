@@ -90,7 +90,7 @@ verbose_flag <- FALSE
 ## Load data ----
 
 if(dual){
-  ratios_df <- read_rds(paste0("data/symlinks/scratch/", outcome_to_run, "_ratios_df_dual.rds"))
+  ratios_df <- read_rds(paste0("data/symlinks/scratch/", outcome_to_run, "-dual_ratios_df.rds"))
 } else {
   ratios_df <- read_rds(paste0("data/symlinks/scratch/", outcome_to_run, "_ratios_df.rds"))
 }
@@ -136,7 +136,7 @@ ratios_df_comb <- ratios_df %>%
             house_price_income_ratio = first(house_price_income_ratio),
             pm25 = first(pm25))
 if(dual){
-  write_rds(ratios_df_comb, paste0("data/symlinks/scratch/", outcome_to_run, "_combined_data_dual.rds"))
+  write_rds(ratios_df_comb, paste0("data/symlinks/scratch/", outcome_to_run, "-dual_combined_data.rds"))
 } else {
   write_rds(ratios_df_comb, paste0("data/symlinks/scratch/", outcome_to_run, "_combined_data.rds")) 
 }

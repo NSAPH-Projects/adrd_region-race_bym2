@@ -93,7 +93,7 @@ verbose_flag <- FALSE
 ## Load data ----
 
 if(dual){
-  ratios_df <- read_rds(paste0("data/symlinks/scratch/", outcome_to_run, "_ratios_df_dual.rds"))
+  ratios_df <- read_rds(paste0("data/symlinks/scratch/", outcome_to_run, "-dual_ratios_df.rds"))
 } else {
   ratios_df <- read_rds(paste0("data/symlinks/scratch/", outcome_to_run, "_ratios_df.rds"))
 }
