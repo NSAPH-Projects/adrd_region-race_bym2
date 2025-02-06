@@ -5,14 +5,18 @@ library(here)
 knitr::opts_knit$set(root.dir = here())
 ```
 
+Description:
+- Outcome: hospitalizations with ADRD (sex-age-dual standardized)
+- Basic stats (for table 1) and visualizations
+- National rates (used for expected counts)
+- Observed and expected counts
+
 ```{r, message=FALSE, warning=FALSE}
 ## Load libraries ----
 library(tidyverse)
 library(magrittr)
 library(ggplot2)
 library(sf)
-#library(feather)
-#library(cowplot)
 library(RColorBrewer)
 library(viridis)
 library(ggthemes)
@@ -23,7 +27,7 @@ library(xtable)
 
 ```{r}
 ## Read data ----
-adrd_county_df <- read_rds("data/symlinks/scratch/adrd_county_df_dual.rds")
+adrd_county_df <- read_rds("data/symlinks/scratch/adrd-dual_county_df.rds")
 county_sf <- read_rds("data/symlinks/scratch/county_sf.rds")
 county_fips_df <- read_rds("data/symlinks/scratch/county_fips_df.rds")
 
@@ -51,9 +55,6 @@ adrd_county_df %<>%
 adrd_county_df$n_enrollees[is.na(adrd_county_df$n_enrollees)] <- 0 
 adrd_county_df$n_admissions[is.na(adrd_county_df$n_admissions)] <- 0 
 
-sum(adrd_county_df$n_enrollees)
-sum(adrd_county_df$n_admissions)
-
 counties_shp_ = unique(county_sf$county)
 counties_adrd_ = unique(adrd_county_df$county)
 
@@ -61,9 +62,11 @@ setdiff(counties_shp_, counties_adrd_)
 setdiff(counties_adrd_, counties_shp_)
 ```
 
-
 ```{r}
 # get basic stats from data (before rounding)
+
+# total # of hospitalizations
+sum(adrd_county_df$n_admissions)
 
 # number of hospitalizations with ADRD by race
 adrd_county_df %>%
@@ -72,257 +75,84 @@ adrd_county_df %>%
 ```
 
 ```{r}
-# get sex and age distribution of person-years for each race
+# get sex, age, dual distribution of person-years for each race
 
-# table with % of person-years in each race that fall in each stratum
-# sex_age_dist_tab <- adrd_county_df %>%
-#   group_by(race, sex, age_grp) %>%
-#   summarise(total_py = sum(n_enrollees)) %>%
-#   ungroup() %>%
-#   # group_by(race) %>%
-#   # mutate(pct_py = round(100 * total_py / sum(total_py), 1)) %>%
-#   spread(key = race, value = total_py) %>%
-#   mutate(sex = ifelse(sex == 1, "Male", "Female"),
-#          age_grp = ifelse(age_grp == "[65,75)", "65-74", age_grp),
-#          age_grp = ifelse(age_grp == "[75,85)", "75-84", age_grp),
-#          age_grp = ifelse(age_grp == ">85", "85+", age_grp),
-#          white_pct = round(100 * `1` / sum(`1`), 1),
-#          black_pct = round(100 * `2` / sum(`2`), 1)) %>%
-#   # paste raw and % together
-#   mutate(py_white = paste0(round(`1`, 0), " (", white_pct, " %)"),
-#          py_black = paste0(round(`2`, 0), " (", black_pct, " %)")) %>%
-#   select(-c(`1`, `2`, white_pct, black_pct)) %>%
-#   arrange(age_grp) %>%
-#   rename("Sex" = "sex",
-#          "Age group" = "age_grp",
-#          "White person-years" = "py_white",
-#          "Black person-years" = "py_black")
-
-# # table with % of person-years in white vs. black for each stratum 
-# sex_age_dist_tab <- adrd_county_df %>%
-#   group_by(race, sex, age_grp) %>%
-#   summarise(total_py = sum(n_enrollees)) %>%
-#   group_by(sex, age_grp) %>%
-#   mutate(pct_py = round(100 * total_py / sum(total_py), 1)) %>%
-#   mutate(total_pct_py = paste0(scales::comma(round(total_py, 0)), 
-#                                " (", pct_py, "\\%)")) %>%
-#   group_by(sex, age_grp) %>%
-#   mutate(total_white_black_py = scales::comma(sum(total_py))) %>%
-#   select(-c(total_py, pct_py)) %>%
-#   spread(key = race, value = total_pct_py) %>%
-#   ungroup() %>%
-#   mutate(sex = ifelse(sex == 1, "Male", "Female"),
-#          age_grp = ifelse(age_grp == "[65,75)", "aged 65-74", age_grp),
-#          age_grp = ifelse(age_grp == "[75,85)", "aged 75-84", age_grp),
-#          age_grp = ifelse(age_grp == ">85", "aged 85+", age_grp),
-#          Stratum = paste0(sex, ", ", age_grp)) %>%
-#   arrange(age_grp) %>%
-#   rename("White" = `1`,
-#          "Black" = `2`,
-#          "Total" = total_white_black_py) %>%
-#   select(c("Stratum", "White", "Black", "Total"))
-# 
-# # write_rds(sex_age_dist_tab, 
-# #           file = paste0("results/tables/intermediate/sex_age_dist.rds"))
-# # # table written to tex in script 10
-# 
-# # modify first column to include indent (easier for copy/paste)
-# sex_age_dist_tab$Stratum <- paste0("\\hspace{20pt}", sex_age_dist_tab$Stratum)
-# 
-# # get table in latex
-# # paste this table into the other table in overleaf
-# print(xtable(sex_age_dist_tab, type = "latex"), 
-#       file = "results/tables/final/sex_age_dist.tex", 
-#       sanitize.text.function = identity,
-#       include.rownames = FALSE)
-```
-
-
-# ```{r}
-# ## Plot number of enrollees across years ----
-# adrd_county_df %>% 
-#   mutate(race = as.character(race)) %>% 
-#   group_by(year, race) %>% 
-#   summarise(n_enrollees = sum(n_enrollees)) %>% 
-#   ggplot() + 
-#   geom_line(aes(x = year, y = n_enrollees, color = race))
-# ```
-# 
-# ```{r}
-# ## Plot number of adrd admissions across years ----
-# adrd_county_df %>% 
-#   mutate(race = as.character(race)) %>% 
-#   group_by(year, race) %>% 
-#   summarise(n_admissions = sum(n_admissions)) %>% 
-#   ggplot() + 
-#   geom_line(aes(x = year, y = n_admissions, color = race))
-# ```
-# 
-# ```{r}
-# ## Number of enrollees by county-sex-age_grp split by race group ----
-# adrd_county_df %>% 
-#   mutate(race = as.character(race)) %>% 
-#   ggplot() + 
-#   geom_density(aes(x = n_enrollees, color = race))
-# ```
-# 
-# ```{r}
-# ## Number of enrollees by county-sex-age_grp split by race group ----
-# adrd_county_df %>% 
-#   filter(n_enrollees < 500) %>% 
-#   mutate(race = as.character(race)) %>% 
-#   ggplot() + 
-#   geom_histogram(aes(x = n_enrollees, color = race)) +
-#   facet_grid(~race)
-# ```
-# 
-# ```{r}
-# ## Adrd blind-to-counties rates for each race-sex-age_grp----
-# adrd_county_df %>% 
-#   group_by(race, sex, age_grp) %>% 
-#   summarise(n_enrollees = sum(n_enrollees), 
-#             n_admissions = sum(n_admissions),
-#             adrd_rate = n_admissions / n_enrollees * 1e5) %>% 
-#   mutate(race_sex = paste(race, sex, sep = "_")) %>% 
-#   ggplot() +
-#   geom_boxplot(aes(x = age_grp, y = adrd_rate)) + 
-#   geom_jitter(aes(x = age_grp, y = adrd_rate, col = race_sex))
-# ```
-# 
-# ```{r}
-# ## Adrd county rates for each race-sex-age_grp ----
-# adrd_county_df %>% 
-#   group_by(county, race, sex, age_grp) %>% 
-#   summarise(n_enrollees = sum(n_enrollees), 
-#             n_admissions = sum(n_admissions),
-#             adrd_rate = n_admissions / n_enrollees * 1e5) %>% 
-#   mutate(race_sex = paste(race, sex, sep = "_")) %>% 
-#   ggplot() +
-#   geom_boxplot(aes(x = age_grp, y = adrd_rate)) + 
-#   geom_jitter(aes(x = age_grp, y = adrd_rate, col = race_sex)) + 
-#   facet_wrap(~race)
-#```
-
-```{r}
-adrd_county_df %>% 
-  group_by(race, sex, age_grp, dual) %>% 
-  summarise(n_enrollees = sum(n_enrollees), 
-            n_admissions = sum(n_admissions),
-            adrd_rate = n_admissions / n_enrollees * 100) %>% 
-  group_by(sex, age_grp, dual) %>% 
-  summarise(adrd_rate = mean(adrd_rate))
+# table with % of person-years in white vs. black for each stratum 
+sex_age_dual_dist_tab <- adrd_county_df %>%
+  group_by(race, sex, age_grp, dual) %>%
+  summarise(total_py = sum(n_enrollees)) %>%
+  group_by(sex, age_grp, dual) %>%
+  mutate(pct_py = round(100 * total_py / sum(total_py), 1)) %>%
+  mutate(total_pct_py = paste0(scales::comma(round(total_py, 0)), 
+                               " (", pct_py, "\\%)")) %>%
+  group_by(sex, age_grp, dual) %>%
+  mutate(total_white_black_py = scales::comma(sum(total_py))) %>%
+  select(-c(total_py, pct_py)) %>%
+  spread(key = race, value = total_pct_py) %>%
+  ungroup() %>%
+  mutate(sex = ifelse(sex == 1, "Male", "Female"),
+         age_grp = ifelse(age_grp == "[65,75)", "aged 65-74", age_grp),
+         age_grp = ifelse(age_grp == "[75,85)", "aged 75-84", age_grp),
+         age_grp = ifelse(age_grp == ">85", "aged 85+", age_grp),
+         dual = ifelse(dual == 0, "Medicaid ineligible", "Medicaid eligible"),
+         Stratum = paste0(sex, ", ", age_grp, ", ", dual)) %>%
+  arrange(age_grp) %>%
+  rename("White" = `1`,
+         "Black" = `2`,
+         "Total" = total_white_black_py) %>%
+  select(c("Stratum", "White", "Black", "Total"))
+sex_age_dual_dist_tab
 ```
 
 ```{r}
-# xx <- adrd_county_df
-# 
-# xx$sex[adrd_county_df$sex == 1] = "male"
-# xx$sex[adrd_county_df$sex == 2] = "female"
-# 
-# ## Reference adrd rates for each sex/age_grp blind to race ----
-# xx %>% 
-#   mutate(race = as.character(race)) %>% 
-#   group_by(race, sex, age_grp) %>% 
-#   summarise(n_enrollees = sum(n_enrollees), 
-#             n_admissions = sum(n_admissions),
-#             adrd_rate = n_admissions / n_enrollees * 100) %>% 
-#   group_by(sex, age_grp) %>% 
-#   summarise(adrd_rate = mean(adrd_rate)) %>%  
-#   ggplot() + 
-#   geom_point(aes(x = age_grp, y = adrd_rate, color = sex)) + 
-#   labs(title = "ADRD reference rates", x = "Age group", y = "ADRD rate") + 
-#   theme_bw()
-# #ggsave("results/figures/adrd_reference_rates.png")
-```
+# simpler stats for new table 1
 
-```{r}
-# ## look at proportions by race
-# prettyNum(prop.table(tapply(adrd_county_df$n_enrollees, adrd_county_df$race, sum)))
-```
+# overall
+adrd_county_df %>%
+  group_by(race) %>%
+  summarise(py = sum(n_enrollees)) %>%
+  mutate(py_pct = 100 * py/sum(py))
 
-```{r}
-# xx <- adrd_county_df
-# 
-# ## Observed county-level ADRD counts
-# xx$race[xx$race == 1] = "white"
-# xx$race[xx$race == 2] = "black"
-# 
-# xx %<>% 
-#   group_by(county, race) %>% 
-#   summarise(n_admissions = sum(n_admissions))
-# 
-# counties_shp_ = unique(county_sf$county)
-# counties_xx_w_ = unique(xx$county[xx$race == "white"])
-# counties_xx_b_ = unique(xx$county[xx$race == "black"])
-# 
-# setdiff(counties_shp_, counties_xx_w_)
-# setdiff(counties_xx_w_, counties_shp_)
-# setdiff(counties_shp_, counties_xx_b_)
-# setdiff(counties_xx_b_, counties_shp_)
-```
+# sex (overall)
+adrd_county_df %>%
+  group_by(sex) %>%
+  summarise(py = sum(n_enrollees)) %>%
+  mutate(py_pct = 100 * py/sum(py))
+# sex(by race)
+adrd_county_df %>%
+  group_by(race, sex) %>% 
+  summarise(count = sum(n_enrollees), .groups = "drop") %>%
+  group_by(race) %>%
+  mutate(percent = 100 * count / sum(count)) %>%
+  ungroup()
 
-```{r}
-# length(unique(xx$county))
-# sum(is.na(xx$race))
-```
+# dual (overall)
+adrd_county_df %>%
+  group_by(dual) %>%
+  summarise(py = sum(n_enrollees)) %>%
+  mutate(py_pct = 100 * py/sum(py))
+# dual (by race)
+adrd_county_df %>%
+  group_by(race, dual) %>% 
+  summarise(count = sum(n_enrollees), .groups = "drop") %>%
+  group_by(race) %>%
+  mutate(percent = 100 * count / sum(count)) %>%
+  ungroup()
 
-```{r}
-# yy <- county_sf %>% 
-#   select(county) %>% 
-#   left_join(xx) 
-# 
-# length(unique(yy$county))
-# sum(is.na(yy$race))
-# sum(is.na(yy$n_admissions))
-```
+# age (overall)
+adrd_county_df %>%
+  group_by(age_grp) %>%
+  summarise(py = sum(n_enrollees)) %>%
+  mutate(py_pct = 100 * py/sum(py))
+# age (by race)
+adrd_county_df %>%
+  group_by(race, age_grp) %>% 
+  summarise(count = sum(n_enrollees), .groups = "drop") %>%
+  group_by(race) %>%
+  mutate(percent = 100 * count / sum(count)) %>%
+  ungroup()
 
-```{r}
-# yy %>%
-#   filter(race == "white") %>% 
-#   st_simplify() %>%
-#   ggplot() +
-#   geom_sf(aes(fill = n_admissions), alpha = 1, lwd = 0.0)
-# 
-# yy %>%
-#   filter(race == "black") %>% 
-#   st_simplify() %>%
-#   ggplot() +
-#   geom_sf(aes(fill = n_admissions), alpha = 1, lwd = 0.0)
 ```
-
-```{r}
-# n_admissions_ <- yy$n_admissions
-# myPalette <- colorRampPalette(rev(RColorBrewer::brewer.pal(11, "Spectral")))
-# sc <- scale_fill_gradientn(colors = myPalette(10), 
-#                            limits = c(min(n_admissions_, na.rm = TRUE), max(n_admissions_, na.rm = TRUE)))
-# 
-# yy  %>% 
-#   ggplot() + 
-#   geom_sf(aes(fill = n_admissions), alpha = 1, lwd = 0.0) +
-#   facet_wrap(~race, ncol = 2) + 
-#   labs(title = "Observed") + 
-#   guides(fill = guide_legend(title = "ADRD counts")) + 
-#   theme_classic() + 
-#   theme(legend.position = "bottom") + 
-#   sc
-# #the yellow looks like white, try another visualization package
-```
-
-```{r}
-# yy %>% 
-#   ggplot() + 
-#   geom_sf(aes(fill = n_admissions), alpha = 1, lwd = 0.0) +
-#   facet_wrap(~race, ncol = 2) + 
-#   labs(title = "Observed") + 
-#   guides(fill = guide_legend(title = "ADRD counts")) + 
-#   theme_classic() + 
-#   scale_fill_viridis(name = "n_admissions", option = "D")
-```
-
-* adrd hospitalizations entangle prevalence and severity, specially in "small" counties 
-* biased measurement error? noise systematically affects certain groups
-* even if not affecting certain groups, measurement error decreases the power of the model
-* variance of the inference, will not detect statistical differences in the output
 
 
 ## Observed vs expected
@@ -331,7 +161,7 @@ adrd_county_df %>%
 # stage 1
 # get race-specific national rates for each sex/age combination 
 exp_stage1_df <- adrd_county_df %>%
-    dplyr::group_by(race, sex, age_grp, dual) %>% # race, sex, age_grp
+    dplyr::group_by(race, sex, age_grp, dual) %>% # race, sex, age_grp, dual
     dplyr::summarize(
         n_admissions = sum(n_admissions),
         n_enrollee_years = sum(n_enrollees),
@@ -341,7 +171,7 @@ exp_stage1_df <- adrd_county_df %>%
 # stage 2
 # get overall national rates for each sex/age combination 
 exp_stage2_df <- adrd_county_df %>%
-    dplyr::group_by(sex, age_grp, dual) %>% # sex, age_grp
+    dplyr::group_by(sex, age_grp, dual) %>% # sex, age_grp, dual
     dplyr::summarize(
         n_admissions = sum(n_admissions),
         n_enrollee_years = sum(n_enrollees),
@@ -392,10 +222,8 @@ exp_rates_tab <- left_join(exp_rates_stage1_tab, exp_rates_stage2_tab)
 
 
 # save tables
-write_rds(exp_rates_stage1_tab, 
-          file = paste0("results/tables/adrd_expected_rates_race-specific_dual.rds"))
-write_rds(exp_rates_stage2_tab, 
-          file = paste0("results/tables/adrd_expected_rates_overall_dual.rds"))
+write_rds(exp_rates_tab, 
+          file = paste0("results/tables/intermediate/adrd-dual_expected_rates.rds"))
 # tables joined and written to tex in script 10
 ```
 
@@ -404,7 +232,7 @@ write_rds(exp_rates_stage2_tab,
 ## Aggregate over years ----
 ## Just tally up the number of person years and hospitalizations over all years
 obs_df <- adrd_county_df %>%
-    dplyr::group_by(county, race, sex, age_grp, dual) %>% #county, race, sex, age_grp
+    dplyr::group_by(county, race, sex, age_grp, dual) %>% #county, race, sex, age_grp, dual
     dplyr::summarize(n_enrollees = sum(n_enrollees),
                      n_admissions = sum(n_admissions), 
                      obs_rate = n_admissions / n_enrollees,
@@ -431,7 +259,6 @@ adrd_ratios_df <- obs_df %>%
                      by = c("sex", "age_grp", "dual"))
 
 ## Now aggregate age ----
-
 # here is where dual drops out!! along with age and sex
 
 adrd_ratios_df %<>% 
@@ -454,140 +281,12 @@ adrd_ratios_df %<>%
 ```
 
 ```{r}
-adrd_ratios_df %>% 
-  mutate(
-    rel_ratio = observed / expected_stage1,
-    race = as.character(race)
-  ) %>% 
-  ggplot() + 
-  geom_density(aes(x = rel_ratio, color = race))
-
-adrd_ratios_df %>% 
-  mutate(
-    rel_ratio = observed / expected_stage2,
-    race = as.character(race)
-  ) %>% 
-  ggplot() + 
-  geom_density(aes(x = rel_ratio, color = race))
-```
-
-```{r}
+# plot observed vs expected
 adrd_ratios_df %>% 
   ggplot() + 
-  geom_point(aes(x = observed, y = expected_stage1, color = as.factor(race)), alpha = 0.5) + 
+  geom_point(aes(x = observed, y = expected_stage2, color = as.factor(race)), alpha = 0.5) + 
   scale_x_sqrt() + 
   scale_y_sqrt()
-```
-
-```{r}
-adrd_ratios_df %>% 
-  mutate(
-    log_diff = log(observed) - log(expected_stage1),
-    race = as.character(race)
-    ) %>% 
-  ggplot() + 
-  geom_density(aes(x = log_diff, color = race))
-
-adrd_ratios_df %>% 
-  mutate(
-    log_diff = log(observed) - log(expected_stage2),
-    race = as.character(race)
-    ) %>% 
-  ggplot() + 
-  geom_density(aes(x = log_diff, color = race))
-```
-
-```{r}
-xx <- adrd_ratios_df
-xx$race[xx$race == 1] = "white"
-xx$race[xx$race == 2] = "black"
-
-xx %<>%
-  mutate(
-    log_diff = log(observed/expected_stage2),
-    log_diff = if_else(observed == 0, as.numeric(NA), log_diff)
-    )
-
-counties_shp_ = unique(county_sf$county)
-counties_xx_w_ = unique(xx$county[xx$race == "white"])
-counties_xx_b_ = unique(xx$county[xx$race == "black"])
-
-setdiff(counties_shp_, counties_xx_w_)
-setdiff(counties_xx_w_, counties_shp_)
-setdiff(counties_shp_, counties_xx_b_)
-setdiff(counties_xx_b_, counties_shp_)
-```
-
-```{r}
-length(unique(xx$county))
-sum(is.na(xx$race))
-```
-
-```{r}
-yy <- county_sf %>% 
-  select(county) %>% 
-  left_join(xx) 
-
-length(unique(yy$county))
-sum(is.na(yy$race))
-sum(is.na(yy$log_diff))
-sum(yy$person_years == 0)
-sum(yy$observed == 0)
-```
-
-```{r}
-yy %>% 
-  mutate(person_years = log(person_years)) %>% 
-  ggplot() + 
-  geom_sf(aes(fill = person_years), alpha = 1, lwd = 0.0) +
-  scale_fill_viridis(name = "person_years", option = "D") +
-  facet_wrap(~race, ncol = 2) + 
-  labs(title = "log person years") + 
-  theme(legend.position = "bottom")
-```
-
-```{r}
-## person years is zero
-yy %>%
-  st_simplify() %>%
-  mutate(zero_persons = (person_years == 0)) %>%
-  ggplot() + 
-  geom_sf(aes(fill = zero_persons), alpha = 1, lwd = 0.0) + 
-  facet_grid(~race)
-```
-
-```{r}
-## observed is zero
-yy %>%
-  st_simplify() %>%
-  mutate(zero_observed = (observed == 0)) %>%
-  ggplot() + 
-  geom_sf(aes(fill = zero_observed), alpha = 1, lwd = 0.0) + 
-  facet_grid(~race)
-```
-
-```{r}
-yy %>%
-  filter(race == "white") %>% 
-  st_simplify() %>%
-  ggplot() +
-  geom_sf(aes(fill = log_diff), alpha = 1, lwd = 0.0)
-
-yy %>%
-  filter(race == "black") %>% 
-  st_simplify() %>%
-  ggplot() +
-  geom_sf(aes(fill = log_diff), alpha = 1, lwd = 0.0)
-```
-
-```{r}
-yy %>% 
-  ggplot() + 
-  geom_sf(aes(fill = log_diff), alpha = 1, lwd = 0.0) +
-  scale_fill_viridis(name = "log_diff", option = "D") +
-  facet_wrap(~race, ncol = 2) + 
-  labs(title = "log(observed) - log(expected)") + 
-  theme(legend.position = "bottom")
 ```
 
 ```{r}
@@ -607,6 +306,7 @@ adrd_ratios_df %<>%
 adrd_ratios_df %<>%
   arrange(race, county)
 
+# any missing values?
 sum(is.na(adrd_ratios_df$c_idx))
 sum(is.na(adrd_ratios_df$s_idx))
 sum(is.na(adrd_ratios_df$observed))
@@ -615,32 +315,6 @@ sum(is.na(adrd_ratios_df$expected_stage2))
 sum(is.na(adrd_ratios_df$person_years))
 ```
 
-
-## Look at PM2.5 and house-price-to-income ratio
-
 ```{r}
-# PM2.5 distribution by race (weighted by person-years)
-adrd_ratios_df %>%
-  mutate(race = case_when(
-    race == 1 ~ "White",
-    race == 2 ~ "Black"
-  )) %>%
-  ggplot(aes(pm25, weight = person_years, col = (race))) +
-  geom_density() +
-  labs(x = "PM2.5", y = "Density", col = "")
-
-# HPI ratio distribution by race (weighted by person-years)
-adrd_ratios_df %>%
-mutate(race = case_when(
-    race == 1 ~ "White",
-    race == 2 ~ "Black"
-  )) %>%
-  ggplot(aes(house_price_income_ratio, weight = person_years, col = factor(race))) +
-  geom_density(bw = 0.4) +
-  labs(x = "House-price-income ratio", y = "Density", col = "")
-```
-
-
-```{r}
-write_rds(adrd_ratios_df, "data/symlinks/scratch/adrd_ratios_df_dual.rds")
+write_rds(adrd_ratios_df, "data/symlinks/scratch/adrd-dual_ratios_df.rds")
 ```
