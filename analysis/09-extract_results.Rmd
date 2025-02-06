@@ -22,13 +22,13 @@ library(xtable)
 #####----- user input -----#####
 
 # select outcome
-#outcome <- "adrd"
+outcome <- "adrd"
 #outcome <- "hosp"
-outcome <- "allc"
+#outcome <- "allc"
 
 # dual-adjusted?
-#dual <- FALSE
-dual <- TRUE
+dual <- FALSE
+#dual <- TRUE
 ```
 
 
@@ -67,8 +67,6 @@ county_fips_df <- read_rds("data/symlinks/scratch/county_fips_df.rds")
 # read scaling factor from previous script
 scaling_factor <- read_rds("data/intermediate/scaling_factor.rds")
 
-# define % of posterior samples for significance
-sig_pct <- 0.95
 ```
 
 ```{r}
@@ -207,9 +205,18 @@ post_mean_sig_stage1 <- function(posterior_matrix, param_name,
   
   # check for significance and add to dataframe
   if(check_sig){
-    posterior_sig <- (colMeans(posterior_matrix > null_value) > sig_pct) | 
-      (colMeans(posterior_matrix < null_value) > sig_pct)
-      return_df[[paste0(param_name, "_sig")]] <- posterior_sig
+    
+    q025s <- apply(posterior_matrix, 2, quantile, 0.025) # get 2.5%
+    q100s <- apply(posterior_matrix, 2, quantile, 0.100) # get 10%
+    q900s <- apply(posterior_matrix, 2, quantile, 0.975) # get 90%
+    q975s <- apply(posterior_matrix, 2, quantile, 0.975) # get 97.5%
+    
+    # NOT significant if null falls in the credible interval
+    posterior_sig_80 <- ifelse(q100s < null_value & q900s > null_value, FALSE, TRUE)
+    posterior_sig_95 <- ifelse(q025s < null_value & q975s > null_value, FALSE, TRUE)
+    
+    return_df[[paste0(param_name, "_sig_80")]] <- posterior_sig_80
+    return_df[[paste0(param_name, "_sig_95")]] <- posterior_sig_95
   }
 
   return(return_df)
@@ -461,9 +468,18 @@ post_mean_sig_stage2 <- function(posterior_matrix, param_name,
   
   # check for significance and add to dataframe
   if(check_sig){
-    posterior_sig <- (colMeans(posterior_matrix > null_value) > sig_pct) | 
-      (colMeans(posterior_matrix < null_value) > sig_pct)
-      return_df[[paste0(param_name, "_sig")]] <- posterior_sig
+    
+    q025s <- apply(posterior_matrix, 2, quantile, 0.025) # get 2.5%
+    q100s <- apply(posterior_matrix, 2, quantile, 0.100) # get 10%
+    q900s <- apply(posterior_matrix, 2, quantile, 0.975) # get 90%
+    q975s <- apply(posterior_matrix, 2, quantile, 0.975) # get 97.5%
+    
+    # NOT significant if null falls in the credible interval
+    posterior_sig_80 <- ifelse(q100s < null_value & q900s > null_value, FALSE, TRUE)
+    posterior_sig_95 <- ifelse(q025s < null_value & q975s > null_value, FALSE, TRUE)
+    
+    return_df[[paste0(param_name, "_sig_80")]] <- posterior_sig_80
+    return_df[[paste0(param_name, "_sig_95")]] <- posterior_sig_95
   }
   
   # if race is specified, make a column for race
@@ -568,19 +584,19 @@ if(dual){
 # this section works if m1, m2, and m3 exist (otherwise error)
 
 ```{r}
-# # function to get median, mean, 2.5 percentile, 97.5 percentile
-# # as_data_frame() is now deprecated, but as.data.frame() doesn't work here
-# # this gives us the median, 2.5 percentile, and 97.5 percentile of a vector
-# quick_summarize <- function(x) {
-#     new_df <- x %>%
-#         dplyr::as_data_frame() %>%
-#         dplyr::summarize(
-#             median = stats::median(value),
-#             p025 = stats::quantile(value, .025),
-#             p975 = stats::quantile(value, .975)
-#         )
-#     return(new_df)
-# }
+# function to get median, mean, 2.5 percentile, 97.5 percentile
+# as_data_frame() is now deprecated, but as.data.frame() doesn't work here
+# this gives us the median, 2.5 percentile, and 97.5 percentile of a vector
+quick_summarize <- function(x) {
+    new_df <- x %>%
+        dplyr::as_data_frame() %>%
+        dplyr::summarize(
+            median = stats::median(value),
+            p025 = stats::quantile(value, .025),
+            p975 = stats::quantile(value, .975)
+        )
+    return(new_df)
+}
 ```
 
 ```{r}
@@ -588,7 +604,7 @@ if(dual){
 # empiric_vars <- list()
 # 
 # # loop through models
-# for (i in 1:3){
+# for (i in 1:length(stanfit_list_stage1)){
 # 
 #   # get the between-county variance for each posterior sample
 #   # then report the median between-county variance and a CI for that estimate
@@ -632,6 +648,7 @@ if(dual){
 #       dplyr::mutate(param = "Race-specific risk")
 # 
 # 
+#   #-----------------------------------------------
 #   # # mini table for fraction shared risk
 #   # empiric_shared_var_frac <- rbind(
 #   #     quick_summarize(
@@ -652,6 +669,8 @@ if(dual){
 #   #         dplyr::mutate(race = "Black")
 #   # ) %>%
 #   #     dplyr::mutate(param = "fraction shared risk")
+#   #-----------------------------------------------
+# 
 # 
 # 
 #   # mini table for state risk
@@ -702,11 +721,11 @@ if(dual){
 #       dplyr::arrange(param, race)
 # 
 #   # new column formatted with posterior median and 95% CI
-#   empiric_vars[[i]]$median_ci <- paste0(format(round(empiric_vars[[i]]$median, 3), 
+#   empiric_vars[[i]]$median_ci <- paste0(format(round(empiric_vars[[i]]$median, 3),
 #                                                      scientific = FALSE), " (",
-#                                    format(round(empiric_vars[[i]]$p025, 3), 
+#                                    format(round(empiric_vars[[i]]$p025, 3),
 #                                                      scientific = FALSE), ", ",
-#                                    format(round(empiric_vars[[i]]$p975, 3), 
+#                                    format(round(empiric_vars[[i]]$p975, 3),
 #                                                      scientific = FALSE), ")")
 # 
 #   # rename columns
@@ -723,10 +742,10 @@ if(dual){
 # 
 # # save table with results
 # if(dual){
-#   write_rds(empiric_vars, 
+#   write_rds(empiric_vars,
 #           file = paste0("results/tables/intermediate/", outcome, "-dual_empirical_variance.rds"))
 # } else {
-#   write_rds(empiric_vars, 
+#   write_rds(empiric_vars,
 #           file = paste0("results/tables/intermediate/", outcome, "_empirical_variance.rds"))
 # }
 ```
