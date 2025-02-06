@@ -17,68 +17,97 @@ library(ggpubr)
 library(knitr)
 library(kableExtra)
 library(xtable)
+library(tigris)
+library(ggthemes)
 ```
 
 ```{r}
-# set path for saving figures
-fig_path <- "results/figures/final/"
-```
+###### user input
 
+#dual <- FALSE
+dual <- TRUE
+
+```
 
 ## Load data for adrd and hosp
 
 ```{r}
+
+# set path for saving figures
+fig_path <- "results/figures/final/"
+
 # choose which model to use
 model <- "m1"
-#model <- "m2"
-#model <- "m3"
 
 ## Read data ----
-county_sf <- read_rds("data/symlinks/scratch/county_sf.rds")
-adrd_res <- read_rds("data/intermediate/adrd_model_results.rds")
-hosp_res <- read_rds("data/intermediate/hosp_model_results.rds")
 
+# model results
+if(dual){
+  adrd_res <- read_rds("data/intermediate/adrd-dual_model_results.rds")
+  hosp_res <- read_rds("data/intermediate/hosp-dual_model_results.rds")
+  allc_res <- read_rds("data/intermediate/allc-dual_model_results.rds")
+} else {
+  adrd_res <- read_rds("data/intermediate/adrd_model_results.rds")
+  hosp_res <- read_rds("data/intermediate/hosp_model_results.rds")
+  allc_res <- read_rds("data/intermediate/allc_model_results.rds")
+}
+
+# filter to model 1 results
 adrd_res <- adrd_res[[paste0("adrd_", model)]]
 hosp_res <- hosp_res[[paste0("hosp_", model)]]
+allc_res <- allc_res[[paste0("allc_", model)]]
 
-## Read non-modeled data ----
-adrd_ratios_df_comb <- read_rds('data/symlinks/scratch/adrd_combined_data.rds')
-hosp_ratios_df_comb <- read_rds('data/symlinks/scratch/hosp_combined_data.rds')
+# non-modeled data
 
-adrd_ratios_df <- read_rds('data/symlinks/scratch/adrd_ratios_df.rds')
-hosp_ratios_df <- read_rds('data/symlinks/scratch/hosp_ratios_df.rds')
+county_sf <- read_rds("data/symlinks/scratch/county_sf.rds")
 
+# race-specific data
+if(dual){
+  adrd_ratios_df <- read_rds('data/symlinks/scratch/adrd-dual_ratios_df.rds')
+  hosp_ratios_df <- read_rds('data/symlinks/scratch/hosp-dual_ratios_df.rds')
+  allc_ratios_df <- read_rds('data/symlinks/scratch/allc-dual_ratios_df.rds')
+} else {
+  adrd_ratios_df <- read_rds('data/symlinks/scratch/adrd_ratios_df.rds')
+  hosp_ratios_df <- read_rds('data/symlinks/scratch/hosp_ratios_df.rds')
+  allc_ratios_df <- read_rds('data/symlinks/scratch/allc_ratios_df.rds')
+}
+
+# overall (races combined) data
+if(dual){
+  adrd_ratios_df_comb <- read_rds('data/symlinks/scratch/adrd-dual_combined_data.rds')
+  hosp_ratios_df_comb <- read_rds('data/symlinks/scratch/hosp-dual_combined_data.rds')
+  allc_ratios_df_comb <- read_rds('data/symlinks/scratch/allc-dual_combined_data.rds')
+} else {
+  adrd_ratios_df_comb <- read_rds('data/symlinks/scratch/adrd_combined_data.rds')
+  hosp_ratios_df_comb <- read_rds('data/symlinks/scratch/hosp_combined_data.rds')
+  allc_ratios_df_comb <- read_rds('data/symlinks/scratch/allc_combined_data.rds')
+}
+
+# combine data sources for each outcome
 adrd_res_df <- adrd_res %>%
   right_join(adrd_ratios_df_comb) %>%
   right_join(adrd_ratios_df)
 hosp_res_df <- hosp_res %>%
   right_join(hosp_ratios_df_comb) %>%
   right_join(hosp_ratios_df)
+allc_res_df <- allc_res %>%
+  right_join(allc_ratios_df_comb) %>%
+  right_join(allc_ratios_df)
 
-
-# make a new column for log(observed/expected) separated by race
-adrd_res_df %<>%
-  mutate(y = log(observed/expected_stage2))
-hosp_res_df %<>%
-  mutate(y = log(observed/expected_stage2))
-# make a new column for log(observed/expected) combined race
-adrd_res_df %<>%
-  mutate(y_stage1_total = log(observed_total/expected_stage1_total))
-hosp_res_df %<>%
-  mutate(y_stage1_total = log(observed_total/expected_stage1_total))
-
-# join adrd and hosp
+# join adrd and hosp (note new suffixes)
 pos_med <- merge(adrd_res_df, hosp_res_df, all = TRUE, 
                  by = c("county", "race", "black", "c_idx", "s_idx", "person_years", 
                         "fipschar", "fips_st", "house_price_income_ratio", "pm25",
                         "med_house_income", "person_years_total"),
                  suffixes = c("_adrd", "_hosp"))
 
+# now join with all-cause too (the all-cause columns won't have suffixes)
+pos_med <- merge(pos_med, allc_res_df, all = TRUE)
+
+# join with county geometry
 pos_med_sf <- county_sf %>% 
   select(county) %>% 
   right_join(pos_med)
-
-colnames(pos_med_sf)
 
 # load state data
 county_fips_df <- read_rds("data/symlinks/scratch/county_fips_df.rds")
@@ -92,25 +121,24 @@ state_sf %<>%
   ) %>% 
   filter(!is.na(s_idx))
 
-# load counties with zero Black person-years
+# load counties with zero Black person-years for plotting
 county_sf_zero_b <- read_rds("data/symlinks/scratch/county_sf_zero_b.rds")
-```
 
-```{r}
-# change projection to Albers Equal Area Conic (good for maps of US)
+# a <- pos_med %>%
+  # select(county, race, observed_adrd, observed_hosp, observed)
+
+# change projections to Albers Equal Area Conic (good for maps of US)
 pos_med_sf <- st_transform(pos_med_sf, 
                            crs = st_crs("+proj=aea +lat_1=29.5 +lat_2=45.5 +lat_0=37.5
                                         +lon_0=-96 +x_0=0 +y_0=0 +datum=NAD83 +units=m +no_defs"))
-state_sf <- st_transform(state_sf, 
-                           crs = st_crs("+proj=aea +lat_1=29.5 +lat_2=45.5 +lat_0=37.5
-                                        +lon_0=-96 +x_0=0 +y_0=0 +datum=NAD83 +units=m +no_defs"))
+# state_sf <- st_transform(state_sf, 
+#                            crs = st_crs("+proj=aea +lat_1=29.5 +lat_2=45.5 +lat_0=37.5
+#                                         +lon_0=-96 +x_0=0 +y_0=0 +datum=NAD83 +units=m +no_defs"))
+# 
+# county_sf <- st_transform(county_sf, 
+#                            crs = st_crs("+proj=aea +lat_1=29.5 +lat_2=45.5 +lat_0=37.5
+#                                         +lon_0=-96 +x_0=0 +y_0=0 +datum=NAD83 +units=m +no_defs"))
 
-county_sf <- st_transform(county_sf, 
-                           crs = st_crs("+proj=aea +lat_1=29.5 +lat_2=45.5 +lat_0=37.5
-                                        +lon_0=-96 +x_0=0 +y_0=0 +datum=NAD83 +units=m +no_defs"))
-```
-
-```{r}
 # race labels for plotting
 race_labels <- c(
   `1` = "White",
@@ -118,128 +146,140 @@ race_labels <- c(
 )
 ```
 
+## Generally understand the data
+
 ```{r}
-# make new columns for rate of hospitalization (observed/person-years)
-# and expected rate of hospitalization (expected/person-years)
-pos_med_sf %<>% 
-  mutate(rate_obs_adrd = observed_adrd/person_years,
-         rate_exp_adrd = expected_stage2_adrd/person_years,
-         rate_obs_hosp = observed_hosp/person_years,
-         rate_exp_hosp = expected_stage2_hosp/person_years)
+# map of single county (Clark County, Nevada) for expected counts diagram
+pos_med_sf %>%
+  group_by(county) %>%
+  mutate(county_a = ifelse(county == "32003", "yes", "no")) %>%
+  ggplot() +
+  geom_sf(aes(fill = county_a), lwd = 0.1) +
+  geom_sf(data = county_sf_zero_b, fill = "white", lwd = 0.1) +
+  geom_sf(data = state_sf, fill = NA, col = "black", lwd = 0.3) +
+  scale_fill_manual(values = c("yes" = "dodgerblue", "no" = "white")) +
+  theme_map() +
+  theme(legend.position = "none")
+ggsave(file = paste0(fig_path, "clark_county.pdf"), width = 8, height = 5)
+
+clark <- pos_med_sf %>%
+  filter(county == "32003")
+
+
 ```
 
-
-## Pre-modeling
+```{r}
+# plot % of person-years contributed by black people in each county
+pos_med_sf %>%
+  group_by(county) %>%
+  summarise(pct_blk = 100 * (person_years[race == 2] /
+                               (person_years[race == 1] + person_years[race == 2]))) %>%
+  ggplot() +
+  geom_sf(aes(fill = pct_blk), lwd = 0.0) +
+  geom_sf(data = county_sf_zero_b, fill = "#440154", lwd = 0.0) + 
+  geom_sf(data = state_sf, fill = NA, col = "white", lwd = 0.2) +
+  labs(fill = "% of person-years \ncontributed by \nBlack adults") +
+  scale_fill_viridis(option = "D",
+                     limits = c(0, 70)) +
+  theme_map() +
+  theme(legend.title = element_text(size = 10),
+        legend.text = element_text(size = 10),
+        legend.position = "right",
+        plot.background = element_rect(fill = "white", color = NA))
+#ggsave(paste0(fig_path, "pct_black.pdf"), plot = myplot, width = 8, height = 5)
+ggsave(paste0(fig_path, "pct_black.png"), width = 8, height = 5, dpi = 1000)
+```
 
 ```{r}
 # person-years, observed counts, raw observed/expected ratios (all before modeling)
 
-# I want to facet by parameter, so I need to gather the columns of interest
-param_dist <- pos_med_sf |>
-  st_drop_geometry() |>
-  mutate(exp_y_adrd = exp(y_adrd),
-         exp_y_hosp = exp(y_hosp)#,
-         # exp_pos_med_y_adrd = exp(pos_med_y_adrd),
-         # exp_pos_med_y_hosp = exp(pos_med_y_hosp)
-         ) |>
-  gather(key = "parameter", value = "value", 
-         c(person_years, 
-           observed_adrd,
-           observed_hosp#,
-           #exp_y_adrd,
-           #exp_y_hosp#,
-           #exp_pos_med_y_adrd,
-           #exp_pos_med_y_hosp
-           )) |>
-  select(county, race, parameter, value)
-
-# look at NA values
-# NA values are for ADRD rate the 71 
-param_dist |>
-  group_by(parameter) |>
-  summarise(num_NA = sum(is.na(value)))
-# these are just the 71 counties with 0 black person-years, so I can ignore them
-
-# I want to plot on log scale, so change any 0s to 0.00000001
-param_dist %<>%
-  mutate(value = ifelse(value == 0, 0.00000001, value))
-
-# set order of plots
-param_dist$parameter <- factor(param_dist$parameter,
-                               levels = c("person_years", "observed_adrd", "observed_hosp"#, 
-                                          #"exp_y_adrd", "exp_y_hosp"
-                                          ))
-
-# plot
-param_dist |>
-  filter(!is.na(value)) |>
-  mutate(race = factor(ifelse(race == 1, "White", "Black"),
-                       levels = c("White", "Black"))) %>% 
-  ggplot() +
-  geom_density(aes(value, col = as.factor(race))) +
-  labs(x = "",
-       y = "Density",
-       col = "") +
-  scale_x_log10(labels = scales::comma) +
-  facet_wrap(~parameter, scales = "free", 
-             ncol = 3,
-             labeller = as_labeller(c(person_years = "Person years",
-                                      observed_adrd = "Observed hosp. w/ ADRD",
-                                      observed_hosp = "Observed hosp. w/o ADRD",
-                                      exp_y_adrd = "Raw observed/expected hosp. w/ ADRD",
-                                      exp_y_hosp = "Raw observed/expected hosp. w/o ADRD"))) +
-  theme_bw() +
-  theme(strip.background = element_rect(fill = "white"),
-        axis.text.y = element_blank(),
-        axis.ticks.y = element_blank(),
-        panel.grid = element_blank(),
-        legend.position = "bottom")
-
-# plotting x-axis on log scale!!
+# # I want to facet by parameter, so I need to gather the columns of interest
+# param_dist <- pos_med_sf |>
+#   st_drop_geometry() |>
+#   mutate(exp_y_adrd = exp(y_adrd),
+#          exp_y_hosp = exp(y_hosp)#,
+#          # exp_pos_med_y_adrd = exp(pos_med_y_adrd),
+#          # exp_pos_med_y_hosp = exp(pos_med_y_hosp)
+#          ) |>
+#   gather(key = "parameter", value = "value", 
+#          c(person_years, 
+#            observed_adrd,
+#            observed_hosp#,
+#            #exp_y_adrd,
+#            #exp_y_hosp#,
+#            #exp_pos_med_y_adrd,
+#            #exp_pos_med_y_hosp
+#            )) |>
+#   select(county, race, parameter, value)
+# 
+# # look at NA values
+# # NA values are for ADRD rate the 71 
+# param_dist |>
+#   group_by(parameter) |>
+#   summarise(num_NA = sum(is.na(value)))
+# # these are just the 71 counties with 0 black person-years, so I can ignore them
+# 
+# # I want to plot on log scale, so change any 0s to 0.00000001
+# param_dist %<>%
+#   mutate(value = ifelse(value == 0, 0.00000001, value))
+# 
+# # set order of plots
+# param_dist$parameter <- factor(param_dist$parameter,
+#                                levels = c("person_years", "observed_adrd", "observed_hosp"#, 
+#                                           #"exp_y_adrd", "exp_y_hosp"
+#                                           ))
+# 
+# # plot
+# param_dist |>
+#   filter(!is.na(value)) |>
+#   mutate(race = factor(ifelse(race == 1, "White", "Black"),
+#                        levels = c("White", "Black"))) %>% 
+#   ggplot() +
+#   geom_density(aes(value, col = as.factor(race))) +
+#   labs(x = "",
+#        y = "Density",
+#        col = "") +
+#   scale_x_log10(labels = scales::comma) +
+#   facet_wrap(~parameter, scales = "free", 
+#              ncol = 3,
+#              labeller = as_labeller(c(person_years = "Person years",
+#                                       observed_adrd = "Observed hosp. w/ ADRD",
+#                                       observed_hosp = "Observed hosp. w/o ADRD",
+#                                       exp_y_adrd = "Raw observed/expected hosp. w/ ADRD",
+#                                       exp_y_hosp = "Raw observed/expected hosp. w/o ADRD"))) +
+#   theme_bw() +
+#   theme(strip.background = element_rect(fill = "white"),
+#         axis.text.y = element_blank(),
+#         axis.ticks.y = element_blank(),
+#         panel.grid = element_blank(),
+#         legend.position = "bottom")
+# 
+# # plotting x-axis on log scale!!
 
 ```
 
-
 ```{r}
-# look at white vs. black person years
-pos_med_sf %>%
-  st_drop_geometry() %>%
-  group_by(race) %>%
-  summarise(q25_py = quantile(person_years, 0.25))
-```
-
-```{r}
-# another plot of person-years
-
-png(file = paste0(fig_path, "py_density.png"), width = 500, height = 300)
-
+# plot of person-years
 pos_med_sf %>%
   mutate(race = factor(ifelse(race == 1, "White", "Black"),
                        levels = c("White", "Black"))) %>% 
   ggplot() +
   geom_histogram(aes(person_years, fill = as.factor(race)), 
                  alpha = 0.3, 
+                 col = NA,
+                 linewidth = 0,
                  #fill = "gray", 
                  position = "identity") +
   scale_x_log10(labels = scales::comma, expand = c(0, 0)) +
   scale_y_continuous(expand = c(0, 0)) +
-  scale_fill_manual(values = c("#0072B2", "#E69F00"),
+  scale_fill_manual(values = c("#5b2eb7", "#886308"),
                     labels = c("White", "Black")) +
   labs(x = "Person-years contributed in each county", 
-       y = "Frequency",
+       y = "Frequency (number of counties)",
        fill = "") +
-  theme_classic()
-
-dev.off()
+  theme_minimal()
+ggsave(file = paste0(fig_path, "py_density.pdf"), width = 5, height = 3)
 ```
-
-```{r}
-# total black vs. white person-years
-adrd_res_df %>%
-  group_by(race) %>%
-  summarise(total_py = sum(person_years))
-```
-
 
 ```{r}
 # counties with zero Black person-years
@@ -250,69 +290,107 @@ pos_med_sf %>%
   geom_sf(data = state_sf, fill = NA, lwd = 0.3) +
   theme_map() +
   theme(legend.position = "none")
-```
-
-
-```{r}
-# counties with < 10 observed ADRD hosp
-pos_med_sf %>%
-  mutate(obs0 = ifelse(person_years < 100, 1, 0)) %>%
-  filter(race == 2) %>%
-  ggplot() +
-  geom_sf(aes(fill = as.factor(obs0)), lwd = 0.1) +
-  geom_sf(data = county_sf_zero_b, fill = "skyblue3", lwd = 0.1) +
-  geom_sf(data = state_sf, fill = NA, lwd = 0.3) +
-  scale_fill_manual(values = c("1" = "skyblue3", "0" = "white")) +
-  theme_map() +
-  theme(legend.position = "none")
+ggsave(file = paste0(fig_path, "zero_black_py.pdf"), width = 5, height = 3)
 ```
 
 ```{r}
-# plot # of neighbors
+# # counties with < 1000 black person-years
+# pos_med_sf %>%
+#   mutate(obs1000 = ifelse(person_years < 1000, 1, 0)) %>%
+#   filter(race == 2) %>%
+#   ggplot() +
+#   geom_sf(aes(fill = as.factor(obs1000)), lwd = 0.1) +
+#   geom_sf(data = county_sf_zero_b, fill = "skyblue3", lwd = 0.1) +
+#   geom_sf(data = state_sf, fill = NA, lwd = 0.3) +
+#   scale_fill_manual(values = c("1" = "skyblue3", "0" = "white")) +
+#   theme_map() +
+#   theme(legend.position = "none")
+```
 
-# load # of border for each county (from adjacency matrix)
-n_borders <- read_rds("data/symlinks/scratch/county_adj_sparse_list.rds")$D_sparse
+```{r}
+# # plot # of neighbors
+# 
+# # load # of border for each county (from adjacency matrix)
+# n_borders <- read_rds("data/symlinks/scratch/county_adj_sparse_list.rds")$D_sparse
+# 
+# # bind with county sf
+# check_adj <- cbind(county_sf, n_borders)
+# 
+# 
+# library(RColorBrewer)
+# 
+# # plot number of borders
+# check_adj %>%
+#   ggplot() +
+#   geom_sf(aes(fill = as.factor(n_borders)), lwd = 0.1) +
+#   #geom_sf(aes(fill = n_borders), lwd = 0.1) +
+#   geom_sf(data = county_sf_zero_b, fill = "gray50", lwd = 0.1) +
+#   geom_sf(data = state_sf, fill = NA, lwd = 0.3, col = "black") +
+#   labs(fill = "Number of \nneighbors") +
+#   #scale_fill_gradient2(high = "darkgreen", low = "white", na.value = "gray50") +
+#   scale_fill_viridis_d(option = "G", direction = -1) +
+#   theme_map() +
+#   theme(legend.position = "right",
+#         legend.title = element_text(size = 10))
+```
 
-# bind with county sf
-check_adj <- cbind(county_sf, n_borders)
+# Hospitalization rates table
 
+```{r}
 
-library(RColorBrewer)
+if(!dual){
+  # get ADRD table
+  adrd_exp_rates <- read_rds(paste0("results/tables/intermediate/adrd_expected_rates.rds")) |>
+    rename("ADRD rate (White)" = `Rate (White)`,
+           "ADRD rate (Black)" = `Rate (Black)`,
+           "ADRD rate (overall)" = `Rate (overall)`)
+  
+  # get hosp table
+  hosp_exp_rates <- read_rds(paste0("results/tables/intermediate/hosp_expected_rates.rds")) |>
+    rename("Non-ADRD rate (White)" = `Rate (White)`,
+           "Non-ADRD rate (Black)" = `Rate (Black)`,
+           "Non-ADRD rate (overall)" = `Rate (overall)`)
+  
+  # join ADRD and hosp
+  exp_rates_tab <- left_join(adrd_exp_rates, hosp_exp_rates)
+  
+  # change col names (can have duplicates)
+  names(exp_rates_tab) <- c("Sex", "Age group", 
+                            "White", "Black", "Overall",
+                            "White", "Black", "Overall")
+  
+  # format in kable with header over cols
+  exp_rates_tab_latex <- kable(exp_rates_tab, "latex", 
+        booktabs = TRUE) %>%
+    add_header_above(c(" " = 2, "ADRD rate" = 3, "Non-ADRD rate" = 3))
+  
+  writeLines(exp_rates_tab_latex, "results/tables/final/national_rates.tex")
+  # note: remove \addlinespace from the resulting table
+  # also need to add begin table and end table and centering
+}
 
-# plot number of borders
-check_adj %>%
-  ggplot() +
-  geom_sf(aes(fill = as.factor(n_borders)), lwd = 0.1) +
-  #geom_sf(aes(fill = n_borders), lwd = 0.1) +
-  geom_sf(data = county_sf_zero_b, fill = "gray50", lwd = 0.1) +
-  geom_sf(data = state_sf, fill = NA, lwd = 0.3, col = "black") +
-  labs(fill = "Number of \nneighbors") +
-  #scale_fill_gradient2(high = "darkgreen", low = "white", na.value = "gray50") +
-  scale_fill_viridis_d(option = "G", direction = -1) +
-  theme_map() +
-  theme(legend.position = "right",
-        legend.title = element_text(size = 10))
 
 ```
 
 
+## What % of hospitalizations have an ADRD code?
 
 ```{r}
-# what % of all hosp have ADRD code?
-
-# get a new column for observed ADRD / observed hosp %
+# get a new column for observed ADRD / observed all-cause (as %)
 pos_med_sf %<>%
-  mutate(adrd_pct = (observed_adrd / (observed_adrd + observed_hosp)) * 100)
+  mutate(adrd_pct = (observed_adrd / (observed)) * 100)
 
+# pos_med_sf %<>%
+#   mutate(adrd_pct = (observed_adrd / (observed_adrd + observed_hosp)) * 100)
+
+
+# note that 93 counties have zero total hospitalizations among black people
+# so we get 0/0 (undefined/NaN) for these rows
 ```
 
 ```{r}
-# get weighted avg. % by race
-# what % of all hospitalizations had ADRD code?
-
-# get total ADRD hosp by race
-# and total other hosp by race
-
+# get total % by race
+# don't use these for table 1! use script 2. and get the %s exactly from script 2
 pos_med_sf %>%
   st_drop_geometry() %>%
   group_by(race) %>%
@@ -321,7 +399,11 @@ pos_med_sf %>%
   mutate(adrd_pct = total_adrd / (total_adrd + total_hosp))
 ```
 
-
+```{r}
+# # look at observed counts for 3 outcomes
+# a <- pos_med_sf %>%
+#   select(county, race, observed_adrd, observed_hosp, observed, adrd_pct)
+```
 
 ```{r}
 # look at distribution of this variable for white vs. black at county-level
@@ -338,6 +420,8 @@ pos_med_sf |>
   scale_fill_manual(values = c("#0072B2", "#E69F00"),
                     labels = c("White", "Black")) +
   theme_minimal()
+ggsave(paste0(fig_path, "pct_adrd.pdf"), width = 5, height = 3)
+
 ```
 
 
@@ -346,74 +430,192 @@ pos_med_sf |>
 
 pos_med_sf |>
   # cap at 30%
-  #mutate(adrd_pct = ifelse(adrd_pct > 30, 30, adrd_pct)) |>
-  # exclude counties with < 500 person-years
-  mutate(adrd_pct = ifelse(person_years < 700, NA, adrd_pct)) |>
+  mutate(adrd_pct = ifelse(adrd_pct > 25, 25, adrd_pct)) |>
+  mutate(adrd_pct = ifelse(adrd_pct < 5, 5, adrd_pct)) |>
+  # exclude counties with < 1000 person-years
+  mutate(adrd_pct = ifelse(person_years < 1000, NA, adrd_pct)) |>
   ggplot() +
-  geom_sf(aes(fill = adrd_pct), lwd = 0.1) +
+  geom_sf(aes(fill = adrd_pct), lwd = 0.05) +
   geom_sf(data = state_sf, fill = NA, col = "black", lwd = 0.1) +
-  labs(fill = "% of hosp. w/ ADRD code") +
-  scale_fill_viridis(option = "D") + 
+  geom_sf(data = county_sf_zero_b, fill = "gray80", lwd = 0.0) +
+  labs(fill = "% of hospitalizations with ADRD code") +
   facet_grid(~race, labeller = as_labeller(race_labels)) +
-  theme_map() +
+  theme_void() +
   theme(legend.position = "bottom",
-        legend.title = element_text(size = 10),
-        legend.text = element_text(size = 8)
-        )
+        legend.title = element_text(size = 8),
+        legend.text = element_text(size = 6),
+        plot.background = element_rect(fill = "white", color = NA)#,
+        #panel.background = element_rect(fill = "white", color = NA), 
+        ) +
+  scale_fill_viridis(option = "D", 
+                     na.value = "gray80",
+                     limits = c(5, 25),
+                     labels = c("<5", "10", "15", "20", "25+"),
+                     guide = guide_colorbar(ticks = FALSE,
+                                            barwidth = 12, barheight = 0.5,
+                                            title.position = "top"))
+#ggsave(paste0(fig_path, "pct_adrd_map.png"), width = 5, height = 3, dpi = 1000)
+ggsave(paste0(fig_path, "pct_adrd_map_1000.png"), width = 5, height = 3, dpi = 1000)
+
+
+# weird that oglala is the one that stands out, but the data all makes sense
+# oglala <- pos_med_sf %>%
+#   filter(county == "46113")
+```
+
+```{r}
+# plot person-years vs % ADRD
+
+pos_med_sf %>%
+  filter(person_years > 51) %>%
+  ggplot() +
+  geom_point(aes(x = person_years, y = adrd_pct, col = as.factor(race)), 
+             alpha = 0.2, shape = 16) +
+  labs(x = "Person-years",
+       y = "% of total hospitalizations with an ADRD diagnosis code",
+       col = "") +
+  scale_color_manual(values = c(`1` = "#0072B2", `2` = "#E69F00"),
+                     labels = c(`1` = "White", `2` = "Black")) +
+  scale_x_log10(labels = scales::comma) +
+  theme_minimal(base_size = 10) +
+  guides(color = guide_legend(override.aes = list(size = 3, alpha = 0.5)))
+ggsave(paste0(fig_path, "py_vs_pct_adrd.pdf"), width = 6, height = 4)
 ```
 
 
 ```{r}
-# try to understand if this makes sense
-pct_df <- pos_med_sf %>%
-  st_drop_geometry() %>%
-  select(county, race, observed_adrd, observed_hosp, adrd_pct)
-
-
-
-# look at Freemont, WY (very high % with lots of people)
-a = pos_med_sf %>%
-  filter(county == 56013)
-
-# Aroostook, ME
-b = pos_med_sf %>%
-  filter(county == 23003)
-```
-
-
-```{r}
-##### get stats for presub inquiry
+##### get stats about % ADRD
 
 #--- % of counties with ADRD hosp > a certain % (by race)
 
 pos_med_sf %>%
   st_drop_geometry() %>%
   group_by(race) %>%
-  summarise(n_50 = sum(adrd_pct > 50, na.rm = TRUE),
-            n_75 = sum(adrd_pct > 75, na.rm = TRUE),
-            n_90 = sum(adrd_pct > 90, na.rm = TRUE))
+  summarise(n_exact_0 = sum(adrd_pct == 0, na.rm = TRUE),
+            n_25 = sum(adrd_pct >= 25, na.rm = TRUE),
+            n_50 = sum(adrd_pct >= 50, na.rm = TRUE),
+            n_75 = sum(adrd_pct >= 75, na.rm = TRUE),
+            n_90 = sum(adrd_pct >= 90, na.rm = TRUE))
 
+b <- pos_med_sf %>%
+  filter(race == 2) %>%
+  filter(adrd_pct >= 25)
 
+c <- pos_med_sf %>%
+  filter(adrd_pct == 0) %>%
+  select(county, observed_adrd, observed_hosp, person_years)
+
+d <- pos_med_sf %>%
+  filter(is.na(adrd_pct)) %>%
+  select(county, observed_adrd, observed_hosp, person_years)
+
+```
+
+## Model results
+
+```{r}
+# # shared and specific results for ADRD and non-ADRD
+# no just do this in script 10
+# 
+# # get risk ratios for ADRD and hosp in the same plot
+# adrd_shared_spec_map_80 <- read_rds("results/figures/intermediate/adrd_shared_specific_maps_80.rds")
+# hosp_shared_spec_map_80 <- read_rds("results/figures/intermediate/hosp_shared_specific_maps_80.rds")
+# 
+# # plot ADRD and non-ADRD
+# shared_spec_maps <- ggarrange(adrd_shared_spec_map_80, 
+#                      hosp_shared_spec_map_80, 
+#                      common.legend = TRUE, legend = "bottom", nrow = 2) +
+#   theme(plot.background = element_rect(fill = "white", color = NA))
+# shared_spec_maps
 ```
 
 
 ```{r}
-# visualize counties where 100% of hospitalizations are hosp with ADRD
+#### figure Dan suggested
 
-hund <- pos_med_sf %>% filter(adrd_pct == 100)
+# # set up data
+# 
+# # get adrd/hosp ratios for phi and psi
+# pos_med_sf <- pos_med_sf %>%
+#   mutate(phi_adrd_over_hosp = phi_adrd / phi_hosp,
+#          psi_adrd_over_hosp = psi_adrd / psi_hosp)
+# 
+# # gather shared and specific columns
+# shared_specific_df <- pos_med_sf |>
+#   select(county, geometry, race, 
+#          phi_adrd_over_hosp, psi_adrd_over_hosp
+#          #phi_adrd, psi_adrd, 
+#          #phi_sig_adrd, psi_sig_adrd,
+#          #phi_hosp, psi_hosp#, 
+#          #phi_sig_hosp, psi_sig_hosp
+#          ) |>
+#   #gather(key = "shared_vs_spec", value = "estimate", phi_adrd, psi_adrd, phi_hosp, psi_hosp) %>%
+#   gather(key = "shared_vs_spec", value = "estimate", phi_adrd_over_hosp, psi_adrd_over_hosp) %>%
+#   mutate(shared_vs_spec = sub("_.*", "", shared_vs_spec)) %>%
+#   # split on underscore to get one column for phi vs. psi
+#   #separate(shared_vs_spec, into = c("shared_vs_spec", "outcome")) %>%
+#   # new sig column for estimate
+#   #mutate(estimate_sig = ifelse(shared_vs_spec == "psi", psi_sig, phi_sig)) |>
+#   # remove other sig columns for clarity
+#   #select(-c(phi_sig, psi_sig)) |>
+#   # change race for shared rows
+#   mutate(race = ifelse(shared_vs_spec == "phi", "both", race)) %>%
+#   distinct() |>
+#   mutate(parameter = paste0(race, "_", shared_vs_spec)) 
+# 
+# 
+# # set levels for plotting
+# shared_specific_df$parameter <- factor(shared_specific_df$parameter,
+#                                        levels = c("1_psi", "both_phi", "2_psi"))
+# 
+# sc <- scale_fill_gradient2(high = "blue4", mid = "white", low = "gold2", na.value = "gray50",
+#                          midpoint = 0,
+#                          guide = guide_colorbar(barwidth = 10, barheight = 1))
+# 
+# # labels for facets
+# shared_specific_labels_1m <- c(
+#   #"1_psi" = "White-specific\n (\u03C8\u2081)",
+#   "1_psi" = "White-specific",
+#   #"both_phi" = "Shared\n (\u03A6)",
+#   "both_phi" = "Shared",
+#   #"2_psi" = "Black-specific\n (\u03C8\u2082)"
+#   "2_psi" = "Black-specific"
+# )
+# 
+# # # set up data
+# # shared_specific_df %<>%
+# #   mutate(estimate_binary = ifelse(estimate > 0, "High risk", "Low risk")) %>%
+# #   mutate(estimate_binary = ifelse(estimate_sig, estimate_binary, NA))
+# 
+# # plot
+# shared_specific_df |>
+#   
+#   # truncate extreme vals
+#   mutate(estimate = ifelse(estimate > 10, 10, estimate)) %>%
+#   mutate(estimate = ifelse(estimate < -10, -10, estimate)) %>%
+#   
+#   ggplot() +
+#   geom_sf(aes(fill = estimate), lwd = 0.03) + 
+#   geom_sf(data = county_sf_zero_b, fill = "gray90", lwd = 0.0) + 
+#   geom_sf(data = state_sf, fill = NA, col = "black", lwd = 0.1) +
+#   labs(fill = "ADRD/non-ADRD:  ") +
+#   facet_grid(~ parameter,
+#              labeller = as_labeller(shared_specific_labels_1m)
+#              ) +
+#   theme_map() + 
+#   theme(legend.title = element_text(size = 10),
+#         legend.text = element_text(size = 10),
+#         legend.position = "bottom",
+#         strip.text = element_text(size = 12),
+#         strip.background = element_blank(),
+#         plot.background = element_rect(fill = "white", color = NA)) +
+#   # scale_fill_manual(values = c("Low risk" = "#006400",
+#                      #           "High risk" = "#B47EE5"),
+#                      # na.value = "gray90")
+#   sc
 
-hund %>%
-  ggplot() +
-  geom_bar(aes(x = as.factor(observed_adrd))) + 
-  labs(x = "Number of hospitalizations",
-       y = "Count") +
-  theme_minimal()
 
 ```
-
-
-
-## Model results
 
 ```{r}
 # compare distributions of risk ratios
@@ -422,39 +624,83 @@ pos_med_sf %>%
   filter(race == 1) %>% # choose one race for risk ratios
   gather(key = "outcome", "risk_ratio", risk_ratio_adrd, risk_ratio_hosp) %>%
   mutate(outcome = ifelse(outcome == "risk_ratio_adrd", 
-                          "ADRD", "All other hosp.")) %>%
+                          "ADRD", "Non-ADRD")) %>%
+  mutate(outcome = factor(outcome, levels = c("Non-ADRD", "ADRD"))) %>%
   ggplot() +
-  geom_density(aes(x = risk_ratio, col = outcome)) +
+  geom_histogram(aes(x = risk_ratio, fill = outcome), 
+                 col = NA, alpha = 0.3, position = "identity") +
   geom_vline(xintercept = 1, lty = 2) +
+  scale_y_continuous(expand = c(0, 0)) +
+  scale_fill_manual(values = c("ADRD" = "red3", "Non-ADRD" = "blue3")) +
   labs(x = "Risk ratio",
-       y = "Density",
-       col = "Outcome") +
-  theme_bw() +
+       y = "Frequency (number of counties)",
+       fill = "") +
+  theme_classic() +
   theme(panel.grid = element_blank())
+if(dual){
+  ggsave(paste0(fig_path, "rr_dual_adrd_vs_hosp.pdf"), width = 6, height = 3)
+} else {
+  ggsave(paste0(fig_path, "rr_adrd_vs_hosp.pdf"), width = 6, height = 3)
+}
+```
+
+```{r}
+# how many counties have both risk ratios < 1?
+both_rr_less1 <- pos_med_sf %>%
+  filter(race == 1) %>%
+  filter(risk_ratio_adrd < 1 & risk_ratio_hosp < 1)
 ```
 
 ```{r}
 # get ratios of risk ratios and map
 
-pos_med_sf %<>%
-  mutate(ratio_of_risk_ratios = risk_ratio_adrd / risk_ratio_hosp)
+# pos_med_sf %<>%
+#   mutate(ratio_of_risk_ratios = risk_ratio_adrd / risk_ratio_hosp)
 
-sc <- scale_fill_gradient2(high = "orange", mid = "white", low = "blue", na.value = "gray50",
-                         midpoint = 1)
+# sc <- scale_fill_gradient2(high = "orange", mid = "white", low = "blue", na.value = "gray50",
+#                          midpoint = 1)
+# 
+# pos_med_sf |>
+#   # cap at 2
+#   mutate(ratio_of_risk_ratios = ifelse(ratio_of_risk_ratios > 2, 2, ratio_of_risk_ratios)) |>
+#   # keep rows where both outcomes are RR > 1 (disparities)
+#   mutate(ratio_of_risk_ratios = ifelse(risk_ratio_adrd > 1 & risk_ratio_hosp > 1, ratio_of_risk_ratios, NA)) %>%
+#   filter(race == 1) %>%
+#   ggplot() +
+#   geom_sf(aes(fill = ratio_of_risk_ratios), lwd = 0.1) +
+#   geom_sf(data = state_sf, fill = NA, lwd = 0.1) +
+#   geom_sf(data = county_sf_zero_b, fill = "gray50", lwd = 0.0) +
+#   labs(fill = "Ratio of risk ratios \n(ADRD/non-ADRD)") +
+#   theme_map() +
+#   theme(legend.position = "bottom",
+#         legend.title = element_text(size = 10),
+#         legend.text = element_text(size = 8)
+#         ) +
+#   sc
+# 
+# 
+# pos_med_sf %<>%
+#   mutate(diff_of_risk_ratios = risk_ratio_adrd - risk_ratio_hosp)
+# 
+# sc <- scale_fill_gradient2(low = "blue3", mid = "white", high = "green3", na.value = "gray50")
+# 
+# pos_med_sf |>
+#   # keep rows where both outcomes are RR > 1 (disparities)
+#   mutate(diff_of_risk_ratios = ifelse(risk_ratio_adrd > 1 & risk_ratio_hosp > 1, diff_of_risk_ratios, NA)) %>%
+#   #mutate(diff_of_risk_ratios = ifelse(risk_ratio_adrd > risk_ratio_hosp, diff_of_risk_ratios, NA)) %>%
+#   filter(race == 1) %>%
+#   ggplot() +
+#   geom_sf(aes(fill = diff_of_risk_ratios), lwd = 0.1) +
+#   geom_sf(data = state_sf, fill = NA, lwd = 0.1) +
+#   geom_sf(data = county_sf_zero_b, fill = "gray50", lwd = 0.0) +
+#   labs(fill = "diff of risk ratios \n(ADRD - non-ADRD)") +
+#   theme_map() +
+#   theme(legend.position = "bottom",
+#         legend.title = element_text(size = 10),
+#         legend.text = element_text(size = 8)
+#         ) +
+#   sc
 
-pos_med_sf |>
-  #mutate(adrd_pct = ifelse(adrd_pct > 20, 20, adrd_pct)) |>
-  filter(race == 1) %>%
-  ggplot() +
-  geom_sf(aes(fill = ratio_of_risk_ratios), lwd = 0.1) +
-  geom_sf(data = state_sf, fill = NA, lwd = 0.1) +
-  labs(fill = "Ratio of risk ratios \n(ADRD/other hosp)") +
-  theme_map() +
-  theme(legend.position = "bottom",
-        legend.title = element_text(size = 10),
-        legend.text = element_text(size = 8)
-        ) +
-  sc
 
 # how do we decide which ones are statistically significantly different from 1?
 
@@ -494,6 +740,21 @@ pos_med_sf |>
 # we really want to know which one is farther from the null, not which one is strictly greater
 
 
+#_________________________
+
+# county A:
+# RR for ADRD = 3.2
+# RR for all-cause = 2
+# ratio of ratios = 1.6
+# worse racial disparities for ADRD
+
+# county B:
+# RR for ADRD = 0.8
+# RR for all-cause = 0.5
+# ratio of ratios = 1.6
+# worse racial disparities for ADRD (but really the two racial groups are more equal)
+
+
 ```
 
 ```{r}
@@ -525,424 +786,547 @@ pos_med_sf |>
 # in counties where black people were significantly worse off (RR > 1) for both ADRD and hosp, which one was stronger?
 # plot ADRD RR / hosp RR
 
-pos_med_sf |>
-  #mutate(adrd_pct = ifelse(adrd_pct > 20, 20, adrd_pct)) |>
-  filter(race == 1) %>%
-  mutate(ratio_of_risk_ratios = ifelse(
-    risk_ratio_adrd > 1 & risk_ratio_sig_adrd & risk_ratio_hosp > 1 & risk_ratio_sig_hosp,
-    ratio_of_risk_ratios, NA)) %>%
-  ggplot() +
-  geom_sf(aes(fill = ratio_of_risk_ratios), lwd = 0.1) +
-  geom_sf(data = state_sf, fill = NA, col = "white", lwd = 0.1) +
-  labs(fill = "Ratio of risk ratios \n(ADRD/other hosp)") +
-  theme_map() +
-  theme(legend.position = "bottom",
-        legend.title = element_text(size = 10),
-        legend.text = element_text(size = 8)
-        ) +
-  sc
+# pos_med_sf |>
+#   #mutate(adrd_pct = ifelse(adrd_pct > 20, 20, adrd_pct)) |>
+#   filter(race == 1) %>%
+#   mutate(ratio_of_risk_ratios = ifelse(
+#     risk_ratio_adrd > 1 & risk_ratio_sig_adrd & risk_ratio_hosp > 1 & risk_ratio_sig_hosp,
+#     ratio_of_risk_ratios, NA)) %>%
+#   ggplot() +
+#   geom_sf(aes(fill = ratio_of_risk_ratios), lwd = 0.1) +
+#   geom_sf(data = state_sf, fill = NA, col = "white", lwd = 0.1) +
+#   labs(fill = "Ratio of risk ratios \n(ADRD/other hosp)") +
+#   theme_map() +
+#   theme(legend.position = "bottom",
+#         legend.title = element_text(size = 10),
+#         legend.text = element_text(size = 8)
+#         )
 
 ```
 
 ```{r}
-# plot with three categories
-
-# new column to compare RRs
-pos_med_sf %<>%
-  mutate(RR_comp = ifelse(risk_ratio_adrd > 1 & risk_ratio_hosp > 1 & 
-                            risk_ratio_sig_adrd & risk_ratio_sig_hosp, 
-                          "black_worse_both", NA)) %>%
-  mutate(RR_comp = ifelse(risk_ratio_adrd < 1 & risk_ratio_hosp < 1 & 
-                            risk_ratio_sig_adrd & risk_ratio_sig_hosp, 
-                          "white_worse_both", RR_comp)) #%>%
-  # mutate(RR_comp = ifelse(risk_ratio_adrd < 1 & risk_ratio_hosp > 1 |
-  #                           risk_ratio_adrd > 1 & risk_ratio_hosp < 1, NA, RR_comp))
-
-
-# get counts of RR_comp
-pos_med_sf %>%
-  filter(race == 1) %>%
-  count(RR_comp)
-```
-
-
-```{r}
-#png(file = paste0(fig_path, "rr_hosp_vs_adrd.png"), width = 600, height = 400)
-
-pos_med_sf |>
-  filter(race == 1) %>%
-  ggplot() +
-  geom_sf(aes(fill = RR_comp), lwd = 0.1) +
-  geom_sf(data = county_sf_zero_b, fill = "white", lwd = 0.0) + 
-  geom_sf(data = state_sf, fill = NA, lwd = 0.1, col = "black") +
-  labs(fill = "") +
-  scale_fill_manual(values = c("black_worse_both" = "#fd8d3c", 
-                               "white_worse_both" = "#2171b5"),
-                    labels = c("black_worse_both" = "Black risk > White risk for both outcomes", 
-                               "white_worse_both" = "White risk > Black risk for both outcomes"),
-                    na.value = "gray90") +
-  theme_map() +
-  theme(legend.position = "bottom",
-        plot.background = element_rect(fill = "white", color = NA)) +
-  guides(fill = guide_legend(ncol = 1, byrow = TRUE))
-
-ggsave(paste0(fig_path, "rr_hosp_vs_adrd.png"), width = 6, height = 4, dpi = 300)
-
-#dev.off()
+# # plot with three categories
+# 
+# # new column to compare RRs
+# pos_med_sf %<>%
+#   mutate(RR_comp = ifelse(risk_ratio_adrd > 1 & risk_ratio_hosp > 1 & 
+#                             risk_ratio_sig_adrd & risk_ratio_sig_hosp, 
+#                           "black_worse_both", NA)) %>%
+#   mutate(RR_comp = ifelse(risk_ratio_adrd < 1 & risk_ratio_hosp < 1 & 
+#                             risk_ratio_sig_adrd & risk_ratio_sig_hosp, 
+#                           "white_worse_both", RR_comp)) #%>%
+#   # mutate(RR_comp = ifelse(risk_ratio_adrd < 1 & risk_ratio_hosp > 1 |
+#   #                           risk_ratio_adrd > 1 & risk_ratio_hosp < 1, NA, RR_comp))
+# 
+# 
+# # get counts of RR_comp
+# pos_med_sf %>%
+#   filter(race == 1) %>%
+#   count(RR_comp)
 ```
 
 ```{r}
+# don't do this. it doesn't capture significance
+
+# pos_med_sf |>
+#   filter(race == 1) %>%
+#   ggplot() +
+#   geom_sf(aes(fill = RR_comp), lwd = 0.1) +
+#   geom_sf(data = county_sf_zero_b, fill = "white", lwd = 0.0) + 
+#   geom_sf(data = state_sf, fill = NA, lwd = 0.1, col = "black") +
+#   labs(fill = "") +
+#   scale_fill_manual(values = c("black_worse_both" = "#fd8d3c", 
+#                                "white_worse_both" = "#2171b5"),
+#                     labels = c("black_worse_both" = "Black risk > White risk for both outcomes", 
+#                                "white_worse_both" = "White risk > Black risk for both outcomes"),
+#                     na.value = "gray90") +
+#   theme_map() +
+#   theme(legend.position = "bottom",
+#         plot.background = element_rect(fill = "white", color = NA)) +
+#   guides(fill = guide_legend(ncol = 1, byrow = TRUE))
+#ggsave(paste0(fig_path, "rr_hosp_vs_adrd.png"), width = 6, height = 4, dpi = 300)
+```
+
+```{r}
+# choose 80% or 95% for significance (or show all counties)
+#sig_rr <- 80
+#sig_rr <- 95
+sig_rr <- 0
+
 # get risk ratios for ADRD and hosp in the same plot
-adrd_risk_ratios_map_1m <- read_rds("results/figures/intermediate/adrd_risk_ratios_map_1m.rds")
-hosp_risk_ratios_map_1m <- read_rds("results/figures/intermediate/hosp_risk_ratios_map_1m.rds")
+if(dual){
+  adrd_risk_ratios_map <- read_rds(paste0("results/figures/intermediate/adrd-dual_risk_ratio_maps_", 
+                                          sig_rr, ".rds"))
+  hosp_risk_ratios_map <- read_rds(paste0("results/figures/intermediate/hosp-dual_risk_ratio_maps_",
+                                          sig_rr, ".rds"))
+} else {
+  adrd_risk_ratios_map <- read_rds(paste0("results/figures/intermediate/adrd_risk_ratio_maps_", 
+                                          sig_rr, ".rds"))
+  hosp_risk_ratios_map <- read_rds(paste0("results/figures/intermediate/hosp_risk_ratio_maps_", 
+                                          sig_rr, ".rds"))
+}
 
-#png(file = paste0(fig_path, "risk_ratios_1m.png"), width = 1300, height = 500)
-
-rr_maps <- ggarrange(adrd_risk_ratios_map_1m, hosp_risk_ratios_map_1m,
-                     common.legend = TRUE, legend = "bottom") +
-  theme(plot.background = element_rect(fill = "white", color = NA))
-
-rr_maps
-
-ggsave(paste0(fig_path, "risk_ratios_1m.png"), width = 7, height = 3.5, dpi = 300)
-
-#dev.off()
-```
-
-```{r}
-# same but with allc!!!
-
-allc_risk_ratios_map_1m <- read_rds("results/figures/intermediate/allc_risk_ratios_map_1m.rds")
-
-#png(file = paste0(fig_path, "risk_ratios_1m.png"), width = 1300, height = 500)
-
-rr_maps <- ggarrange(adrd_risk_ratios_map_1m, hosp_risk_ratios_map_1m, allc_risk_ratios_map_1m,
+# plot ADRD and non-ADRD
+rr_maps <- ggarrange(adrd_risk_ratios_map, 
+                     hosp_risk_ratios_map, 
                      common.legend = TRUE, legend = "bottom", nrow = 1) +
   theme(plot.background = element_rect(fill = "white", color = NA))
-
 rr_maps
 
-ggsave(paste0(fig_path, "risk_ratios_1m_allc.png"), width = 7, height = 3.5, dpi = 300)
+if(dual){
+  ggsave(paste0(fig_path, paste0("risk_ratio_maps_dual_", sig_rr, ".png")), width = 7, height = 3.5, dpi = 1000)
+} else {
+  ggsave(paste0(fig_path, paste0("risk_ratio_maps_", sig_rr, ".png")), width = 7, height = 3.5, dpi = 1000)
+}
 
-#dev.off()
 ```
 
 ```{r}
-# same but with allc and resp!!!
-
-allc_risk_ratios_map_1m <- read_rds("results/figures/intermediate/allc_risk_ratios_map_1m.rds")
-resp_risk_ratios_map_1m <- read_rds("results/figures/intermediate/resp_risk_ratios_map_1m.rds")
-
-#png(file = paste0(fig_path, "risk_ratios_1m.png"), width = 1300, height = 500)
-
-rr_maps <- ggarrange(adrd_risk_ratios_map_1m, hosp_risk_ratios_map_1m, 
-                     allc_risk_ratios_map_1m, resp_risk_ratios_map_1m,
-                     common.legend = TRUE, legend = "bottom") +
-  theme(plot.background = element_rect(fill = "white", color = NA))
-
-rr_maps
-
-ggsave(paste0(fig_path, "risk_ratios_1m_resp.png"), width = 7, height = 3.5, dpi = 300)
-
-#dev.off()
-```
-
-
-```{r}
-# get risk ratios for ADRD and hosp in the same plot
-
-# 700 py
-
-
-adrd_risk_ratios_map_1m <- read_rds("results/figures/intermediate/adrd_risk_ratios_map_1m_700py.rds")
-hosp_risk_ratios_map_1m <- read_rds("results/figures/intermediate/hosp_risk_ratios_map_1m_700py.rds")
-
-#png(file = paste0(fig_path, "risk_ratios_1m.png"), width = 1300, height = 500)
-
-rr_maps <- ggarrange(adrd_risk_ratios_map_1m, hosp_risk_ratios_map_1m,
-                     common.legend = TRUE, legend = "bottom") +
-  theme(plot.background = element_rect(fill = "white", color = NA))
-
-rr_maps
-
-#ggsave(paste0(fig_path, "risk_ratios_1m.png"), width = 7, height = 3.5, dpi = 300)
-
-#dev.off()
-```
-
-
-```{r}
-# same but for all three models
-adrd_risk_ratios_map <- read_rds("results/figures/intermediate/adrd_risk_ratios_map_3m.rds")
-hosp_risk_ratios_map <- read_rds("results/figures/intermediate/hosp_risk_ratios_map_3m.rds")
-
-png(file = paste0(fig_path, "risk_ratios_3m.png"), width = 700, height = 500)
-
-ggarrange(adrd_risk_ratios_map, hosp_risk_ratios_map,
-          nrow = 2,
-          common.legend = TRUE, 
-          legend = "bottom")
-
-dev.off()
-```
-
-# Hospitalization rates table
-
-```{r}
-# get ADRD table
-adrd_exp_rates_1 <- read_rds(paste0("results/tables/intermediate/adrd_expected_rates_race-specific.rds"))
-adrd_exp_rates_2 <- read_rds(paste0("results/tables/intermediate/adrd_expected_rates_overall.rds"))
-adrd_exp_rates <- left_join(adrd_exp_rates_1, adrd_exp_rates_2) |>
-  rename("ADRD rate (White)" = `Rate (White)`,
-         "ADRD rate (Black)" = `Rate (Black)`,
-         "ADRD rate (overall)" = `Rate (overall)`)
-
-# get hosp table
-hosp_exp_rates_1 <- read_rds(paste0("results/tables/intermediate/hosp_expected_rates_race-specific.rds"))
-hosp_exp_rates_2 <- read_rds(paste0("results/tables/intermediate/hosp_expected_rates_overall.rds"))
-hosp_exp_rates <- left_join(hosp_exp_rates_1, hosp_exp_rates_2) |>
-  rename("Non-ADRD rate (White)" = `Rate (White)`,
-         "Non-ADRD rate (Black)" = `Rate (Black)`,
-         "Non-ADRD rate (overall)" = `Rate (overall)`)
-
-# join ADRD and hosp
-exp_rates_tab <- left_join(adrd_exp_rates, hosp_exp_rates)
-
-# change col names (can have duplicates)
-names(exp_rates_tab) <- c("Sex", "Age group", 
-                          "White", "Black", "Overall",
-                          "White", "Black", "Overall")
-
-# format in kable with header over cols
-exp_rates_tab_latex <- kable(exp_rates_tab, "latex", 
-      booktabs = TRUE) %>%
-  add_header_above(c(" " = 2, "ADRD rate" = 3, "Non-ADRD rate" = 3))
-
-writeLines(exp_rates_tab_latex, "results/tables/final/national_rates.tex")
-# note: remove \addlinespace from the resulting table
-# also need to add begin table and end table and centering
+# # same but with allc (for supplement)
+# 
+# #resp_risk_ratios_map <- read_rds("results/figures/intermediate/archive/resp_risk_ratios_map_1m.rds")
+# 
+# rr_maps <- ggarrange(adrd_risk_ratios_map, hosp_risk_ratios_map, 
+#                      allc_risk_ratios_map, #resp_risk_ratios_map,
+#                      common.legend = TRUE, legend = "bottom", nrow = 1) +
+#   theme(plot.background = element_rect(fill = "white", color = NA))
+# rr_maps
+# ggsave(paste0(fig_path, "risk_ratios_with_allc_dual.png"), width = 10, height = 3.5, dpi = 300)
 
 ```
-
 
 # Covariate effects (beta) table
 
 ```{r}
-# read adrd + hosp tables
-adrd_beta <- read_rds(paste0("results/tables/intermediate/adrd_beta_df.rds"))
-hosp_beta <- read_rds(paste0("results/tables/intermediate/hosp_beta_df.rds"))
-
-names(adrd_beta)[2] <- paste0(names(adrd_beta)[2], " ADRD")
-names(hosp_beta)[2] <- paste0(names(hosp_beta)[2], " Non-ADRD")
-
-# join
-beta_tab <- left_join(adrd_beta, hosp_beta)
-
-# change col names (can have duplicates)
-names(beta_tab) <- c("Parameter", "ADRD", "Non-ADRD")
-
-# format in kable with header over cols
-beta_tab_latex <- kable(beta_tab, "latex", booktabs = TRUE, escape = FALSE) %>%
-  add_header_above(c(" " = 1, "Estimate (95% CI)" = 2))
-# don't escape % in header with kable
-
-writeLines(beta_tab_latex, "results/tables/final/betas.tex")
-# note: remove \addlinespace from the resulting table
-# also need to add begin table and end table and centering
+# # read adrd + hosp tables
+# adrd_beta <- read_rds(paste0("results/tables/intermediate/adrd_beta_df.rds"))
+# hosp_beta <- read_rds(paste0("results/tables/intermediate/hosp_beta_df.rds"))
+# 
+# names(adrd_beta)[2] <- paste0(names(adrd_beta)[2], " ADRD")
+# names(hosp_beta)[2] <- paste0(names(hosp_beta)[2], " Non-ADRD")
+# 
+# # join
+# beta_tab <- left_join(adrd_beta, hosp_beta)
+# 
+# # change col names (can have duplicates)
+# names(beta_tab) <- c("Parameter", "ADRD", "Non-ADRD")
+# 
+# # format in kable with header over cols
+# beta_tab_latex <- kable(beta_tab, "latex", booktabs = TRUE, escape = FALSE) %>%
+#   add_header_above(c(" " = 1, "Estimate (95% CI)" = 2))
+# # don't escape % in header with kable
+# 
+# writeLines(beta_tab_latex, "results/tables/final/betas.tex")
+# # note: remove \addlinespace from the resulting table
+# # also need to add begin table and end table and centering
 
 ```
 
 # Empirical variance table (adrd + hosp)
 
 ```{r}
-# load list with ADRD all results and bind into df
-adrd_ev <- read_rds(paste0("results/tables/intermediate/adrd_empirical_variance.rds"))
-adrd_ev <- bind_rows(adrd_ev, .id = "model")
-
-# spread columns by model
-adrd_ev <- adrd_ev |>
-  spread(key = model, value = Estimate) |>
-  arrange(Parameter) #|>
-  # rename(`Unadjusted` = adrd_m1,
-  #        `Adjusted for PIR` = adrd_m2,
-  #        `Adjusted for PM2.5` = adrd_m3)
-
-# load list with hosp all results and bind into df
-hosp_ev <- read_rds(paste0("results/tables/intermediate/hosp_empirical_variance.rds"))
-hosp_ev <- bind_rows(hosp_ev, .id = "model")
-
-# spread columns by model
-hosp_ev <- hosp_ev |>
-  spread(key = model, value = Estimate) |>
-  arrange(Parameter) #|>
-  # rename(`Unadjusted` = hosp_m1,
-  #        `Adjusted for PIR` = hosp_m2,
-  #        `Adjusted for PM2.5` = hosp_m3)
-
-# join adrd + hosp
-ev <- left_join(adrd_ev, hosp_ev)
-
-# change col names (can have duplicates)
-names(ev) <- c("Race", "Parameter", rep(c("Unadjusted", 
-                                          "Adjusted for PIR", 
-                                          "Adjusted for PM2.5"), times = 2))
-
-# format in kable with header over cols
-ev_tab <- kable(ev, "latex", booktabs = TRUE, escape = FALSE) %>%
-  add_header_above(c(" " = 2, "ADRD" = 3, "Non-ADRD" = 3))
-# don't escape % in header with kable
-
-writeLines(ev_tab, "results/tables/final/empirical_variance.tex")
-
-# print(xtable(ev, type = "latex"),
-#       include.rownames = FALSE,
-#       file = "results/tables/final/empirical_variance.tex")
+# # load list with ADRD all results and bind into df
+# adrd_ev <- read_rds(paste0("results/tables/intermediate/adrd_empirical_variance.rds"))
+# adrd_ev <- bind_rows(adrd_ev, .id = "model")
+# 
+# # spread columns by model
+# adrd_ev <- adrd_ev |>
+#   spread(key = model, value = Estimate) |>
+#   arrange(Parameter) #|>
+#   # rename(`Unadjusted` = adrd_m1,
+#   #        `Adjusted for PIR` = adrd_m2,
+#   #        `Adjusted for PM2.5` = adrd_m3)
+# 
+# # load list with hosp all results and bind into df
+# hosp_ev <- read_rds(paste0("results/tables/intermediate/hosp_empirical_variance.rds"))
+# hosp_ev <- bind_rows(hosp_ev, .id = "model")
+# 
+# # spread columns by model
+# hosp_ev <- hosp_ev |>
+#   spread(key = model, value = Estimate) |>
+#   arrange(Parameter) #|>
+#   # rename(`Unadjusted` = hosp_m1,
+#   #        `Adjusted for PIR` = hosp_m2,
+#   #        `Adjusted for PM2.5` = hosp_m3)
+# 
+# # join adrd + hosp
+# ev <- left_join(adrd_ev, hosp_ev)
+# 
+# # change col names (can have duplicates)
+# names(ev) <- c("Race", "Parameter", rep(c("Unadjusted", 
+#                                           "Adjusted for PIR", 
+#                                           "Adjusted for PM2.5"), times = 2))
+# 
+# # format in kable with header over cols
+# ev_tab <- kable(ev, "latex", booktabs = TRUE, escape = FALSE) %>%
+#   add_header_above(c(" " = 2, "ADRD" = 3, "Non-ADRD" = 3))
+# # don't escape % in header with kable
+# 
+# writeLines(ev_tab, "results/tables/final/empirical_variance.tex")
+# 
+# # print(xtable(ev, type = "latex"),
+# #       include.rownames = FALSE,
+# #       file = "results/tables/final/empirical_variance.tex")
 
 ```
 
 # Posterior standard deviation map (ADRD + hosp)
 
 ```{r}
-adrd_sd <- read_rds("results/figures/intermediate/adrd_sd.rds")
-hosp_sd <- read_rds("results/figures/intermediate/hosp_sd.rds")
+# use the ADRD map only (in script 10)
 
-png(file = paste0(fig_path, "posterior_sd.png"), width = 1300, height = 500)
-
-ggarrange(adrd_sd, hosp_sd,
-          common.legend = TRUE, 
-          legend = "bottom")
-
-dev.off()
+# adrd_sd <- read_rds("results/figures/intermediate/archive/adrd_sd.rds")
+# hosp_sd <- read_rds("results/figures/intermediate/archive/hosp_sd.rds")
+# 
+# #png(file = paste0(fig_path, "posterior_sd.png"), width = 1300, height = 500)
+# 
+# ggarrange(adrd_sd, hosp_sd,
+#           common.legend = TRUE, 
+#           legend = "bottom")
+# 
+# #dev.off()
 ```
 
 
-
-
-# ADRD vs. non-ADRD risk ratios by state
+## ADRD vs. non-ADRD risk ratios
 
 ```{r}
 
-# don't need to run anything above this (except to load packages)
-
-model <- "m1"
-
-# model results
-adrd_res <- read_rds("data/intermediate/adrd_model_results.rds")
-hosp_res <- read_rds("data/intermediate/hosp_model_results.rds")
-allc_res <- read_rds("data/intermediate/allc_model_results.rds")
-
-adrd_res <- adrd_res[[paste0("adrd_", model)]]
-hosp_res <- hosp_res[[paste0("hosp_", model)]]
-allc_res <- allc_res[[paste0("allc_", model)]]
-
-
-## Read non-modeled data ----
-adrd_ratios_df_comb <- read_rds('data/symlinks/scratch/adrd_combined_data.rds')
-hosp_ratios_df_comb <- read_rds('data/symlinks/scratch/hosp_combined_data.rds')
-allc_ratios_df_comb <- read_rds('data/symlinks/scratch/allc_combined_data.rds')
-
-adrd_ratios_df <- read_rds('data/symlinks/scratch/adrd_ratios_df.rds')
-hosp_ratios_df <- read_rds('data/symlinks/scratch/hosp_ratios_df.rds')
-allc_ratios_df <- read_rds('data/symlinks/scratch/allc_ratios_df.rds')
-
-adrd_res_df <- adrd_res %>%
-  right_join(adrd_ratios_df_comb) %>%
-  right_join(adrd_ratios_df)
-hosp_res_df <- hosp_res %>%
-  right_join(hosp_ratios_df_comb) %>%
-  right_join(hosp_ratios_df)
-allc_res_df <- allc_res %>%
-  right_join(allc_ratios_df_comb) %>%
-  right_join(allc_ratios_df)
-
-pos_med <- merge(hosp_res_df, allc_res_df, all = TRUE, 
-                 by = c("county", "race", "black", "c_idx", "s_idx", "person_years", 
-                        "fipschar", "fips_st", "house_price_income_ratio", "pm25",
-                        "med_house_income", "person_years_total"),
-                 suffixes = c("_hosp", "_allc"))
+# # model results
+# adrd_res <- read_rds("data/intermediate/adrd_model_results.rds")
+# hosp_res <- read_rds("data/intermediate/hosp_model_results.rds")
+# allc_res <- read_rds("data/intermediate/allc_model_results.rds")
+# 
+# adrd_res <- adrd_res[[paste0("adrd_", model)]]
+# hosp_res <- hosp_res[[paste0("hosp_", model)]]
+# allc_res <- allc_res[[paste0("allc_", model)]]
+# 
+# 
+# ## Read non-modeled data ----
+# adrd_ratios_df_comb <- read_rds('data/symlinks/scratch/adrd_combined_data.rds')
+# hosp_ratios_df_comb <- read_rds('data/symlinks/scratch/hosp_combined_data.rds')
+# allc_ratios_df_comb <- read_rds('data/symlinks/scratch/allc_combined_data.rds')
+# 
+# adrd_ratios_df <- read_rds('data/symlinks/scratch/adrd_ratios_df.rds')
+# hosp_ratios_df <- read_rds('data/symlinks/scratch/hosp_ratios_df.rds')
+# allc_ratios_df <- read_rds('data/symlinks/scratch/allc_ratios_df.rds')
+# 
+# adrd_res_df <- adrd_res %>%
+#   right_join(adrd_ratios_df_comb) %>%
+#   right_join(adrd_ratios_df)
+# hosp_res_df <- hosp_res %>%
+#   right_join(hosp_ratios_df_comb) %>%
+#   right_join(hosp_ratios_df)
+# allc_res_df <- allc_res %>%
+#   right_join(allc_ratios_df_comb) %>%
+#   right_join(allc_ratios_df)
+# 
+# pos_med <- merge(adrd_res_df, hosp_res_df, all = TRUE, 
+#                  by = c("county", "race", "black", "c_idx", "s_idx", "person_years", 
+#                         "fipschar", "fips_st", "house_price_income_ratio", "pm25",
+#                         "med_house_income", "person_years_total"),
+#                  suffixes = c("_adrd", "_hosp"))
 
 ```
 
 ```{r}
+# table comparing ADRD and non-ADRD RR *point estimates only*
 
-# load posterior distribution for statistical test
-hosp_rr <- read_rds('data/intermediate/hosp_risk_ratio_post.rds')
-allc_rr <- read_rds('data/intermediate/allc_risk_ratio_post.rds')
-
-# get allc - hosp for each draw for each county
-allc_minus_hosp <- allc_rr - hosp_rr
-
-# get % > 0 for each county
-allc_minus_hosp_num <- sapply(allc_minus_hosp, function(x) mean(x > 0) * 100)
-
-# get into df
-allc_minus_hosp_df <- data.frame(county = names(allc_minus_hosp_num),
-                                     pct_geq0 = allc_minus_hosp_num)
-
-# join with data
-pos_med <- merge(pos_med, allc_minus_hosp_df, by = "county")
-```
-
-```{r}
-# get other stats for paper
-
-# all-cause RR > non-ADRD RR in what % of counties?
-mean(pos_med$risk_ratio_allc > pos_med$risk_ratio_hosp) * 100
-
-# "Moreover, removing hospitalizations with ADRD from all-cause hospitalizations changed Black-White risk ratios from greater than 1.0 to less than 1.0 (indicating greater risk for White versus Black beneficiaries) in XX% of counties." 
-mean(pos_med$risk_ratio_allc > 1 & pos_med$risk_ratio_hosp < 1) * 100
-
-
-```
-
-```{r}
-# group by state and get mean risk ratio for ADRD and hosp
-rr_state <- pos_med %>%
+# get table of categories
+pos_med_sf %>%
   st_drop_geometry() %>%
   filter(race == 1) %>%
-  select(county, fips_st, risk_ratio_hosp, risk_ratio_allc, pct_geq0) %>%
-  group_by(fips_st) %>%
-  summarise(rr_hosp_mean = mean(risk_ratio_hosp),
-            rr_allc_mean = mean(risk_ratio_allc),
-            pct_geq0 = mean(pct_geq0))
+  count(risk_ratio_adrd > risk_ratio_hosp)
+```
 
-# get state abbreviations and join with data
-library(tigris)
+```{r}
+# prepare risk ratio posterior distribution data
+
+# load risk ratio posterior distributions so we can test for significance
+if(dual){
+  adrd_rr <- read_rds('data/intermediate/adrd-dual_risk_ratio_post.rds')
+  hosp_rr <- read_rds('data/intermediate/hosp-dual_risk_ratio_post.rds')
+  allc_rr <- read_rds('data/intermediate/allc-dual_risk_ratio_post.rds')
+} else {
+  adrd_rr <- read_rds('data/intermediate/adrd_risk_ratio_post.rds')
+  hosp_rr <- read_rds('data/intermediate/hosp_risk_ratio_post.rds')
+  allc_rr <- read_rds('data/intermediate/allc_risk_ratio_post.rds')
+}
+
+# pivot long
+adrd_rr_long <- adrd_rr %>% 
+  pivot_longer(cols = everything(), names_to = "county", values_to = "adrd_rr")
+hosp_rr_long <- hosp_rr %>% 
+  pivot_longer(cols = everything(), names_to = "county", values_to = "hosp_rr")
+allc_rr_long <- allc_rr %>% 
+  pivot_longer(cols = everything(), names_to = "county", values_to = "allc_rr")
+
+
+# join
+rr_df <- cbind.data.frame(adrd_rr_long, # county and adrd_rr columns
+                          hosp_rr = hosp_rr_long$hosp_rr,
+                          allc_rr = allc_rr_long$allc_rr)
+
+# # get a column for adrd RR - hosp RR
+# rr_df <- rr_df %>%
+#   mutate(adrd_minus_hosp = adrd_rr - hosp_rr)
+
+# read in county to state mapping to get state abbreviations and names
 tigris_fips <- tigris::fips_codes %>%
-  select(state, state_code) %>%
+  mutate(county = as.character(as.numeric(paste0(state_code, county_code)))) %>% # county in same form
+  select(county, state, state_code, state_name) %>%
   distinct()
-rr_state <- merge(rr_state, tigris_fips, by.x = "fips_st", by.y = "state_code")
 
-# factor levels by non-adrd
-rr_state$state <- factor(rr_state$state, 
-                         levels = rev(rr_state$state[order(rr_state$rr_allc_mean)]))
-
+# merge with RR data
+rr_df <- merge(rr_df, tigris_fips, by = "county", all.x = TRUE)
+# note: many rows per county (each raw is one posterior draw)
 ```
 
 ```{r}
-# plot
-rr_state %>%
+# t-tests to compare ADRD RR and non-ADRD RR in each county
+
+# for each county, do a two-tailed unpaired t-test to see if the ADRD and non-ADRD risk ratio distributions are different
+# we can't compare the posterior distributions in a Bayesian way because they come from different models
+
+rr_ttests <- rr_df %>%
+  group_by(county) %>%
+  summarise(
+    mean_adrd_minus_hosp = mean(adrd_rr) - mean(hosp_rr),
+    t_test = list(t.test(adrd_rr, hosp_rr, alternative = "two.sided", paired = FALSE)),
+    t_statistic = t_test[[1]]$statistic,
+    p_value = t_test[[1]]$p.value
+  ) %>%
+  select(-t_test) %>%
+  mutate(p_val_sig = ifelse(p_value < 0.05, TRUE, FALSE),
+         p_val_sig_bonf = ifelse(p_value < 0.05/3037, TRUE, FALSE))
+
+# get significance indicators
+rr_ttests <- rr_ttests %>%
+  mutate(sig_cat = ifelse(mean_adrd_minus_hosp > 0 & p_val_sig_bonf, "adrd_larger", 
+                          ifelse(mean_adrd_minus_hosp < 0 & p_val_sig_bonf, "hosp_larger", NA)))
+    
+# merge with all other data
+rr_ttests <- merge(pos_med_sf, rr_ttests, by = "county")
+```
+
+```{r}
+# table comparing ADRD and non-ADRD RR significance
+# get table of categories
+rr_ttests %>%
+  st_drop_geometry() %>%
+  filter(race == 1) %>%
+  count(sig_cat)
+```
+
+```{r}
+# plot map with county-level t-test results
+rr_ttests %>%
+  filter(race == 1) %>%
+  ggplot() +
+  geom_sf(aes(fill = sig_cat), lwd = 0.1) +
+  geom_sf(data = county_sf_zero_b, fill = "gray40", lwd = 0.0) + 
+  geom_sf(data = state_sf, fill = NA, col = "black", lwd = 0.2) +
+  labs(fill = "") +
+  scale_fill_manual(values = c("adrd_larger" = "#eea7da", 
+                               "hosp_larger" = "#ffffbc"),
+                    labels = c("adrd_larger" = "ADRD RR significantly > non-ADRD RR", 
+                               "hosp_larger" = "Non-ADRD RR significantly > ADRD RR"),
+                    na.value = "gray40") +
+  theme_map(base_size = 16) +
+  theme(#legend.title = element_text(size = 14),
+        #legend.text = element_text(size = 14),
+        legend.position = "bottom",
+        plot.background = element_rect(fill = "white", color = NA)) +
+  guides(fill = guide_legend(nrow = 2))
+
+if(dual){
+  ggsave(paste0(fig_path, "adrd_hosp_diff_map_dual.pdf"), width = 8, height = 5)
+} else {
+  ggsave(paste0(fig_path, "adrd_hosp_diff_map.pdf"), width = 8, height = 5)
+}
+```
+
+
+```{r}
+# now look at the state level
+
+# group by state and get posterior probability of certain conditions being true
+state_rr <- rr_df %>%
+  group_by(state) %>%
   filter(state != "DC") %>% # remove DC
-  ggplot(aes(x = state)) +
-  geom_point(aes(y = rr_hosp_mean, shape = "Non-ADRD")) +
-  geom_point(aes(y = rr_allc_mean, shape = "All-cause")) +
-  geom_segment(aes(x = state, xend = state, 
-                   y = rr_hosp_mean, yend = rr_allc_mean)) +
-  labs(x = "",
-       y = "Risk ratios",
-       shape = "") +
-  geom_hline(yintercept = 1, lty = 2) +
-  scale_shape_manual(
-    values = c("Non-ADRD" = 19, "All-cause" = 4)
-  ) +
-  theme_minimal()
+  summarise(# ADRD
+            adrd_mean = mean(adrd_rr), # mean RR
+            adrd_q025 = quantile(adrd_rr, 0.025), # 2.5 %ile
+            adrd_q975 = quantile(adrd_rr, 0.975), # 97.5 %ile
+            adrd_diff1 = ifelse(adrd_q025 > 1 | adrd_q975 < 1, TRUE, FALSE), # sig diff from 1?
+            
+            # adrd_q05 = quantile(adrd_rr, 0.05),
+            # adrd_q95 = quantile(adrd_rr, 0.95),
+            # adrd_g1 = ifelse(adrd_q05 > 1, TRUE, FALSE), # sig >1?
+            # adrd_l1 = ifelse(adrd_q95 < 1, TRUE, FALSE), # sig <1?
+            
+            # non-ADRD
+            hosp_mean  = mean(hosp_rr), # mean RR
+            hosp_q025 = quantile(hosp_rr, 0.025), # 2.5 %ile
+            hosp_q975 = quantile(hosp_rr, 0.975), # 97.5 %ile
+            hosp_diff1 = ifelse(hosp_q025 > 1 | hosp_q975 < 1, TRUE, FALSE), # sig diff from 1?
+            
+            # hosp_q05 = quantile(hosp_rr, 0.05),
+            # hosp_q95 = quantile(hosp_rr, 0.95),
+            # hosp_g1 = ifelse(hosp_q05 > 1, TRUE, FALSE), # sig >1?
+            # hosp_l1 = ifelse(hosp_q95 < 1, TRUE, FALSE), # sig <1?
+            
+            # all-cause
+            allc_mean  = mean(allc_rr), # mean RR
+            allc_q025 = quantile(allc_rr, 0.025), # 2.5 %ile
+            allc_q975 = quantile(allc_rr, 0.975), # 97.5 %ile
+            allc_diff1 = ifelse(allc_q025 > 1 | allc_q975 < 1, TRUE, FALSE), # sig diff from 1?
+            
+            # allc_q05 = quantile(allc_rr, 0.05),
+            # allc_q95 = quantile(allc_rr, 0.95),
+            # allc_g1 = ifelse(allc_q05 > 1, TRUE, FALSE), # sig >1?
+            # allc_l1 = ifelse(allc_q95 < 1, TRUE, FALSE), # sig <1?
+            
+            # # ADRD vs. non-ADRD
+            # adrd_minus_hosp_mean = mean(adrd_minus_hosp),
+            # adrd_minus_hosp_q025 = quantile(adrd_minus_hosp, 0.025), # 2.5 %ile
+            # adrd_minus_hosp_q975 = quantile(adrd_minus_hosp, 0.975), # 97.5 %ile
+            # adrd_minus_hosp_diff0 = ifelse(adrd_minus_hosp_q025 > 1 | adrd_minus_hosp_q975 < 1, 
+            #                                TRUE, FALSE), # sig diff from 1?
+            # adrd_minus_hosp_g0_prob = mean(adrd_minus_hosp > 0), # prob that ADRD > non-ADRD
+            
+            # keep other columns
+            state = first(state),
+            state_name = first(state_name)
+            ) %>%
+  select(state, state_name,
+         adrd_mean, adrd_diff1,
+         hosp_mean, hosp_diff1,
+         allc_mean, allc_diff1)
+
+
+# stats for paper
+sum(state_rr$adrd_diff1)
+sum(state_rr$hosp_diff1)
+sum(state_rr$allc_diff1)
 ```
 
 ```{r}
-# print out table
-rr_state %>%
-  select(state, pct_geq0) %>%
-  filter(state != "DC")
+# plot state-level ADRD and non-ADRD risk ratios
+
+# factor levels by non-adrd (state code)
+state_rr$state <- factor(state_rr$state, 
+                         levels = rev(state_rr$state[order(state_rr$adrd_mean)]))
+
+# factor levels by non-adrd (state name)
+state_rr$state_name <- factor(state_rr$state_name, 
+                         levels = state_rr$state_name[order(state_rr$adrd_mean)])
+
+# # horizontal
+# state_rr %>%
+#   mutate() %>%
+#   ggplot(aes(x = state)) +
+#   geom_segment(aes(x = state, xend = state, 
+#                    y = adrd_mean, yend = hosp_mean)) +
+#   geom_point(aes(y = adrd_mean, 
+#                  shape = "ADRD", 
+#                  stroke = 2,
+#                  color = adrd_diff1,
+#                  size = adrd_diff1)) +
+#   geom_point(aes(y = hosp_mean, 
+#                  shape = "Non-ADRD", 
+#                  stroke = 2,
+#                  color = hosp_diff1,
+#                  size = hosp_diff1)) +
+#   scale_color_manual(values = c(`TRUE` = "#eb1f37", `FALSE` = "black")) +
+#   scale_size_manual(values = c(`TRUE` = 2.5, `FALSE` = 1)) + 
+#   scale_shape_manual(values = c("ADRD" = 19, "Non-ADRD" = 4)) +
+#   labs(x = "",
+#        y = "Risk ratio",
+#        shape = "") +
+#   geom_hline(yintercept = 1, lty = 2) +
+#   theme_minimal(base_size = 16) +
+#   theme(axis.text.x = element_text(size = 9)) +
+#   guides(color = "none", size = "none",
+#          shape = guide_legend(override.aes = list(size = 3)))
+# if(dual){
+#   ggsave(paste0(fig_path, "state_rr_horizontal_dual.pdf"), width = 14, height = 5)
+# } else {
+#   ggsave(paste0(fig_path, "state_rr_horizontal.pdf"), width = 14, height = 5)
+# }
+
+# vertical
+state_rr %>%
+  ggplot(aes(y = state_name)) +
+  geom_segment(aes(y = state_name, yend = state_name, 
+                   x = adrd_mean, xend = hosp_mean)) +
+  geom_point(aes(x = adrd_mean, 
+                 shape = "ADRD",
+                 stroke = 2,
+                 color = adrd_diff1,
+                 size = adrd_diff1)) +
+  geom_point(aes(x = hosp_mean, 
+                 shape = "Non-ADRD",
+                 stroke = 2,
+                 color = hosp_diff1,
+                 size = hosp_diff1)) +
+  scale_color_manual(values = c(`TRUE` = "#eb1f37", `FALSE` = "black")) +
+  scale_size_manual(values = c(`TRUE` = 2.5, `FALSE` = 1)) + 
+  scale_shape_manual(values = c("ADRD" = 19, "Non-ADRD" = 4),
+                     limits = c("Non-ADRD", "ADRD")) +
+  labs(x = "Risk ratio",
+       y = "",
+       shape = "") +
+  geom_vline(xintercept = 1, lty = 2) +
+  theme_minimal(base_size = 16) +
+  theme(legend.position = "bottom") +
+  guides(color = "none", size = "none",
+         shape = guide_legend(override.aes = list(size = 3)))
+if(dual){
+  ggsave(paste0(fig_path, "state_rr_vertical_dual.pdf"), width = 8, height = 12)
+} else {
+  ggsave(paste0(fig_path, "state_rr_vertical.pdf"), width = 8, height = 12)
+}
+
+```
+
+```{r}
+# # table with posterior prob of ADRD RR greater than non-ADRD RR
+# state_rr %>%
+#   select(state_name, adrd_minus_hosp_g0_prob) %>%
+#   arrange(desc(adrd_minus_hosp_g0_prob)) %>%
+#   mutate(adrd_minus_hosp_g0_prob = round(adrd_minus_hosp_g0_prob * 100, 1))
+```
+
+```{r}
+# t-tests to compare ADRD RR and non-ADRD RR in each STATE (above was county)
+
+# for each state, do a two-tailed unpaired t-test to see if the ADRD and non-ADRD risk ratio distributions are different
+# we can't compare the posterior distributions in a Bayesian way because they come from different models
+
+rr_ttests_state <- rr_df %>%
+  filter(state != "DC") %>%
+  group_by(state) %>%
+  summarise(
+    mean_adrd_minus_hosp = mean(adrd_rr) - mean(hosp_rr),
+    t_test = list(t.test(adrd_rr, hosp_rr, alternative = "two.sided", paired = FALSE)),
+    t_statistic = t_test[[1]]$statistic,
+    p_value = t_test[[1]]$p.value
+  ) %>%
+  select(-t_test) %>%
+  mutate(p_val_sig = ifelse(p_value < 0.05, TRUE, FALSE),
+         p_val_sig_bonf = ifelse(p_value < 0.05/48, TRUE, FALSE))
+
+# ADRD significiantly > non-ADRD (even with Bonferroni correction) in all 48 states
+
+# make a little hist of WV (p-vals are suspiciously small?)
+wv <- rr_df %>% filter(state == "WV")
+
+wv %>%
+  select(adrd_rr, hosp_rr) %>%
+  pivot_longer(cols = c("adrd_rr", "hosp_rr"), names_to = "outcome") %>%
+  ggplot() +
+  geom_density(aes(value, col = outcome))
 ```
 
 
