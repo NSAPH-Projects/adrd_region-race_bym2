@@ -24,6 +24,9 @@ names(stanfit_list) <- str_remove_all(list.files("results/models/working/", patt
 
 # # just look at stage 1
 # stanfit_list <- stanfit_list[str_detect(names(stanfit_list), "stage1")]
+
+# just look at model 1
+stanfit_list <- stanfit_list[str_detect(names(stanfit_list), "m1")]
 ```
 
 ```{r}
@@ -63,7 +66,7 @@ print(rhat_plots)
 
 # # run something like this (with the correct number of plots) to get them all in one figure
 # library(gridExtra)
-# grid.arrange(rhat_plots[[1]], rhat_plots[[2]], rhat_plots[[3]], rhat_plots[[4]], rhat_plots[[5]], rhat_plots[[6]], nrow = 2)
+# grid.arrange(rhat_plots[[1]], rhat_plots[[2]], rhat_plots[[3]], rhat_plots[[5]], rhat_plots[[6]], rhat_plots[[7]], nrow = 2)
 ```
 
 ## Now look at R hat values for specific parameters
