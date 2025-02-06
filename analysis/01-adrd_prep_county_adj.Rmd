@@ -551,7 +551,7 @@ write_rds(county_adj_sparse_list, "data/symlinks/scratch/county_adj_sparse_list.
 write_rds(county_fips_df, "data/symlinks/scratch/county_fips_df.rds")
 
 if(dual){
-  write_rds(adrd_county_df, "data/symlinks/scratch/adrd_county_df_dual.rds")
+  write_rds(adrd_county_df, "data/symlinks/scratch/adrd-dual_county_df.rds")
 } else {
   write_rds(adrd_county_df, "data/symlinks/scratch/adrd_county_df.rds")
 }

@@ -6,7 +6,7 @@ knitr::opts_knit$set(root.dir = here())
 ```
 
 Description:
-- Outcome: hospitalizations without ADRD (sex-age standardized & sex-age-dual standardized)
+- Outcome: all-cause hospitalizations (sex-age standardized & sex-age-dual standardized)
 - Ensure counties match in all objects
 - Merge in geometry
 - Merge in PM2.5 & house-price-to-income ratio data for adjusted models (not presented in paper)
@@ -140,13 +140,14 @@ setdiff(counties_adj_, counties_shp_)
 ## All-cause data
 
 ```{r}
-
+# load data (dual-standardized or not)
 if(dual){
   hosp_county_df <- read_csv("data/symlinks/scratch/hosp_rates_dual.csv")
 } else {
   hosp_county_df <- read_csv("data/symlinks/scratch/hosp_rates.csv")
 }
 
+# filter out states
 hosp_county_df <- hosp_county_df %>% 
     filter(!state %in% c(2, 15, 66, 72, 60, 69, 78)) %>%
     arrange(race, county)
@@ -268,11 +269,12 @@ median_household_df %<>%
   )
 ```
 
-## Pollution
+## PM2.5 data
 
 ```{r, echo=FALSE, message=FALSE}
+# full path: "/n/dominici_lab_ro/lab/data/exposures/exposure/pm25/whole_us/annual/counties/county_rm/data/county_pm25_2000.csv"
 pollution_county_df <- read_csv("data/symlinks/county_rm/data/county_pm25_2000.csv")
-years_ <- 2001:2018
+years_ <- 2000:2018
 for(y_ in years_) {
   pollution_county_df <- rbind(pollution_county_df, 
                                read_csv(paste0("data/symlinks/county_rm/data/county_pm25_", y_, ".csv")))
@@ -342,8 +344,9 @@ length(unique(county_adj_df$county))
 ```
 
 ```{r}
+# save results
 if(dual){
-  write_rds(hosp_county_df, "data/symlinks/scratch/hosp_county_df_dual.rds")
+  write_rds(hosp_county_df, "data/symlinks/scratch/hosp-dual_county_df.rds")
 } else {
   write_rds(hosp_county_df, "data/symlinks/scratch/hosp_county_df.rds")
 }
