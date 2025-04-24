@@ -24,19 +24,19 @@ def get_outcomes_query(outcome_criteria, icd_string, medpar_hospitalizations_pre
 
     if outcome_criteria == 'all':
         query = f"""
-        SELECT bene_id, adm_id 
+        SELECT bene_id, adm_id
         FROM '{file}', UNNEST(diagnoses) AS adm(diag)
-        WHERE adm.diag IN ({icd_string})
+        WHERE adm.diag IN ({icd_string}) 
         """
     elif outcome_criteria == 'primary':
         query = f"""
-        SELECT bene_id, adm_id 
+        SELECT bene_id, adm_id
         FROM '{file}'
         WHERE diagnoses[1] IN ({icd_string})
         """
     elif outcome_criteria == 'first_two':
         query = f"""
-        SELECT bene_id, adm_id 
+        SELECT bene_id, adm_id
         FROM '{file}'
         WHERE diagnoses[1] IN ({icd_string}) OR diagnoses[2] IN ({icd_string})
         """
