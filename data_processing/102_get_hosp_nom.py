@@ -3,7 +3,7 @@ import duckdb
 import argparse
 import logging
 
-def get_hosp_nom_query(mbsf_denom_prefix, medpar_denom_prefix, year):
+def get_nonadrd_nom_query(mbsf_denom_prefix, medpar_denom_prefix, outcomes_prefix, year):
     query = f"""
     WITH adm AS (
         SELECT
@@ -12,6 +12,11 @@ def get_hosp_nom_query(mbsf_denom_prefix, medpar_denom_prefix, year):
             EXTRACT(YEAR FROM discharge_date) as year
         FROM
             '{medpar_denom_prefix}_{year}.parquet'
+        WHERE
+            adm_id in (
+                SELECT adm_id
+                FROM '{outcomes_prefix}adm_without_adrd_{year}.parquet'
+            )
     )
     SELECT
         adm_id,
@@ -20,7 +25,8 @@ def get_hosp_nom_query(mbsf_denom_prefix, medpar_denom_prefix, year):
         year,
         race, 
         sex,
-        year - yob as age
+        year - yob as age,
+        dual
     FROM
         '{mbsf_denom_prefix}_*.parquet'
     INNER JOIN
@@ -29,7 +35,8 @@ def get_hosp_nom_query(mbsf_denom_prefix, medpar_denom_prefix, year):
         (bene_id, year)
     WHERE  
         race in ('1', '2') AND
-        sex in ('1', '2')
+        sex in ('1', '2') AND
+        dual in (0, 1)
     """
     logging.info(query)
     return query
@@ -39,9 +46,10 @@ def main(args):
         conn = duckdb.connect()
         
         logging.info("## Preparing hosp nom ----")
-        query = get_hosp_nom_query(
+        query = get_nonadrd_nom_query(
              args.mbsf_prefix,
              args.medpar_prefix,
+             args.outcomes_prefix,
              args.year
         )
 
@@ -50,7 +58,7 @@ def main(args):
         logging.info(df.shape)
         logging.info(df.head())
     
-        logging.info("## Writing hosp nom ----")
+        logging.info("## Writing nonadrd nom ----")
         df = df.set_index(['adm_id'])
     
         output_file = f"{args.output_prefix}_{args.year}.{args.output_format}"
@@ -78,16 +86,19 @@ if __name__ == "__main__":
     parser.add_argument("--medpar_prefix", 
                         default = "data/symlinks/mbsf_medpar_denom/medpar_hospitalizations"
                        )
+    parser.add_argument('--outcomes_prefix', 
+                        type=str, 
+                        default='data/symlinks/scratch/')
     parser.add_argument("--output_format", 
                         default = "parquet", 
                         choices=["parquet", "feather", "csv"]
                        )           
     parser.add_argument("--output_prefix", 
-                    default = "data/symlinks/scratch/nom_hosp"
+                    default = "data/symlinks/scratch/nom_nonadrd"
                    )
     args = parser.parse_args()
 
 
-    logging.basicConfig(filename=f"logs/get_hosp_nom_{args.year}.out", level=logging.INFO)
+    logging.basicConfig(filename=f"logs/get_nonadrd_nom_{args.year}.out", level=logging.INFO)
     
     main(args)
