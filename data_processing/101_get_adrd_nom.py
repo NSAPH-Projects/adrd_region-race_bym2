@@ -15,7 +15,7 @@ def get_adrd_nom_query(mbsf_denom_prefix, medpar_denom_prefix, outcomes_prefix, 
         WHERE
             adm_id in (
                 SELECT adm_id
-                FROM '{outcomes_prefix}_{year}.parquet'
+                FROM '{outcomes_prefix}adm_with_adrd_{year}.parquet'
             )
     )
     SELECT
@@ -25,7 +25,8 @@ def get_adrd_nom_query(mbsf_denom_prefix, medpar_denom_prefix, outcomes_prefix, 
         year,
         race, 
         sex,
-        year - yob as age
+        year - yob as age,
+        dual
     FROM
         '{mbsf_denom_prefix}_*.parquet'
     INNER JOIN
@@ -34,7 +35,8 @@ def get_adrd_nom_query(mbsf_denom_prefix, medpar_denom_prefix, outcomes_prefix, 
         (bene_id, year)
     WHERE  
         race in ('1', '2') AND
-        sex in ('1', '2')
+        sex in ('1', '2')  AND
+        dual in (0, 1)
     """
     logging.info(query)
     return query
@@ -86,7 +88,7 @@ if __name__ == "__main__":
                        )
     parser.add_argument('--outcomes_prefix', 
                         type=str, 
-                        default='data/symlinks/scratch/outcomes_adrd')
+                        default='data/symlinks/scratch/')
     parser.add_argument("--output_format", 
                         default = "parquet", 
                         choices=["parquet", "feather", "csv"]
