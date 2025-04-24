@@ -35,7 +35,7 @@ def get_adrd_nom_query(mbsf_denom_prefix, medpar_denom_prefix, outcomes_prefix, 
         (bene_id, year)
     WHERE  
         race in ('1', '2') AND
-        sex in ('1', '2')  AND
+        sex in ('1', '2') AND
         dual in (0, 1)
     """
     logging.info(query)

@@ -1,3 +1,9 @@
+#### note: need to run this file once for ADRD and once for non-ADRD
+
+#----- run adrd and nonadrd outcomes like this
+# python data_processing/05_count_hosps_sensitivity.py --nom_prefix data/symlinks/scratch/nom_adrd --output_file data/symlinks/scratch/adrd_county_sensitivity.csv
+# python data_processing/05_count_hosps_sensitivity.py --nom_prefix data/symlinks/scratch/nom_nonadrd --output_file data/symlinks/scratch/nonadrd_county_sensitivity.csv
+
 import pandas as pd
 import duckdb
 import argparse
@@ -80,18 +86,14 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--nom_prefix', 
                         type=str, 
-                        default='data/symlinks/scratch/nom_hosp_dual') # edit name here
+                        default='data/symlinks/scratch/nom_nonadrd') # edit name here or in command
     parser.add_argument('--zip_county_csv', 
                         type=str,
                         default='data/county/zip_county_2015.csv')
     parser.add_argument('--output_file',
                         type=str,
-                        default='data/symlinks/scratch/hosp_county_dual.csv') # edit name here
+                        default='data/symlinks/scratch/nonadrd_county_sensitivity.csv') # edit name here or in command
     args = parser.parse_args()
 
     logging.info(f"## args: {args}")
     main(args)
-
-# python data_processing/201_adm_county.py --nom_prefix data/symlinks/scratch/nom_adrd --output_file data/symlinks/scratch/adrd_county.csv
-# python data_processing/201_adm_county.py --nom_prefix data/symlinks/scratch/nom_hosp --output_file data/symlinks/scratch/hosp_county.csv
-# python data_processing/201_adm_county.py --nom_prefix data/symlinks/scratch/nom_cvd --output_file data/symlinks/scratch/cvd_county.csv

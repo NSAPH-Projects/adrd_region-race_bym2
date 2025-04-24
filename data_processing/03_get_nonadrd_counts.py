@@ -45,7 +45,7 @@ def main(args):
         
         conn = duckdb.connect()
         
-        logging.info("## Preparing hosp nom ----")
+        logging.info("## Preparing nonadrd nom ----")
         query = get_nonadrd_nom_query(
              args.mbsf_prefix,
              args.medpar_prefix,

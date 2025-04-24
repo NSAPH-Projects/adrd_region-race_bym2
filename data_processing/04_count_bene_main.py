@@ -98,7 +98,7 @@ if __name__ == '__main__':
                         default='data/county/zip_county_2015.csv')
     parser.add_argument('--output_file',
                         type=str,
-                        default='data/symlinks/scratch/bene_county.csv')
+                        default='data/symlinks/scratch/bene_county_main.csv')
     args = parser.parse_args()
 
     main(args)
