@@ -13,6 +13,17 @@ Description:
 - Remove counties with zero Black person-years (must do before creating adjacency matrix)
 - Create county adjacency matrix
 
+```{r}
+########## user input ########## 
+
+# outcome (adrd or nonadrd)
+outcome <- "adrd"
+#outcome <- "nonadrd"
+
+# incorporate Medicaid eligibility into expected counts?
+#dual <- TRUE # yes, standardize by age/sex/dual
+dual <- FALSE # no, standardize by age/sex
+```
 
 ```{r, message=FALSE, warning=FALSE}
 ## load packages ----
@@ -21,15 +32,6 @@ library(magrittr)
 library(sf)
 library(ggthemes)
 library(stringr)
-```
-
-```{r}
-########## user input ########## 
-
-# are we incorporating Medicaid eligibility into expected counts?
-
-dual <- TRUE # yes, standardize by age/sex/dual
-#dual <- FALSE # no, standardize by age/sex
 ```
 
 
@@ -136,28 +138,28 @@ setdiff(counties_shp_, counties_adj_)
 setdiff(counties_adj_, counties_shp_)
 ```
 
-## ADRD data
+## Outcome data
 
 ```{r}
-# load data (dual-standardized or not)
+# load outcome data
 if(dual){
-  adrd_county_df <- read_csv("data/symlinks/scratch/adrd_rates_dual.csv")
+  county_df <- read_csv(paste0("data/symlinks/scratch/", outcome, "_rates_sensitivity.csv"))
 } else {
-  adrd_county_df <- read_csv("data/symlinks/scratch/adrd_rates.csv")
+  county_df <- read_csv(paste0("data/symlinks/scratch/", outcome, "_rates_main.csv"))
 }
 
 # filter out states
-adrd_county_df <- adrd_county_df %>% 
+county_df <- county_df %>% 
     filter(!state %in% c(2, 15, 66, 72, 60, 69, 78)) %>%
     arrange(race, county)
 
-counties_adrd_ = unique(adrd_county_df$county)
+counties_ = unique(county_df$county)
 
-length(counties_adrd_) #3109
-setdiff(counties_adrd_, counties_adj_) 
+length(counties_) #3109
+setdiff(counties_, counties_adj_) 
 #when using 2010 crosswalk 51515 51560
 #when using 2015 crosswalk 46102
-setdiff(counties_adj_, counties_adrd_) 
+setdiff(counties_adj_, counties_) 
 #when using 2010 crosswalk 8014
 #when using 2015 crosswalk none
 ```
@@ -172,17 +174,17 @@ zip_county %>%
 
 ```{r}
 # change fips
-adrd_county_df$county[adrd_county_df$county == 46102] <- 46113
+county_df$county[county_df$county == 46102] <- 46113
 
 # get # of enrollees and # of admissions by strata
 if(dual){
-  adrd_county_df %<>% 
+  county_df %<>% 
     group_by(county, year, race, sex, age_grp, dual, state) %>% 
     summarise(n_enrollees = sum(n_enrollees), 
               n_admissions = sum(n_admissions)) %>% 
   ungroup()
 } else {
-  adrd_county_df %<>% 
+  county_df %<>% 
     group_by(county, year, race, sex, age_grp, state) %>% 
     summarise(n_enrollees = sum(n_enrollees), 
               n_admissions = sum(n_admissions)) %>% 
@@ -191,11 +193,11 @@ if(dual){
 ```
 
 ```{r}
-counties_adrd_ = unique(adrd_county_df$county)
+counties_ = unique(county_df$county)
 
-length(counties_adrd_)
-setdiff(counties_adrd_, counties_adj_)
-setdiff(counties_adj_, counties_adrd_)
+length(counties_)
+setdiff(counties_, counties_adj_)
+setdiff(counties_adj_, counties_)
 ```
 
 
@@ -309,7 +311,7 @@ pollution_county_df$county[pollution_county_df$county == 46102] <- 46113
 * merge datasets
 
 ```{r}
-adrd_county_df %<>%
+county_df %<>%
   left_join(
     median_household_df %>% select(county, med_house_income, house_price_income_ratio)
   ) %>% 
@@ -319,7 +321,7 @@ adrd_county_df %<>%
 ```
 
 ```{r}
-lapply(adrd_county_df, summary)
+lapply(county_df, summary)
 ```
 
 ## Remove counties with zero Black person-years
@@ -330,7 +332,7 @@ lapply(adrd_county_df, summary)
 
 # get counties with zero person-years
 # note: n_enrollees = NA means zero person-years
-county_zero_b <- adrd_county_df %>%
+county_zero_b <- county_df %>%
   group_by(race, county) %>%
   filter(all(is.na(n_enrollees))) %>%
   distinct(county) %>%
@@ -344,7 +346,7 @@ length(county_zero_b)
 
 ```{r}
 # remove rows for these counties from ADRD data (both white and black rows)
-adrd_county_df %<>%
+county_df %<>%
   filter(!county %in% county_zero_b)
 
 # and remove from county adjacency
@@ -362,9 +364,22 @@ county_sf %<>%
 length(unique(county_sf$county))
 ```
 
+# Save county-level data
+
+```{r}
+if(dual){
+  write_rds(adrd_county_df, paste0("data/symlinks/scratch/", outcome, "-dual_county_df.rds"))
+} else {
+  write_rds(adrd_county_df, psate0("data/symlinks/scratch/", outcome, "_county_df.rds"))
+}
+```
+
+
 
 ## Adjacency matrix
-(same for all outcomes--only do this once for ADRD)
+
+Note: only need to run everything below this once! The county adjacency matrix is the same for both outcomes and for the main and sensitivity analyses.  
+
 
 ```{r}
 ####
@@ -439,7 +454,7 @@ county_fips_df
 
 ```{r}
 length(unique(county_fips_df$county))
-length(unique(adrd_county_df$county))
+length(unique(county_df$county))
 ```
 
 ```{r}
@@ -549,11 +564,4 @@ check_adj %>%
 write_rds(county_sf, "data/symlinks/scratch/county_sf.rds")
 write_rds(county_adj_sparse_list, "data/symlinks/scratch/county_adj_sparse_list.rds")
 write_rds(county_fips_df, "data/symlinks/scratch/county_fips_df.rds")
-
-if(dual){
-  write_rds(adrd_county_df, "data/symlinks/scratch/adrd-dual_county_df.rds")
-} else {
-  write_rds(adrd_county_df, "data/symlinks/scratch/adrd_county_df.rds")
-}
-
 ```
