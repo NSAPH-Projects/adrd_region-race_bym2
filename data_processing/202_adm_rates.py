@@ -1,3 +1,8 @@
+#### note: need to run this file once for ADRD and once for non-ADRD
+
+# python data_processing/202_adm_rates.py --admissions_county_csv data/symlinks/scratch/adrd_county.csv --output_file data/symlinks/scratch/adrd_rates.csv
+# python data_processing/202_adm_rates.py --admissions_county_csv data/symlinks/scratch/hosp_county.csv --output_file data/symlinks/scratch/hosp_rates.csv
+
 import pandas as pd
 import argparse
 import logging
@@ -60,18 +65,14 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--bene_county_csv',
                         type=str, 
-                        default='data/symlinks/scratch/bene_county.csv')
+                        default='data/symlinks/scratch/bene_county_main.csv')
     parser.add_argument('--admissions_county_csv', 
                         type=str,
-                        default='data/symlinks/scratch/resp_county.csv') # edit name here
+                        default='data/symlinks/scratch/adrd_county_main.csv') # edit name here
     parser.add_argument('--output_file',
                         type=str,
-                        default='data/symlinks/scratch/resp_rates.csv') # edit name here
+                        default='data/symlinks/scratch/adrd_rates_main.csv') # edit name here
     args = parser.parse_args()
 
     logging.info(args)
     main(args)
-
-# python data_processing/202_adm_rates.py --admissions_county_csv data/symlinks/scratch/adrd_county.csv --output_file data/symlinks/scratch/adrd_rates.csv
-# python data_processing/202_adm_rates.py --admissions_county_csv data/symlinks/scratch/hosp_county.csv --output_file data/symlinks/scratch/hosp_rates.csv
-# python data_processing/202_adm_rates.py --admissions_county_csv data/symlinks/scratch/cvd_county.csv --output_file data/symlinks/scratch/cvd_rates.csv
