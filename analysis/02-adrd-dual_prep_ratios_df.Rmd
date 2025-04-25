@@ -6,10 +6,18 @@ knitr::opts_knit$set(root.dir = here())
 ```
 
 Description:
-- Outcome: hospitalizations with ADRD (sex-age-dual standardized)
+- Outcome: hospitalizations with or without ADRD (sex-age-dual standardized)
 - Basic stats (for table 1) and visualizations
 - National rates (used for expected counts)
 - Observed and expected counts
+
+```{r}
+########## user input ########## 
+
+# outcome (adrd or nonadrd)
+outcome <- "adrd"
+#outcome <- "nonadrd"
+```
 
 ```{r, message=FALSE, warning=FALSE}
 ## Load libraries ----
@@ -27,20 +35,20 @@ library(xtable)
 
 ```{r}
 ## Read data ----
-adrd_county_df <- read_rds("data/symlinks/scratch/adrd-dual_county_df.rds")
+county_df <- read_rds(paste0("data/symlinks/scratch/", outcome, "-dual_county_df.rds"))
 county_sf <- read_rds("data/symlinks/scratch/county_sf.rds")
 county_fips_df <- read_rds("data/symlinks/scratch/county_fips_df.rds")
 
-length(unique(adrd_county_df$county))
+length(unique(county_df$county))
 length(unique(county_sf$county))
 length(unique(county_fips_df$county))
 
 counties_shp_ = unique(county_sf$county)
-counties_adrd_ = unique(adrd_county_df$county)
+counties_ = unique(ounty_df$county)
 counties_ = unique(county_fips_df$county)
 
-setdiff(counties_shp_, counties_adrd_)
-setdiff(counties_adrd_, counties_shp_)
+setdiff(counties_shp_, counties_)
+setdiff(counties_, counties_shp_)
 setdiff(counties_, counties_shp_)
 setdiff(counties_shp_, counties_)
 ```
@@ -48,28 +56,28 @@ setdiff(counties_shp_, counties_)
 ```{r}
 ## Subset ----
 ##  Subset to population of interest --
-adrd_county_df %<>%
+county_df %<>%
     filter(age_grp %in% c("[65,75)", "[75,85)", ">85"))
 
 ##  Replace NA with 0 --
-adrd_county_df$n_enrollees[is.na(adrd_county_df$n_enrollees)] <- 0 
-adrd_county_df$n_admissions[is.na(adrd_county_df$n_admissions)] <- 0 
+county_df$n_enrollees[is.na(county_df$n_enrollees)] <- 0 
+county_df$n_admissions[is.na(county_df$n_admissions)] <- 0 
 
 counties_shp_ = unique(county_sf$county)
-counties_adrd_ = unique(adrd_county_df$county)
+counties_ = unique(county_df$county)
 
-setdiff(counties_shp_, counties_adrd_)
-setdiff(counties_adrd_, counties_shp_)
+setdiff(counties_shp_, counties_)
+setdiff(counties_, counties_shp_)
 ```
 
 ```{r}
 # get basic stats from data (before rounding)
 
 # total # of hospitalizations
-sum(adrd_county_df$n_admissions)
+sum(county_df$n_admissions)
 
-# number of hospitalizations with ADRD by race
-adrd_county_df %>%
+# number of hospitalizations by race
+county_df %>%
   group_by(race) %>%
   summarise(total_hosp = sum(n_admissions, na.rm = TRUE))
 ```
@@ -78,7 +86,7 @@ adrd_county_df %>%
 # get sex, age, dual distribution of person-years for each race
 
 # table with % of person-years in white vs. black for each stratum 
-sex_age_dual_dist_tab <- adrd_county_df %>%
+sex_age_dual_dist_tab <- county_df %>%
   group_by(race, sex, age_grp, dual) %>%
   summarise(total_py = sum(n_enrollees)) %>%
   group_by(sex, age_grp, dual) %>%
@@ -108,18 +116,18 @@ sex_age_dual_dist_tab
 # simpler stats for new table 1
 
 # overall
-adrd_county_df %>%
+county_df %>%
   group_by(race) %>%
   summarise(py = sum(n_enrollees)) %>%
   mutate(py_pct = 100 * py/sum(py))
 
 # sex (overall)
-adrd_county_df %>%
+county_df %>%
   group_by(sex) %>%
   summarise(py = sum(n_enrollees)) %>%
   mutate(py_pct = 100 * py/sum(py))
 # sex(by race)
-adrd_county_df %>%
+county_df %>%
   group_by(race, sex) %>% 
   summarise(count = sum(n_enrollees), .groups = "drop") %>%
   group_by(race) %>%
@@ -127,12 +135,12 @@ adrd_county_df %>%
   ungroup()
 
 # dual (overall)
-adrd_county_df %>%
+county_df %>%
   group_by(dual) %>%
   summarise(py = sum(n_enrollees)) %>%
   mutate(py_pct = 100 * py/sum(py))
 # dual (by race)
-adrd_county_df %>%
+county_df %>%
   group_by(race, dual) %>% 
   summarise(count = sum(n_enrollees), .groups = "drop") %>%
   group_by(race) %>%
@@ -140,12 +148,12 @@ adrd_county_df %>%
   ungroup()
 
 # age (overall)
-adrd_county_df %>%
+county_df %>%
   group_by(age_grp) %>%
   summarise(py = sum(n_enrollees)) %>%
   mutate(py_pct = 100 * py/sum(py))
 # age (by race)
-adrd_county_df %>%
+county_df %>%
   group_by(race, age_grp) %>% 
   summarise(count = sum(n_enrollees), .groups = "drop") %>%
   group_by(race) %>%
@@ -160,7 +168,7 @@ adrd_county_df %>%
 ```{r}
 # stage 1
 # get race-specific national rates for each sex/age combination 
-exp_stage1_df <- adrd_county_df %>%
+exp_stage1_df <- county_df %>%
     dplyr::group_by(race, sex, age_grp, dual) %>% # race, sex, age_grp, dual
     dplyr::summarize(
         n_admissions = sum(n_admissions),
@@ -170,7 +178,7 @@ exp_stage1_df <- adrd_county_df %>%
 
 # stage 2
 # get overall national rates for each sex/age combination 
-exp_stage2_df <- adrd_county_df %>%
+exp_stage2_df <- county_df %>%
     dplyr::group_by(sex, age_grp, dual) %>% # sex, age_grp, dual
     dplyr::summarize(
         n_admissions = sum(n_admissions),
@@ -223,7 +231,7 @@ exp_rates_tab <- left_join(exp_rates_stage1_tab, exp_rates_stage2_tab)
 
 # save tables
 write_rds(exp_rates_tab, 
-          file = paste0("results/tables/intermediate/adrd-dual_expected_rates.rds"))
+          file = paste0("results/tables/intermediate/", outcome, "-dual_expected_rates.rds"))
 # tables joined and written to tex in script 10
 ```
 
@@ -231,7 +239,7 @@ write_rds(exp_rates_tab,
 ```{r}
 ## Aggregate over years ----
 ## Just tally up the number of person years and hospitalizations over all years
-obs_df <- adrd_county_df %>%
+obs_df <- county_df %>%
     dplyr::group_by(county, race, sex, age_grp, dual) %>% #county, race, sex, age_grp, dual
     dplyr::summarize(n_enrollees = sum(n_enrollees),
                      n_admissions = sum(n_admissions), 
@@ -250,7 +258,7 @@ obs_df$obs_rate[is.na(obs_df$obs_rate)] <- 0
 
 ```{r}
 ## Merge with exp_df ----
-adrd_ratios_df <- obs_df %>%
+ratios_df <- obs_df %>%
     dplyr::left_join(exp_stage1_df %>%
                          dplyr::select(race, sex, age_grp, dual, exp_rate_stage1),
                      by = c("race", "sex", "age_grp", "dual")) %>%
@@ -261,7 +269,7 @@ adrd_ratios_df <- obs_df %>%
 ## Now aggregate age ----
 # here is where dual drops out!! along with age and sex
 
-adrd_ratios_df %<>% 
+ratios_df %<>% 
   mutate(
     expected_stage1 = n_enrollees * exp_rate_stage1, 
     expected_stage2 = n_enrollees * exp_rate_stage2,
@@ -282,7 +290,7 @@ adrd_ratios_df %<>%
 
 ```{r}
 # plot observed vs expected
-adrd_ratios_df %>% 
+ratios_df %>% 
   ggplot() + 
   geom_point(aes(x = observed, y = expected_stage2, color = as.factor(race)), alpha = 0.5) + 
   scale_x_sqrt() + 
@@ -291,7 +299,7 @@ adrd_ratios_df %>%
 
 ```{r}
 ## Prep data ----
-adrd_ratios_df %<>% 
+ratios_df %<>% 
   mutate(
     black = as.integer(if_else(race == 2, 1, 0)),
     # expected = as.integer(ceiling(expected)), # expected values don't need to be integers!
@@ -303,18 +311,18 @@ adrd_ratios_df %<>%
   left_join(county_fips_df)
 
 # sort by race and then county
-adrd_ratios_df %<>%
+ratios_df %<>%
   arrange(race, county)
 
 # any missing values?
-sum(is.na(adrd_ratios_df$c_idx))
-sum(is.na(adrd_ratios_df$s_idx))
-sum(is.na(adrd_ratios_df$observed))
-sum(is.na(adrd_ratios_df$expected_stage1))
-sum(is.na(adrd_ratios_df$expected_stage2))
-sum(is.na(adrd_ratios_df$person_years))
+sum(is.na(ratios_df$c_idx))
+sum(is.na(ratios_df$s_idx))
+sum(is.na(ratios_df$observed))
+sum(is.na(ratios_df$expected_stage1))
+sum(is.na(ratios_df$expected_stage2))
+sum(is.na(ratios_df$person_years))
 ```
 
 ```{r}
-write_rds(adrd_ratios_df, "data/symlinks/scratch/adrd-dual_ratios_df.rds")
+write_rds(ratios_df, "data/symlinks/scratch/", outcome, "-dual_ratios_df.rds")
 ```
