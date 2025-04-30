@@ -6,7 +6,7 @@ knitr::opts_knit$set(root.dir = here())
 ```
 
 Description:
-- Outcome: hospitalizations with ADRD (sex-age standardized & sex-age-dual standardized)
+- Outcome: hospitalizations with or without ADRD (sex-age standardized & sex-age-dual standardized)
 - Ensure counties match in all objects
 - Merge in geometry
 - Merge in PM2.5 & house-price-to-income ratio data for adjusted models (not presented in paper)
@@ -17,8 +17,8 @@ Description:
 ########## user input ########## 
 
 # outcome (adrd or nonadrd)
-outcome <- "adrd"
-#outcome <- "nonadrd"
+#outcome <- "adrd"
+outcome <- "nonadrd"
 
 # incorporate Medicaid eligibility into expected counts?
 #dual <- TRUE # yes, standardize by age/sex/dual
@@ -345,7 +345,7 @@ length(county_zero_b)
 ```
 
 ```{r}
-# remove rows for these counties from ADRD data (both white and black rows)
+# remove rows for these counties from data (both white and black rows)
 county_df %<>%
   filter(!county %in% county_zero_b)
 
@@ -368,9 +368,9 @@ length(unique(county_sf$county))
 
 ```{r}
 if(dual){
-  write_rds(adrd_county_df, paste0("data/symlinks/scratch/", outcome, "-dual_county_df.rds"))
+  write_rds(county_df, paste0("data/symlinks/scratch/", outcome, "-dual_county_df.rds"))
 } else {
-  write_rds(adrd_county_df, psate0("data/symlinks/scratch/", outcome, "_county_df.rds"))
+  write_rds(county_df, paste0("data/symlinks/scratch/", outcome, "_county_df.rds"))
 }
 ```
 
