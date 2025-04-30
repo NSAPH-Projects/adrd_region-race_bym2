@@ -15,8 +15,8 @@ Description:
 ########## user input ########## 
 
 # outcome (adrd or nonadrd)
-outcome <- "adrd"
-#outcome <- "nonadrd"
+#outcome <- "adrd"
+outcome <- "nonadrd"
 ```
 
 ```{r, message=FALSE, warning=FALSE}
@@ -44,7 +44,7 @@ length(unique(county_sf$county))
 length(unique(county_fips_df$county))
 
 counties_shp_ = unique(county_sf$county)
-counties_ = unique(ounty_df$county)
+counties_ = unique(county_df$county)
 counties_ = unique(county_fips_df$county)
 
 setdiff(counties_shp_, counties_)
@@ -165,36 +165,36 @@ county_df %>%
 
 ## Observed vs expected
 
+We're using overall rates (ignoring race) to get expected counts, but we will still present race-specific rates in a table.
+
 ```{r}
-# stage 1
 # get race-specific national rates for each sex/age combination 
-exp_stage1_df <- county_df %>%
+exp_race_specific <- county_df %>%
     dplyr::group_by(race, sex, age_grp, dual) %>% # race, sex, age_grp, dual
     dplyr::summarize(
         n_admissions = sum(n_admissions),
         n_enrollee_years = sum(n_enrollees),
-        exp_rate_stage1 = n_admissions / n_enrollee_years
+        exp_rate = n_admissions / n_enrollee_years
     )
 
-# stage 2
 # get overall national rates for each sex/age combination 
-exp_stage2_df <- county_df %>%
+exp_overall <- county_df %>%
     dplyr::group_by(sex, age_grp, dual) %>% # sex, age_grp, dual
     dplyr::summarize(
         n_admissions = sum(n_admissions),
         n_enrollee_years = sum(n_enrollees),
-        exp_rate_stage2 = n_admissions / n_enrollee_years
+        exp_rate = n_admissions / n_enrollee_years
     )
 ```
 
 ```{r}
 # make tables of standardized rates
 
-#----- stage 1 -----#
+#----- race-specific -----#
 
-exp_rates_stage1_tab <- exp_stage1_df %>%
+exp_race_specific_tab <- exp_race_specific %>%
   select(-c(n_enrollee_years, n_admissions)) %>%
-  spread(key = "race", value = "exp_rate_stage1") %>%
+  spread(key = "race", value = "exp_rate") %>%
   mutate(sex = ifelse(sex == 1, "Male", "Female"),
          age_grp = ifelse(age_grp == "[65,75)", "65-74", age_grp),
          age_grp = ifelse(age_grp == "[75,85)", "75-84", age_grp),
@@ -206,33 +206,31 @@ exp_rates_stage1_tab <- exp_stage1_df %>%
          "Age group" = "age_grp",
          "Rate (White)" = "1",
          "Rate (Black)" = "2")
-exp_rates_stage1_tab
+exp_race_specific_tab
 
 
-#----- stage 2 -----#
+#----- overall (using these to get expected counts) -----#
 
-exp_rates_stage2_tab <- exp_stage2_df %>%
+exp_overall_tab <- exp_overall %>%
   select(-c(n_enrollee_years, n_admissions)) %>%
   mutate(sex = ifelse(sex == 1, "Male", "Female"),
          age_grp = ifelse(age_grp == "[65,75)", "65-74", age_grp),
          age_grp = ifelse(age_grp == "[75,85)", "75-84", age_grp),
          age_grp = ifelse(age_grp == ">85", "85+", age_grp),
-         exp_rate_stage2 = format(round(exp_rate_stage2, 3), nsmall = 3)) %>%
+         exp_rate = format(round(exp_rate, 3), nsmall = 3)) %>%
   arrange(age_grp) %>%
   rename("Sex" = "sex",
          "Age group" = "age_grp",
-         "Rate (overall)" = "exp_rate_stage2")
-exp_rates_stage2_tab
+         "Rate (overall)" = "exp_rate")
+exp_overall_tab
 
 
-# join tables together (not saving right now)
-exp_rates_tab <- left_join(exp_rates_stage1_tab, exp_rates_stage2_tab)
-
+# join tables together
+exp_rates_tab <- left_join(exp_race_specific_tab, exp_overall_tab)
 
 # save tables
 write_rds(exp_rates_tab, 
-          file = paste0("results/tables/intermediate/", outcome, "-dual_expected_rates.rds"))
-# tables joined and written to tex in script 10
+          file = paste0("results/tables/", outcome, "-dual_expected_rates.rds"))
 ```
 
 
@@ -257,13 +255,42 @@ obs_df$obs_rate[is.na(obs_df$obs_rate)] <- 0
 ```
 
 ```{r}
+# ## Merge with exp_df ----
+# ratios_df <- obs_df %>%
+#     dplyr::left_join(exp_stage1_df %>%
+#                          dplyr::select(race, sex, age_grp, dual, exp_rate_stage1),
+#                      by = c("race", "sex", "age_grp", "dual")) %>%
+#     dplyr::left_join(exp_stage2_df %>%
+#                          dplyr::select(sex, age_grp, dual, exp_rate_stage2),
+#                      by = c("sex", "age_grp", "dual"))
+# 
+# ## Now aggregate age ----
+# # here is where dual drops out!! along with age and sex
+# 
+# ratios_df %<>% 
+#   mutate(
+#     expected_stage1 = n_enrollees * exp_rate_stage1, 
+#     expected_stage2 = n_enrollees * exp_rate_stage2,
+#     observed = n_admissions
+#   ) %>% 
+#   dplyr::group_by(county, race) %>%
+#   dplyr::summarize(
+#     person_years = sum(n_enrollees),
+#     expected_stage1 = sum(expected_stage1), 
+#     expected_stage2 = sum(expected_stage2), 
+#     observed = sum(observed),
+#     # HPI and PM2.5 are the same across all years --> just take mean
+#     med_house_income = mean(med_house_income),
+#     house_price_income_ratio = mean(house_price_income_ratio),
+#     pm25 = mean(pm25)) %>%
+#   dplyr::ungroup()
+```
+
+```{r}
 ## Merge with exp_df ----
 ratios_df <- obs_df %>%
-    dplyr::left_join(exp_stage1_df %>%
-                         dplyr::select(race, sex, age_grp, dual, exp_rate_stage1),
-                     by = c("race", "sex", "age_grp", "dual")) %>%
-    dplyr::left_join(exp_stage2_df %>%
-                         dplyr::select(sex, age_grp, dual, exp_rate_stage2),
+    dplyr::left_join(exp_overall %>%
+                         dplyr::select(sex, age_grp, dual, exp_rate),
                      by = c("sex", "age_grp", "dual"))
 
 ## Now aggregate age ----
@@ -271,15 +298,13 @@ ratios_df <- obs_df %>%
 
 ratios_df %<>% 
   mutate(
-    expected_stage1 = n_enrollees * exp_rate_stage1, 
-    expected_stage2 = n_enrollees * exp_rate_stage2,
+    expected = n_enrollees * exp_rate,
     observed = n_admissions
   ) %>% 
   dplyr::group_by(county, race) %>%
   dplyr::summarize(
     person_years = sum(n_enrollees),
-    expected_stage1 = sum(expected_stage1), 
-    expected_stage2 = sum(expected_stage2), 
+    expected = sum(expected), 
     observed = sum(observed),
     # HPI and PM2.5 are the same across all years --> just take mean
     med_house_income = mean(med_house_income),
@@ -288,11 +313,12 @@ ratios_df %<>%
   dplyr::ungroup()
 ```
 
+
 ```{r}
 # plot observed vs expected
 ratios_df %>% 
   ggplot() + 
-  geom_point(aes(x = observed, y = expected_stage2, color = as.factor(race)), alpha = 0.5) + 
+  geom_point(aes(x = observed, y = expected, color = as.factor(race)), alpha = 0.5) + 
   scale_x_sqrt() + 
   scale_y_sqrt()
 ```
@@ -305,8 +331,7 @@ ratios_df %<>%
     # expected = as.integer(ceiling(expected)), # expected values don't need to be integers!
     observed = as.integer(round(observed)), # round normally (must be integers)
     # person_years = as.integer(round(person_years)), # doesn't need to be integers
-    log_expected_stage1 = log(expected_stage1 + 0.00001), # to avoid issues with expected = 0
-    log_expected_stage2 = log(expected_stage2 + 0.00001) # to avoid issues with expected = 0
+    log_expected = log(expected + 0.00001) # to avoid issues with expected = 0
   ) %>% 
   left_join(county_fips_df)
 
@@ -318,11 +343,10 @@ ratios_df %<>%
 sum(is.na(ratios_df$c_idx))
 sum(is.na(ratios_df$s_idx))
 sum(is.na(ratios_df$observed))
-sum(is.na(ratios_df$expected_stage1))
-sum(is.na(ratios_df$expected_stage2))
+sum(is.na(ratios_df$expected))
 sum(is.na(ratios_df$person_years))
 ```
 
 ```{r}
-write_rds(ratios_df, "data/symlinks/scratch/", outcome, "-dual_ratios_df.rds")
+write_rds(ratios_df, paste0("data/symlinks/scratch/", outcome, "-dual_ratios_df.rds"))
 ```
