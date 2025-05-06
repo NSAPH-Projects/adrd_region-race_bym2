@@ -16,14 +16,14 @@ data {
   // data size and outcomes
   int<lower = 1> n;           // Number of counties
   int<lower = 1> s;           // Number of states
-  int<lower = 1> m;           // Number of obs (2 * n) NEW
-  int<lower = 0> y[m];        // Observed values UPDATED
-  vector[m] log_offset;       // log offset for each obs y UPDATED
-  matrix[m, s] state_mat_idx; // State indicators correspond to y UPDATED
-  vector[m] d1_idx;           // Race 1 indicator corresponding to y NEW
-  vector[m] d2_idx;           // Race 2 indicator corresponding to y NEW
+  int<lower = 1> m;           // Number of obs (2 * n)
+  int<lower = 0> y[m];        // Observed values
+  vector[m] log_offset;       // log offset for each obs y
+  matrix[m, s] state_mat_idx; // State indicators correspond to y
+  vector[m] d1_idx;           // Race 1 indicator corresponding to y
+  vector[m] d2_idx;           // Race 2 indicator corresponding to y
   
-  int<lower=1, upper=n> c_idx[m];  // maps each observation to a county NEW
+  int<lower=1, upper=n> c_idx[m];  // maps each observation to a county
   
   // adjacency matrix
   int W_n;                    // Number of edges
