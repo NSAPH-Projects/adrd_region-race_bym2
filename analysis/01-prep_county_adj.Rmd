@@ -9,7 +9,6 @@ Description:
 - Outcome: hospitalizations with or without ADRD (sex-age standardized & sex-age-dual standardized)
 - Ensure counties match in all objects
 - Merge in geometry
-- Merge in PM2.5 & house-price-to-income ratio data for adjusted models (not presented in paper)
 - Remove counties with zero Black person-years (must do before creating adjacency matrix)
 - Create county adjacency matrix
 
@@ -201,124 +200,16 @@ setdiff(counties_adj_, counties_)
 ```
 
 
-## House-price-to-income ratio data
-
-* year 2000
-
-```{r}
-# full path: "/n/dominici_nsaph_l3/Lab/data/confounders/data_for_analysis/prepped_census/census_county_interpolated.csv"
-census_county_df <- read_csv("data/symlinks/prepped_census/census_county_interpolated.csv") %>% 
-  rename(county = fips) %>% 
-  mutate(county = as.numeric(county), 
-         state = round(county / 1000)) %>% 
-  filter(!state %in% c(2, 15, 66, 72, 60, 69, 78))
-
-census_county_2000_df <- census_county_df %>% 
-  filter(year == 2000, 
-         !is.na(median_household_income),
-         !is.na(median_house_value)) 
-
-counties_census_ = unique(census_county_2000_df$county)
-
-length(counties_census_)
-setdiff(counties_census_, counties_adj_) #46102
-setdiff(counties_adj_, counties_census_) #46113
-```
-
-```{r}
-census_county_2000_df$county[census_county_2000_df$county == 46102] <- 46113
-sum(is.na(census_county_2000_df$median_household_income))
-sum(is.na(census_county_2000_df$median_house_value))
-```
-
-* year 2010
-
-```{r}
-census_county_2010_df <- census_county_df %>% 
-  filter(year == 2010, 
-         !is.na(median_household_income),
-         !is.na(median_house_value)) 
-
-counties_census_ = unique(census_county_2010_df$county)
-
-length(counties_census_)
-setdiff(counties_census_, counties_adj_) #46102
-setdiff(counties_adj_, counties_census_) #46113
-```
-
-```{r}
-census_county_2010_df$county[census_county_2010_df$county == 46102] <- 46113
-sum(is.na(census_county_2010_df$median_household_income))
-sum(is.na(census_county_2010_df$median_house_value))
-```
-
-```{r}
-# get table with 2000, 2010, and mean for median household income and median house value
-median_household_df <- census_county_2000_df %>% 
-  rename(med_house_income_2000 = median_household_income,
-         med_house_value_2000 = median_house_value) %>% 
-  select(county, med_house_income_2000, med_house_value_2000) %>% 
-  left_join(
-    census_county_2010_df %>% 
-    rename(med_house_income_2010 = median_household_income,
-           med_house_value_2010 = median_house_value) %>% 
-    select(county, med_house_income_2010, med_house_value_2010)
-  ) 
-
-# get mean of 2000 and 2010, and get housing price to income (HPI) ratio
-median_household_df %<>%
-  mutate(
-    med_house_income = (med_house_income_2000 + med_house_income_2010)/2,
-    med_house_value = (med_house_value_2000 + med_house_value_2010)/2,
-    house_price_income_ratio = med_house_value/med_house_income
-  )
-```
 
 
-## PM2.5 data
 
-```{r, echo=FALSE, message=FALSE}
-# full path: "/n/dominici_lab_ro/lab/data/exposures/exposure/pm25/whole_us/annual/counties/county_rm/data/county_pm25_2000.csv"
-pollution_county_df <- read_csv("data/symlinks/county_rm/data/county_pm25_2000.csv")
-years_ <- 2000:2018
-for(y_ in years_) {
-  pollution_county_df <- rbind(pollution_county_df, 
-                               read_csv(paste0("data/symlinks/county_rm/data/county_pm25_", y_, ".csv")))
-}
-pollution_county_df %<>% 
-  group_by(fips) %>% 
-  summarise(pm25 = mean(pm25))
-```
 
-```{r}
-pollution_county_df %<>% 
-  rename(county = fips) %>% 
-  mutate(county = as.numeric(county), 
-         state = round(county / 1000)) %>% 
-  filter(!state %in% c(2, 15, 66, 72, 60, 69, 78))
 
-counties_pollution_ = unique(pollution_county_df$county)
 
-length(counties_pollution_)
-setdiff(counties_pollution_, counties_adj_) #46102
-setdiff(counties_adj_, counties_pollution_) #46113
-```
 
-```{r}
-pollution_county_df$county[pollution_county_df$county == 46102] <- 46113
-```
 
-* merge datasets
 
-```{r}
-county_df %<>%
-  left_join(
-    median_household_df %>% select(county, med_house_income, house_price_income_ratio)
-  ) %>% 
-  left_join(
-    pollution_county_df %>% select(county, pm25)
-  )
-```
+
 
 ```{r}
 lapply(county_df, summary)
