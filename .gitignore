@@ -2,6 +2,7 @@
 /results/models/
 /logs/
 /data/intermediate
+/data/models
 /old
 /analysis/old
 **/archive/**
