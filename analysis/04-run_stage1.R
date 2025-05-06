@@ -9,12 +9,12 @@ library(rstan)
 ########## user input ########## 
 
 # outcome (adrd or nonadrd)
-outcome <- "adrd"
-#outcome <- "nonadrd"
+#outcome <- "adrd"
+outcome <- "nonadrd"
 
 # incorporating Medicaid eligibility into expected counts?
-#dual <- TRUE # standardize by sex, age, Medicaid
-dual <- FALSE # standardize by sex, age
+dual <- TRUE # standardize by sex, age, Medicaid
+#dual <- FALSE # standardize by sex, age
 
 #------------------------------------#
 
@@ -23,11 +23,7 @@ paste0(outcome)
 paste0("dual = ", dual)
 
 # get path to location to store model
-if(dual){
-  path_mod <- paste0("data/models/stage1/sensitivity/", outcome, "/")
-} else {
-  path_mod <- paste0("data/models/stage1/main/", outcome, "/")
-}
+path_mod <- paste0("data/models/stage1/")
 
 # path to stan program
 stan_file <- "stan_programs/model_stage1.stan"
@@ -52,8 +48,14 @@ get_random_seed <-
 tstamp <- format(Sys.time(), format = "%Y%m%d-%H%M")
 
 # make directories to store the results
-mkdir_p(paste0(path_mod, 'model_run_', tstamp))
-random_seed <- get_random_seed(paste0(path_mod, 'model_run_', tstamp, '/seed.rds'))
+
+if(dual){
+  dir_tstamp <- paste0(path_mod, outcome, '-dual_model_run_', tstamp)
+} else {
+  dir_tstamp <- paste0(path_mod, outcome, '_model_run_', tstamp)
+}
+mkdir_p(dir_tstamp)
+random_seed <- get_random_seed(paste0(dir_tstamp, '/seed.rds'))
 model_name <- 'model'
 
 # print tstamp and model (so sbatch output can be linked to model results)
@@ -142,7 +144,7 @@ stan_list  <-
 
 ## copy stan file into model_run ----
 # path for new file
-temp_stan_file <- paste0(path_mod, 'model_run_', tstamp, '/temp_file.stan')
+temp_stan_file <- paste0(dir_tstamp, '/temp_file.stan')
 # copy stan file (in analysis folder) into a new file at this path
 file.copy(stan_file, temp_stan_file)
 
@@ -150,26 +152,26 @@ rstan_options(auto_write = TRUE)
 options(mc.cores = parallel::detectCores())
 
 fit <- stan(
-    file = temp_stan_file,
-    data = stan_list, 
-    thin = n_thin,
-    iter = n_iter,
-    warmup = n_burnin,
-    chains = 4, 
-    verbose = verbose_flag,
-    save_dso = TRUE,
-    seed = 1, 
-    refresh = n_iter / 100,
-    # sample files to avoid storing everything in memory
-    sample_file = paste0(path_mod, '/model_run_', tstamp, '/sample_file')
+  file = temp_stan_file,
+  data = stan_list, 
+  thin = n_thin,
+  iter = n_iter,
+  warmup = n_burnin,
+  chains = 4, 
+  verbose = verbose_flag,
+  save_dso = TRUE,
+  seed = 1, 
+  refresh = n_iter / 100,
+  # sample files to avoid storing everything in memory
+  sample_file = paste0(dir_tstamp, '/sample_file')
 )
 
 
 # write stanfit object
 if(dual){
-  write_rds(fit, paste0(path_mod, 'model_run_', tstamp, '/stanfit_object_stage1_', outcome, '.rds'))
+  write_rds(fit, paste0(dir_tstamp, '/stanfit_object_stage1_', outcome, '.rds'))
 } else {
-  write_rds(fit, paste0(path_mod, 'model_run_', tstamp, '/stanfit_object_stage1_', outcome, '-dual.rds'))
+  write_rds(fit, paste0(dir_tstamp, '/stanfit_object_stage1_', outcome, '-dual.rds'))
 }
 
 
@@ -178,4 +180,4 @@ if(dual){
 file.remove(temp_stan_file)
 # compiled model
 # this path will be the same as temp_stan_file but ends in dot rds instead of dot stan
-file.remove(paste0(path_mod, 'model_run_', tstamp, '/temp_file.rds'))
+file.remove(paste0(dir_tstamp, '/temp_file.rds'))
