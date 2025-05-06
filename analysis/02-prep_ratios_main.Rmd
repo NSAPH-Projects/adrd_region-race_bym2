@@ -247,11 +247,7 @@ obs_df <- county_df %>%
     dplyr::group_by(county, race, sex, age_grp) %>% # county, race, sex, age_grp
     dplyr::summarize(n_enrollees = sum(n_enrollees),
                      n_admissions = sum(n_admissions), 
-                     obs_rate = n_admissions / n_enrollees,
-                     # HPI and PM2.5 are the same across all years
-                     med_house_income = first(med_house_income),
-                     house_price_income_ratio = first(house_price_income_ratio),
-                     pm25 = mean(pm25))
+                     obs_rate = n_admissions / n_enrollees)
 
 ## fill NAs
 obs_df %>% 
@@ -307,11 +303,7 @@ ratios_df %<>%
   dplyr::summarize(
     person_years = sum(n_enrollees),
     expected = sum(expected), 
-    observed = sum(observed),
-    # HPI and PM2.5 are the same across all years --> just take mean
-    med_house_income = mean(med_house_income),
-    house_price_income_ratio = mean(house_price_income_ratio),
-    pm25 = mean(pm25)) %>%
+    observed = sum(observed)) %>%
   dplyr::ungroup()
 ```
 
@@ -360,31 +352,6 @@ sum(is.na(ratios_df$observed))
 sum(is.na(ratios_df$expected))
 sum(is.na(ratios_df$person_years))
 ```
-
-## Look at PM2.5 and house-price-to-income ratio distributions
-
-```{r}
-# # PM2.5 distribution by race (weighted by person-years)
-# ratios_df %>%
-#   mutate(race = case_when(
-#     race == 1 ~ "White",
-#     race == 2 ~ "Black"
-#   )) %>%
-#   ggplot(aes(pm25, weight = person_years, col = (race))) +
-#   geom_density() +
-#   labs(x = "PM2.5", y = "Density", col = "")
-# 
-# # HPI ratio distribution by race (weighted by person-years)
-# ratios_df %>%
-# mutate(race = case_when(
-#     race == 1 ~ "White",
-#     race == 2 ~ "Black"
-#   )) %>%
-#   ggplot(aes(house_price_income_ratio, weight = person_years, col = factor(race))) +
-#   geom_density(bw = 0.4) +
-#   labs(x = "House-price-income ratio", y = "Density", col = "")
-```
-
 
 ```{r}
 write_rds(ratios_df, paste0("data/symlinks/scratch/", outcome, "_ratios_df.rds"))

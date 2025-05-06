@@ -241,11 +241,7 @@ obs_df <- county_df %>%
     dplyr::group_by(county, race, sex, age_grp, dual) %>% #county, race, sex, age_grp, dual
     dplyr::summarize(n_enrollees = sum(n_enrollees),
                      n_admissions = sum(n_admissions), 
-                     obs_rate = n_admissions / n_enrollees,
-                     # HPI and PM2.5 are the same across all years
-                     med_house_income = first(med_house_income),
-                     house_price_income_ratio = first(house_price_income_ratio),
-                     pm25 = mean(pm25))
+                     obs_rate = n_admissions / n_enrollees)
 
 ## fill NAs
 obs_df %>% 
@@ -305,11 +301,7 @@ ratios_df %<>%
   dplyr::summarize(
     person_years = sum(n_enrollees),
     expected = sum(expected), 
-    observed = sum(observed),
-    # HPI and PM2.5 are the same across all years --> just take mean
-    med_house_income = mean(med_house_income),
-    house_price_income_ratio = mean(house_price_income_ratio),
-    pm25 = mean(pm25)) %>%
+    observed = sum(observed)) %>%
   dplyr::ungroup()
 ```
 
