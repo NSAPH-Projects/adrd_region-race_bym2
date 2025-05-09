@@ -71,9 +71,9 @@ verbose_flag <- FALSE
 ## Load data ----
 
 if(dual){
-  ratios_df <- read_rds(paste0("data/symlinks/scratch/", outcome_to_run, "-dual_ratios_df.rds"))
+  ratios_df <- read_rds(paste0("data/symlinks/scratch/", outcome, "-dual_ratios_df.rds"))
 } else {
-  ratios_df <- read_rds(paste0("data/symlinks/scratch/", outcome_to_run, "_ratios_df.rds"))
+  ratios_df <- read_rds(paste0("data/symlinks/scratch/", outcome, "_ratios_df.rds"))
 }
 
 # load county adjacency
@@ -125,7 +125,7 @@ stan_list  <-
     # population_years
     y = ratios_df$observed,
     # log of expected
-    log_offset = log(ratios_df$expected_stage2),
+    log_offset = log(ratios_df$expected),
     
     # m*s matrix with state indicators
     state_mat_idx = state_mat,
@@ -178,9 +178,9 @@ fit <- stan(
 
 # write stanfit object
 if(dual){
-  write_rds(fit, paste0(dir_tstamp, '/stanfit_object_stage2_', outcome, '.rds'))
-} else {
   write_rds(fit, paste0(dir_tstamp, '/stanfit_object_stage2_', outcome, '-dual.rds'))
+} else {
+  write_rds(fit, paste0(dir_tstamp, '/stanfit_object_stage2_', outcome, '.rds'))
 }
 
 
