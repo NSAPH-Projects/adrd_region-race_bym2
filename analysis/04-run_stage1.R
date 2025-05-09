@@ -169,9 +169,9 @@ fit <- stan(
 
 # write stanfit object
 if(dual){
-  write_rds(fit, paste0(dir_tstamp, '/stanfit_object_stage1_', outcome, '.rds'))
-} else {
   write_rds(fit, paste0(dir_tstamp, '/stanfit_object_stage1_', outcome, '-dual.rds'))
+} else {
+  write_rds(fit, paste0(dir_tstamp, '/stanfit_object_stage1_', outcome, '.rds'))
 }
 
 
