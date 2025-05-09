@@ -13,8 +13,8 @@ library(rstan)
 outcome <- "nonadrd"
 
 # incorporating Medicaid eligibility into expected counts?
-dual <- TRUE # standardize by sex, age, Medicaid
-#dual <- FALSE # standardize by sex, age
+#dual <- TRUE # standardize by sex, age, Medicaid
+dual <- FALSE # standardize by sex, age
 
 #------------------------------------#
 
@@ -63,7 +63,7 @@ paste0("Model time stamp: ", tstamp)
 
 ##  Run parameters
 n_chains <- 4
-n_iter <- 20000
+n_iter <- 40000
 n_burnin <- floor(n_iter / 2)
 n_thin <- 40
 verbose_flag <- FALSE
