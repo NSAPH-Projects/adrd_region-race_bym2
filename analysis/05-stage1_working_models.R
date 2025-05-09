@@ -3,13 +3,14 @@
 # This allows me to fit lots of models and keep track of which ones I'm currently using
 
 
-models <- c(paste0("data/models/stage1/", c("adrd_model_run_20250506-1610",
-                                            "adrd-dual_model_run_20250506-1610",
-                                            "nonadrd_model_run_20250506-1610",
-                                            "nonadrd-dual_model_run_20250506-1611")))
+models <- c(paste0("data/models/stage1/", 
+                   c("adrd_model_run_20250506-1610/stanfit_object_stage1_adrd.rds",
+                     "adrd-dual_model_run_20250506-1610/stanfit_object_stage1_adrd-dual.rds",
+                     "nonadrd_model_run_20250506-1610/stanfit_object_stage1_nonadrd.rds",
+                     "nonadrd-dual_model_run_20250506-1611/stanfit_object_stage1_nonadrd-dual.rds")))
 
 # copy all of these models into the working folder
-file.copy(models, "results/models/working", overwrite = TRUE)
+file.copy(models, "data/models/working", overwrite = TRUE)
 
 
 
