@@ -19,6 +19,7 @@ library(kableExtra)
 library(xtable)
 library(tigris)
 library(ggthemes)
+library(ggplot2)
 ```
 
 ```{r}
@@ -29,33 +30,23 @@ dual <- TRUE
 
 ```
 
-## Load data for adrd and hosp
+## Load data for adrd and nonadrd
 
 ```{r}
 
 # set path for saving figures
 fig_path <- "results/figures/final/"
 
-# choose which model to use
-model <- "m1"
-
 ## Read data ----
 
 # model results
 if(dual){
   adrd_res <- read_rds("data/intermediate/adrd-dual_model_results.rds")
-  hosp_res <- read_rds("data/intermediate/hosp-dual_model_results.rds")
-  allc_res <- read_rds("data/intermediate/allc-dual_model_results.rds")
+  nonadrd_res <- read_rds("data/intermediate/nonadrd-dual_model_results.rds")
 } else {
   adrd_res <- read_rds("data/intermediate/adrd_model_results.rds")
-  hosp_res <- read_rds("data/intermediate/hosp_model_results.rds")
-  allc_res <- read_rds("data/intermediate/allc_model_results.rds")
+  nonadrd_res <- read_rds("data/intermediate/nonadrd_model_results.rds")
 }
-
-# filter to model 1 results
-adrd_res <- adrd_res[[paste0("adrd_", model)]]
-hosp_res <- hosp_res[[paste0("hosp_", model)]]
-allc_res <- allc_res[[paste0("allc_", model)]]
 
 # non-modeled data
 
@@ -64,45 +55,23 @@ county_sf <- read_rds("data/symlinks/scratch/county_sf.rds")
 # race-specific data
 if(dual){
   adrd_ratios_df <- read_rds('data/symlinks/scratch/adrd-dual_ratios_df.rds')
-  hosp_ratios_df <- read_rds('data/symlinks/scratch/hosp-dual_ratios_df.rds')
-  allc_ratios_df <- read_rds('data/symlinks/scratch/allc-dual_ratios_df.rds')
+  nonadrd_ratios_df <- read_rds('data/symlinks/scratch/nonadrd-dual_ratios_df.rds')
 } else {
   adrd_ratios_df <- read_rds('data/symlinks/scratch/adrd_ratios_df.rds')
-  hosp_ratios_df <- read_rds('data/symlinks/scratch/hosp_ratios_df.rds')
-  allc_ratios_df <- read_rds('data/symlinks/scratch/allc_ratios_df.rds')
-}
-
-# overall (races combined) data
-if(dual){
-  adrd_ratios_df_comb <- read_rds('data/symlinks/scratch/adrd-dual_combined_data.rds')
-  hosp_ratios_df_comb <- read_rds('data/symlinks/scratch/hosp-dual_combined_data.rds')
-  allc_ratios_df_comb <- read_rds('data/symlinks/scratch/allc-dual_combined_data.rds')
-} else {
-  adrd_ratios_df_comb <- read_rds('data/symlinks/scratch/adrd_combined_data.rds')
-  hosp_ratios_df_comb <- read_rds('data/symlinks/scratch/hosp_combined_data.rds')
-  allc_ratios_df_comb <- read_rds('data/symlinks/scratch/allc_combined_data.rds')
+  nonadrd_ratios_df <- read_rds('data/symlinks/scratch/nonadrd_ratios_df.rds')
 }
 
 # combine data sources for each outcome
 adrd_res_df <- adrd_res %>%
-  right_join(adrd_ratios_df_comb) %>%
   right_join(adrd_ratios_df)
-hosp_res_df <- hosp_res %>%
-  right_join(hosp_ratios_df_comb) %>%
-  right_join(hosp_ratios_df)
-allc_res_df <- allc_res %>%
-  right_join(allc_ratios_df_comb) %>%
-  right_join(allc_ratios_df)
+nonadrd_res_df <- nonadrd_res %>%
+  right_join(nonadrd_ratios_df)
 
 # join adrd and hosp (note new suffixes)
-pos_med <- merge(adrd_res_df, hosp_res_df, all = TRUE, 
+pos_med <- merge(adrd_res_df, nonadrd_res_df, all = TRUE, 
                  by = c("county", "race", "black", "c_idx", "s_idx", "person_years", 
-                        "fipschar", "fips_st", "house_price_income_ratio", "pm25",
-                        "med_house_income", "person_years_total"),
-                 suffixes = c("_adrd", "_hosp"))
-
-# now join with all-cause too (the all-cause columns won't have suffixes)
-pos_med <- merge(pos_med, allc_res_df, all = TRUE)
+                        "fipschar", "fips_st"),
+                 suffixes = c("_adrd", "_nonadrd"))
 
 # join with county geometry
 pos_med_sf <- county_sf %>% 
@@ -147,26 +116,6 @@ race_labels <- c(
 ```
 
 ## Generally understand the data
-
-```{r}
-# map of single county (Clark County, Nevada) for expected counts diagram
-pos_med_sf %>%
-  group_by(county) %>%
-  mutate(county_a = ifelse(county == "32003", "yes", "no")) %>%
-  ggplot() +
-  geom_sf(aes(fill = county_a), lwd = 0.1) +
-  geom_sf(data = county_sf_zero_b, fill = "white", lwd = 0.1) +
-  geom_sf(data = state_sf, fill = NA, col = "black", lwd = 0.3) +
-  scale_fill_manual(values = c("yes" = "dodgerblue", "no" = "white")) +
-  theme_map() +
-  theme(legend.position = "none")
-ggsave(file = paste0(fig_path, "clark_county.pdf"), width = 8, height = 5)
-
-clark <- pos_med_sf %>%
-  filter(county == "32003")
-
-
-```
 
 ```{r}
 # plot % of person-years contributed by black people in each county
@@ -338,36 +287,36 @@ ggsave(file = paste0(fig_path, "zero_black_py.pdf"), width = 5, height = 3)
 
 ```{r}
 
-if(!dual){
-  # get ADRD table
-  adrd_exp_rates <- read_rds(paste0("results/tables/intermediate/adrd_expected_rates.rds")) |>
-    rename("ADRD rate (White)" = `Rate (White)`,
-           "ADRD rate (Black)" = `Rate (Black)`,
-           "ADRD rate (overall)" = `Rate (overall)`)
-  
-  # get hosp table
-  hosp_exp_rates <- read_rds(paste0("results/tables/intermediate/hosp_expected_rates.rds")) |>
-    rename("Non-ADRD rate (White)" = `Rate (White)`,
-           "Non-ADRD rate (Black)" = `Rate (Black)`,
-           "Non-ADRD rate (overall)" = `Rate (overall)`)
-  
-  # join ADRD and hosp
-  exp_rates_tab <- left_join(adrd_exp_rates, hosp_exp_rates)
-  
-  # change col names (can have duplicates)
-  names(exp_rates_tab) <- c("Sex", "Age group", 
-                            "White", "Black", "Overall",
-                            "White", "Black", "Overall")
-  
-  # format in kable with header over cols
-  exp_rates_tab_latex <- kable(exp_rates_tab, "latex", 
-        booktabs = TRUE) %>%
-    add_header_above(c(" " = 2, "ADRD rate" = 3, "Non-ADRD rate" = 3))
-  
-  writeLines(exp_rates_tab_latex, "results/tables/final/national_rates.tex")
-  # note: remove \addlinespace from the resulting table
-  # also need to add begin table and end table and centering
-}
+# if(!dual){
+#   # get ADRD table
+#   adrd_exp_rates <- read_rds(paste0("results/tables/intermediate/adrd_expected_rates.rds")) |>
+#     rename("ADRD rate (White)" = `Rate (White)`,
+#            "ADRD rate (Black)" = `Rate (Black)`,
+#            "ADRD rate (overall)" = `Rate (overall)`)
+#   
+#   # get hosp table
+#   hosp_exp_rates <- read_rds(paste0("results/tables/intermediate/hosp_expected_rates.rds")) |>
+#     rename("Non-ADRD rate (White)" = `Rate (White)`,
+#            "Non-ADRD rate (Black)" = `Rate (Black)`,
+#            "Non-ADRD rate (overall)" = `Rate (overall)`)
+#   
+#   # join ADRD and hosp
+#   exp_rates_tab <- left_join(adrd_exp_rates, hosp_exp_rates)
+#   
+#   # change col names (can have duplicates)
+#   names(exp_rates_tab) <- c("Sex", "Age group", 
+#                             "White", "Black", "Overall",
+#                             "White", "Black", "Overall")
+#   
+#   # format in kable with header over cols
+#   exp_rates_tab_latex <- kable(exp_rates_tab, "latex", 
+#         booktabs = TRUE) %>%
+#     add_header_above(c(" " = 2, "ADRD rate" = 3, "Non-ADRD rate" = 3))
+#   
+#   writeLines(exp_rates_tab_latex, "results/tables/final/national_rates.tex")
+#   # note: remove \addlinespace from the resulting table
+#   # also need to add begin table and end table and centering
+# }
 
 
 ```
@@ -378,11 +327,7 @@ if(!dual){
 ```{r}
 # get a new column for observed ADRD / observed all-cause (as %)
 pos_med_sf %<>%
-  mutate(adrd_pct = (observed_adrd / (observed)) * 100)
-
-# pos_med_sf %<>%
-#   mutate(adrd_pct = (observed_adrd / (observed_adrd + observed_hosp)) * 100)
-
+  mutate(adrd_pct = (observed_adrd / (observed_adrd + observed_nonadrd)) * 100)
 
 # note that 93 counties have zero total hospitalizations among black people
 # so we get 0/0 (undefined/NaN) for these rows
@@ -395,8 +340,8 @@ pos_med_sf %>%
   st_drop_geometry() %>%
   group_by(race) %>%
   summarise(total_adrd = sum(observed_adrd),
-            total_hosp = sum(observed_hosp)) %>%
-  mutate(adrd_pct = total_adrd / (total_adrd + total_hosp))
+            total_nonadrd = sum(observed_nonadrd)) %>%
+  mutate(adrd_pct = total_adrd / (total_adrd + total_nonadrd))
 ```
 
 ```{r}
@@ -433,7 +378,7 @@ pos_med_sf |>
   mutate(adrd_pct = ifelse(adrd_pct > 25, 25, adrd_pct)) |>
   mutate(adrd_pct = ifelse(adrd_pct < 5, 5, adrd_pct)) |>
   # exclude counties with < 1000 person-years
-  mutate(adrd_pct = ifelse(person_years < 1000, NA, adrd_pct)) |>
+  #mutate(adrd_pct = ifelse(person_years < 1000, NA, adrd_pct)) |>
   ggplot() +
   geom_sf(aes(fill = adrd_pct), lwd = 0.05) +
   geom_sf(data = state_sf, fill = NA, col = "black", lwd = 0.1) +
@@ -454,8 +399,8 @@ pos_med_sf |>
                      guide = guide_colorbar(ticks = FALSE,
                                             barwidth = 12, barheight = 0.5,
                                             title.position = "top"))
-#ggsave(paste0(fig_path, "pct_adrd_map.png"), width = 5, height = 3, dpi = 1000)
-ggsave(paste0(fig_path, "pct_adrd_map_1000.png"), width = 5, height = 3, dpi = 1000)
+ggsave(paste0(fig_path, "pct_adrd_map.png"), width = 5, height = 3, dpi = 1000)
+#ggsave(paste0(fig_path, "pct_adrd_map_1000.png"), width = 5, height = 3, dpi = 1000)
 
 
 # weird that oglala is the one that stands out, but the data all makes sense
@@ -503,11 +448,11 @@ b <- pos_med_sf %>%
 
 c <- pos_med_sf %>%
   filter(adrd_pct == 0) %>%
-  select(county, observed_adrd, observed_hosp, person_years)
+  select(county, observed_adrd, observed_nonadrd, person_years)
 
 d <- pos_med_sf %>%
   filter(is.na(adrd_pct)) %>%
-  select(county, observed_adrd, observed_hosp, person_years)
+  select(county, observed_adrd, observed_nonadrd, person_years)
 
 ```
 
@@ -622,7 +567,7 @@ d <- pos_med_sf %>%
 pos_med_sf %>%
   st_drop_geometry() %>%
   filter(race == 1) %>% # choose one race for risk ratios
-  gather(key = "outcome", "risk_ratio", risk_ratio_adrd, risk_ratio_hosp) %>%
+  gather(key = "outcome", "risk_ratio", risk_ratio_adrd, risk_ratio_nonadrd) %>%
   mutate(outcome = ifelse(outcome == "risk_ratio_adrd", 
                           "ADRD", "Non-ADRD")) %>%
   mutate(outcome = factor(outcome, levels = c("Non-ADRD", "ADRD"))) %>%
@@ -648,7 +593,7 @@ if(dual){
 # how many counties have both risk ratios < 1?
 both_rr_less1 <- pos_med_sf %>%
   filter(race == 1) %>%
-  filter(risk_ratio_adrd < 1 & risk_ratio_hosp < 1)
+  filter(risk_ratio_adrd < 1 & risk_ratio_nonadrd < 1)
 ```
 
 ```{r}
@@ -855,20 +800,20 @@ sig_rr <- 0
 
 # get risk ratios for ADRD and hosp in the same plot
 if(dual){
-  adrd_risk_ratios_map <- read_rds(paste0("results/figures/intermediate/adrd-dual_risk_ratio_maps_", 
-                                          sig_rr, ".rds"))
-  hosp_risk_ratios_map <- read_rds(paste0("results/figures/intermediate/hosp-dual_risk_ratio_maps_",
-                                          sig_rr, ".rds"))
+  adrd_risk_ratios_map <- 
+    read_rds(paste0("results/figures/intermediate/adrd-dual_risk_ratio_maps_", sig_rr, ".rds"))
+  nonadrd_risk_ratios_map <- 
+    read_rds(paste0("results/figures/intermediate/nonadrd-dual_risk_ratio_maps_", sig_rr, ".rds"))
 } else {
-  adrd_risk_ratios_map <- read_rds(paste0("results/figures/intermediate/adrd_risk_ratio_maps_", 
-                                          sig_rr, ".rds"))
-  hosp_risk_ratios_map <- read_rds(paste0("results/figures/intermediate/hosp_risk_ratio_maps_", 
-                                          sig_rr, ".rds"))
+  adrd_risk_ratios_map <- 
+    read_rds(paste0("results/figures/intermediate/adrd_risk_ratio_maps_", sig_rr, ".rds"))
+  nonadrd_risk_ratios_map <- 
+    read_rds(paste0("results/figures/intermediate/nonadrd_risk_ratio_maps_", sig_rr, ".rds"))
 }
 
 # plot ADRD and non-ADRD
 rr_maps <- ggarrange(adrd_risk_ratios_map, 
-                     hosp_risk_ratios_map, 
+                     nonadrd_risk_ratios_map, 
                      common.legend = TRUE, legend = "bottom", nrow = 1) +
   theme(plot.background = element_rect(fill = "white", color = NA))
 rr_maps
@@ -1036,7 +981,8 @@ if(dual){
 pos_med_sf %>%
   st_drop_geometry() %>%
   filter(race == 1) %>%
-  count(risk_ratio_adrd > risk_ratio_hosp)
+  count(risk_ratio_adrd > risk_ratio_nonadrd) %>%
+  mutate(pcnt = n / sum(n) * 100)
 ```
 
 ```{r}
@@ -1045,27 +991,22 @@ pos_med_sf %>%
 # load risk ratio posterior distributions so we can test for significance
 if(dual){
   adrd_rr <- read_rds('data/intermediate/adrd-dual_risk_ratio_post.rds')
-  hosp_rr <- read_rds('data/intermediate/hosp-dual_risk_ratio_post.rds')
-  allc_rr <- read_rds('data/intermediate/allc-dual_risk_ratio_post.rds')
+  nonadrd_rr <- read_rds('data/intermediate/nonadrd-dual_risk_ratio_post.rds')
 } else {
   adrd_rr <- read_rds('data/intermediate/adrd_risk_ratio_post.rds')
-  hosp_rr <- read_rds('data/intermediate/hosp_risk_ratio_post.rds')
-  allc_rr <- read_rds('data/intermediate/allc_risk_ratio_post.rds')
+  nonadrd_rr <- read_rds('data/intermediate/nonadrd_risk_ratio_post.rds')
 }
 
 # pivot long
 adrd_rr_long <- adrd_rr %>% 
   pivot_longer(cols = everything(), names_to = "county", values_to = "adrd_rr")
-hosp_rr_long <- hosp_rr %>% 
-  pivot_longer(cols = everything(), names_to = "county", values_to = "hosp_rr")
-allc_rr_long <- allc_rr %>% 
-  pivot_longer(cols = everything(), names_to = "county", values_to = "allc_rr")
+nonadrd_rr_long <- nonadrd_rr %>% 
+  pivot_longer(cols = everything(), names_to = "county", values_to = "nonadrd_rr")
 
 
 # join
 rr_df <- cbind.data.frame(adrd_rr_long, # county and adrd_rr columns
-                          hosp_rr = hosp_rr_long$hosp_rr,
-                          allc_rr = allc_rr_long$allc_rr)
+                          nonadrd_rr = nonadrd_rr_long$nonadrd_rr)
 
 # # get a column for adrd RR - hosp RR
 # rr_df <- rr_df %>%
@@ -1091,8 +1032,8 @@ rr_df <- merge(rr_df, tigris_fips, by = "county", all.x = TRUE)
 rr_ttests <- rr_df %>%
   group_by(county) %>%
   summarise(
-    mean_adrd_minus_hosp = mean(adrd_rr) - mean(hosp_rr),
-    t_test = list(t.test(adrd_rr, hosp_rr, alternative = "two.sided", paired = FALSE)),
+    mean_adrd_minus_nonadrd = mean(adrd_rr) - mean(nonadrd_rr),
+    t_test = list(t.test(adrd_rr, nonadrd_rr, alternative = "two.sided", paired = FALSE)),
     t_statistic = t_test[[1]]$statistic,
     p_value = t_test[[1]]$p.value
   ) %>%
@@ -1102,8 +1043,8 @@ rr_ttests <- rr_df %>%
 
 # get significance indicators
 rr_ttests <- rr_ttests %>%
-  mutate(sig_cat = ifelse(mean_adrd_minus_hosp > 0 & p_val_sig_bonf, "adrd_larger", 
-                          ifelse(mean_adrd_minus_hosp < 0 & p_val_sig_bonf, "hosp_larger", NA)))
+  mutate(sig_cat = ifelse(mean_adrd_minus_nonadrd > 0 & p_val_sig_bonf, "adrd_larger", 
+                          ifelse(mean_adrd_minus_nonadrd < 0 & p_val_sig_bonf, "nonadrd_larger", NA)))
     
 # merge with all other data
 rr_ttests <- merge(pos_med_sf, rr_ttests, by = "county")
@@ -1115,7 +1056,8 @@ rr_ttests <- merge(pos_med_sf, rr_ttests, by = "county")
 rr_ttests %>%
   st_drop_geometry() %>%
   filter(race == 1) %>%
-  count(sig_cat)
+  count(sig_cat) %>%
+  mutate(pcnt = n / sum(n) * 100)
 ```
 
 ```{r}
@@ -1128,11 +1070,11 @@ rr_ttests %>%
   geom_sf(data = state_sf, fill = NA, col = "black", lwd = 0.2) +
   labs(fill = "") +
   scale_fill_manual(values = c("adrd_larger" = "#eea7da", 
-                               "hosp_larger" = "#ffffbc"),
+                               "nonadrd_larger" = "#ffffbc"),
                     labels = c("adrd_larger" = "ADRD RR significantly > non-ADRD RR", 
-                               "hosp_larger" = "Non-ADRD RR significantly > ADRD RR"),
+                               "nonadrd_larger" = "Non-ADRD RR significantly > ADRD RR"),
                     na.value = "gray40") +
-  theme_map(base_size = 16) +
+  theme_map() +
   theme(#legend.title = element_text(size = 14),
         #legend.text = element_text(size = 14),
         legend.position = "bottom",
@@ -1140,9 +1082,9 @@ rr_ttests %>%
   guides(fill = guide_legend(nrow = 2))
 
 if(dual){
-  ggsave(paste0(fig_path, "adrd_hosp_diff_map_dual.pdf"), width = 8, height = 5)
+  ggsave(paste0(fig_path, "adrd_nonadrd_diff_map_dual.png"), width = 8, height = 5, dpi = 1000)
 } else {
-  ggsave(paste0(fig_path, "adrd_hosp_diff_map.pdf"), width = 8, height = 5)
+  ggsave(paste0(fig_path, "adrd_nonadrd_diff_map.png"), width = 8, height = 5, dpi = 1000)
 }
 ```
 
@@ -1156,36 +1098,15 @@ state_rr <- rr_df %>%
   filter(state != "DC") %>% # remove DC
   summarise(# ADRD
             adrd_mean = mean(adrd_rr), # mean RR
-            adrd_q025 = quantile(adrd_rr, 0.025), # 2.5 %ile
-            adrd_q975 = quantile(adrd_rr, 0.975), # 97.5 %ile
+            adrd_q025 = quantile(adrd_rr, 0.1), # 10 %ile
+            adrd_q975 = quantile(adrd_rr, 0.9), # 90 %ile
             adrd_diff1 = ifelse(adrd_q025 > 1 | adrd_q975 < 1, TRUE, FALSE), # sig diff from 1?
             
-            # adrd_q05 = quantile(adrd_rr, 0.05),
-            # adrd_q95 = quantile(adrd_rr, 0.95),
-            # adrd_g1 = ifelse(adrd_q05 > 1, TRUE, FALSE), # sig >1?
-            # adrd_l1 = ifelse(adrd_q95 < 1, TRUE, FALSE), # sig <1?
-            
             # non-ADRD
-            hosp_mean  = mean(hosp_rr), # mean RR
-            hosp_q025 = quantile(hosp_rr, 0.025), # 2.5 %ile
-            hosp_q975 = quantile(hosp_rr, 0.975), # 97.5 %ile
-            hosp_diff1 = ifelse(hosp_q025 > 1 | hosp_q975 < 1, TRUE, FALSE), # sig diff from 1?
-            
-            # hosp_q05 = quantile(hosp_rr, 0.05),
-            # hosp_q95 = quantile(hosp_rr, 0.95),
-            # hosp_g1 = ifelse(hosp_q05 > 1, TRUE, FALSE), # sig >1?
-            # hosp_l1 = ifelse(hosp_q95 < 1, TRUE, FALSE), # sig <1?
-            
-            # all-cause
-            allc_mean  = mean(allc_rr), # mean RR
-            allc_q025 = quantile(allc_rr, 0.025), # 2.5 %ile
-            allc_q975 = quantile(allc_rr, 0.975), # 97.5 %ile
-            allc_diff1 = ifelse(allc_q025 > 1 | allc_q975 < 1, TRUE, FALSE), # sig diff from 1?
-            
-            # allc_q05 = quantile(allc_rr, 0.05),
-            # allc_q95 = quantile(allc_rr, 0.95),
-            # allc_g1 = ifelse(allc_q05 > 1, TRUE, FALSE), # sig >1?
-            # allc_l1 = ifelse(allc_q95 < 1, TRUE, FALSE), # sig <1?
+            nonadrd_mean  = mean(nonadrd_rr), # mean RR
+            nonadrd_q025 = quantile(nonadrd_rr, 0.1), # 10 %ile
+            nonadrd_q975 = quantile(nonadrd_rr, 0.9), # 90 %ile
+            nonadrd_diff1 = ifelse(nonadrd_q025 > 1 | nonadrd_q975 < 1, TRUE, FALSE), # sig diff from 1?
             
             # # ADRD vs. non-ADRD
             # adrd_minus_hosp_mean = mean(adrd_minus_hosp),
@@ -1201,14 +1122,12 @@ state_rr <- rr_df %>%
             ) %>%
   select(state, state_name,
          adrd_mean, adrd_diff1,
-         hosp_mean, hosp_diff1,
-         allc_mean, allc_diff1)
+         nonadrd_mean, nonadrd_diff1)
 
 
 # stats for paper
 sum(state_rr$adrd_diff1)
-sum(state_rr$hosp_diff1)
-sum(state_rr$allc_diff1)
+sum(state_rr$nonadrd_diff1)
 ```
 
 ```{r}
@@ -1259,17 +1178,17 @@ state_rr$state_name <- factor(state_rr$state_name,
 state_rr %>%
   ggplot(aes(y = state_name)) +
   geom_segment(aes(y = state_name, yend = state_name, 
-                   x = adrd_mean, xend = hosp_mean)) +
+                   x = adrd_mean, xend = nonadrd_mean)) +
   geom_point(aes(x = adrd_mean, 
                  shape = "ADRD",
                  stroke = 2,
                  color = adrd_diff1,
                  size = adrd_diff1)) +
-  geom_point(aes(x = hosp_mean, 
+  geom_point(aes(x = nonadrd_mean, 
                  shape = "Non-ADRD",
                  stroke = 2,
-                 color = hosp_diff1,
-                 size = hosp_diff1)) +
+                 color = nonadrd_diff1,
+                 size = nonadrd_diff1)) +
   scale_color_manual(values = c(`TRUE` = "#eb1f37", `FALSE` = "black")) +
   scale_size_manual(values = c(`TRUE` = 2.5, `FALSE` = 1)) + 
   scale_shape_manual(values = c("ADRD" = 19, "Non-ADRD" = 4),
@@ -1283,9 +1202,9 @@ state_rr %>%
   guides(color = "none", size = "none",
          shape = guide_legend(override.aes = list(size = 3)))
 if(dual){
-  ggsave(paste0(fig_path, "state_rr_vertical_dual.pdf"), width = 8, height = 12)
+  ggsave(paste0(fig_path, "state_rr_dual.pdf"), width = 8, height = 12)
 } else {
-  ggsave(paste0(fig_path, "state_rr_vertical.pdf"), width = 8, height = 12)
+  ggsave(paste0(fig_path, "state_rr.pdf"), width = 8, height = 12)
 }
 
 ```
@@ -1308,8 +1227,8 @@ rr_ttests_state <- rr_df %>%
   filter(state != "DC") %>%
   group_by(state) %>%
   summarise(
-    mean_adrd_minus_hosp = mean(adrd_rr) - mean(hosp_rr),
-    t_test = list(t.test(adrd_rr, hosp_rr, alternative = "two.sided", paired = FALSE)),
+    mean_adrd_minus_nonadrd = mean(adrd_rr) - mean(nonadrd_rr),
+    t_test = list(t.test(adrd_rr, nonadrd_rr, alternative = "two.sided", paired = FALSE)),
     t_statistic = t_test[[1]]$statistic,
     p_value = t_test[[1]]$p.value
   ) %>%
@@ -1323,8 +1242,8 @@ rr_ttests_state <- rr_df %>%
 wv <- rr_df %>% filter(state == "WV")
 
 wv %>%
-  select(adrd_rr, hosp_rr) %>%
-  pivot_longer(cols = c("adrd_rr", "hosp_rr"), names_to = "outcome") %>%
+  select(adrd_rr, nonadrd_rr) %>%
+  pivot_longer(cols = c("adrd_rr", "nonadrd_rr"), names_to = "outcome") %>%
   ggplot() +
   geom_density(aes(value, col = outcome))
 ```
