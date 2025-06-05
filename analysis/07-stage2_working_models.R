@@ -7,8 +7,8 @@
 models <- c(paste0("data/models/stage2/", 
                    c("adrd_model_run_20250508-1426/stanfit_object_stage2_adrd.rds",
                      "adrd-dual_model_run_20250508-1425/stanfit_object_stage2_adrd-dual.rds",
-                     "nonadrd_model_run_20250508-1427/stanfit_object_stage2_nonadrd.rds",
-                     "nonadrd-dual_model_run_20250508-1427/stanfit_object_stage2_nonadrd-dual.rds")))
+                     "nonadrd_model_run_20250513-1430/stanfit_object_stage2_nonadrd.rds",
+                     "nonadrd-dual_model_run_20250513-1436/stanfit_object_stage2_nonadrd-dual.rds")))
 
 # copy all of these models into the working folder
 file.copy(models, "data/models/working", overwrite = TRUE)
