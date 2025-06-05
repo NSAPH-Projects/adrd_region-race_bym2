@@ -15,8 +15,8 @@ Description:
 ########## user input ########## 
 
 # outcome (adrd or nonadrd)
-#outcome <- "adrd"
-outcome <- "nonadrd"
+outcome <- "adrd"
+#outcome <- "nonadrd"
 ```
 
 ```{r, message=FALSE, warning=FALSE}
@@ -83,33 +83,51 @@ county_df %>%
 ```
 
 ```{r}
-# get sex, age, dual distribution of person-years for each race
+#--------- person-years ----------#
 
-# table with % of person-years in white vs. black for each stratum 
-sex_age_dual_dist_tab <- county_df %>%
-  group_by(race, sex, age_grp, dual) %>%
+# by Medicaid eligibility
+
+# total
+county_df %>%
+  group_by(dual) %>%
   summarise(total_py = sum(n_enrollees)) %>%
-  group_by(sex, age_grp, dual) %>%
-  mutate(pct_py = round(100 * total_py / sum(total_py), 1)) %>%
-  mutate(total_pct_py = paste0(scales::comma(round(total_py, 0)), 
-                               " (", pct_py, "\\%)")) %>%
-  group_by(sex, age_grp, dual) %>%
-  mutate(total_white_black_py = scales::comma(sum(total_py))) %>%
-  select(-c(total_py, pct_py)) %>%
-  spread(key = race, value = total_pct_py) %>%
-  ungroup() %>%
-  mutate(sex = ifelse(sex == 1, "Male", "Female"),
-         age_grp = ifelse(age_grp == "[65,75)", "aged 65-74", age_grp),
-         age_grp = ifelse(age_grp == "[75,85)", "aged 75-84", age_grp),
-         age_grp = ifelse(age_grp == ">85", "aged 85+", age_grp),
-         dual = ifelse(dual == 0, "Medicaid ineligible", "Medicaid eligible"),
-         Stratum = paste0(sex, ", ", age_grp, ", ", dual)) %>%
-  arrange(age_grp) %>%
-  rename("White" = `1`,
-         "Black" = `2`,
-         "Total" = total_white_black_py) %>%
-  select(c("Stratum", "White", "Black", "Total"))
-sex_age_dual_dist_tab
+  mutate(pct_py = round(100 * total_py / sum(total_py), 1))
+
+# by race
+county_df %>%
+  group_by(race, dual) %>%
+  summarise(total_py = sum(n_enrollees)) %>%
+  group_by(race) %>%
+  mutate(pct_py = round(100 * total_py / sum(total_py), 1))
+
+
+# # get sex, age, dual distribution of person-years for each race
+# 
+# # table with % of person-years in white vs. black for each stratum 
+# sex_age_dual_dist_tab <- county_df %>%
+#   group_by(race, sex, age_grp, dual) %>%
+#   summarise(total_py = sum(n_enrollees)) %>%
+#   group_by(sex, age_grp, dual) %>%
+#   mutate(pct_py = round(100 * total_py / sum(total_py), 1)) %>%
+#   mutate(total_pct_py = paste0(scales::comma(round(total_py, 0)), 
+#                                " (", pct_py, "\\%)")) %>%
+#   group_by(sex, age_grp, dual) %>%
+#   mutate(total_white_black_py = scales::comma(sum(total_py))) %>%
+#   select(-c(total_py, pct_py)) %>%
+#   spread(key = race, value = total_pct_py) %>%
+#   ungroup() %>%
+#   mutate(sex = ifelse(sex == 1, "Male", "Female"),
+#          age_grp = ifelse(age_grp == "[65,75)", "aged 65-74", age_grp),
+#          age_grp = ifelse(age_grp == "[75,85)", "aged 75-84", age_grp),
+#          age_grp = ifelse(age_grp == ">85", "aged 85+", age_grp),
+#          dual = ifelse(dual == 0, "Medicaid ineligible", "Medicaid eligible"),
+#          Stratum = paste0(sex, ", ", age_grp, ", ", dual)) %>%
+#   arrange(age_grp) %>%
+#   rename("White" = `1`,
+#          "Black" = `2`,
+#          "Total" = total_white_black_py) %>%
+#   select(c("Stratum", "White", "Black", "Total"))
+# sex_age_dual_dist_tab
 ```
 
 ```{r}

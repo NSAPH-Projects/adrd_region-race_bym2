@@ -89,47 +89,51 @@ county_df %>%
 ```
 
 ```{r}
+#--------- person-years ----------#
+
+# total
+county_df %>%
+  summarise(total_py = sum(n_enrollees))
+
+county_df %>%
+  group_by(race) %>%
+  summarise(total_py = sum(n_enrollees)) %>%
+  mutate(pct_py = round(100 * total_py / sum(total_py), 1))
+
+
 # get sex and age distribution of person-years for each race
 
-# table with % of person-years in white vs. black for each stratum 
-sex_age_dist_tab <- county_df %>%
-  group_by(race, sex, age_grp) %>%
+#----- total
+
+# sex
+county_df %>%
+  group_by(sex) %>%
   summarise(total_py = sum(n_enrollees)) %>%
-  group_by(sex, age_grp) %>%
-  mutate(pct_py = round(100 * total_py / sum(total_py), 1)) %>%
-  mutate(total_pct_py = paste0(scales::comma(round(total_py, 0)), 
-                               " (", pct_py, "\\%)")) %>%
-  group_by(sex, age_grp) %>%
-  mutate(total_white_black_py = scales::comma(sum(total_py))) %>%
-  select(-c(total_py, pct_py)) %>%
-  spread(key = race, value = total_pct_py) %>%
-  ungroup() %>%
-  mutate(sex = ifelse(sex == 1, "Male", "Female"),
-         age_grp = ifelse(age_grp == "[65,75)", "aged 65-74", age_grp),
-         age_grp = ifelse(age_grp == "[75,85)", "aged 75-84", age_grp),
-         age_grp = ifelse(age_grp == ">85", "aged 85+", age_grp),
-         Stratum = paste0(sex, ", ", age_grp)) %>%
-  arrange(age_grp) %>%
-  rename("White" = `1`,
-         "Black" = `2`,
-         "Total" = total_white_black_py) %>%
-  select(c("Stratum", "White", "Black", "Total"))
+  mutate(pct_py = round(100 * total_py / sum(total_py), 1))
 
-# write_rds(sex_age_dist_tab, 
-#           file = paste0("results/tables/intermediate/sex_age_dist.rds"))
-# # table written to tex in script 10
+# age
+county_df %>%
+  group_by(age_grp) %>%
+  summarise(total_py = sum(n_enrollees)) %>%
+  mutate(pct_py = round(100 * total_py / sum(total_py), 1))
 
-# # modify first column to include indent (easier for copy/paste)
-# sex_age_dist_tab$Stratum <- paste0("\\hspace{20pt}", sex_age_dist_tab$Stratum)
 
-# # get table in latex
-# # paste this table into the other table in overleaf
-# print(xtable(sex_age_dist_tab, type = "latex"), 
-#       file = "results/tables/final/sex_age_dist.tex", 
-#       sanitize.text.function = identity,
-#       include.rownames = FALSE)
+#----- by race
 
-sex_age_dist_tab
+# sex
+county_df %>%
+  group_by(race, sex) %>%
+  summarise(total_py = sum(n_enrollees)) %>%
+  group_by(race) %>%
+  mutate(pct_py = round(100 * total_py / sum(total_py), 1))
+
+# age
+county_df %>%
+  group_by(race, age_grp) %>%
+  summarise(total_py = sum(n_enrollees)) %>%
+  group_by(race) %>%
+  mutate(pct_py = round(100 * total_py / sum(total_py), 1))
+
 ```
 
 ```{r}
