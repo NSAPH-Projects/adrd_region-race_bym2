@@ -12,28 +12,26 @@ library(magrittr)
 library(bayesplot)
 library(rstan)
 library(ggplot2)
+library(gridExtra)
 ```
 
 ```{r}
 # load all models in working model directory
-stanfit_list <- lapply(paste0("results/models/working/",
-                            list.files("results/models/working/", pattern = ".rds")), read_rds)
+stanfit_list <- lapply(paste0("data/models/working/",
+                            list.files("data/models/working/", pattern = ".rds")), read_rds)
 
 # name list elements
-names(stanfit_list) <- str_remove_all(list.files("results/models/working/", pattern = ".rds"), "stanfit_object_|\\.rds")
+names(stanfit_list) <- str_remove_all(list.files("data/models/working/", pattern = ".rds"), "stanfit_object_|\\.rds")
 
 # # just look at stage 1
 # stanfit_list <- stanfit_list[str_detect(names(stanfit_list), "stage1")]
-
-# just look at model 1
-stanfit_list <- stanfit_list[str_detect(names(stanfit_list), "m1")]
 ```
 
 ```{r}
-# #----- or run this to look at one specific file!
+# #----- or run something like this to look at one specific file!
 # 
 # # e.g.
-# # stanfit_list <- list(read_rds("results/models/adrd/m1/stage1/model_run_20240405-18/stanfit_object.rds"))
+# # stanfit_list <- list(read_rds("data/models/working/adrd_model_run_20250508-1426/stanfit_object_stage2_adrd.rds"))
 
 ```
 
@@ -62,11 +60,8 @@ for (i in seq_along(rhat_plots)) {
   rhat_plots[[i]] <- rhat_plots[[i]] + ggplot2::labs(title = plot_title)
 }
 
-print(rhat_plots)
-
-# # run something like this (with the correct number of plots) to get them all in one figure
-# library(gridExtra)
-# grid.arrange(rhat_plots[[1]], rhat_plots[[2]], rhat_plots[[3]], rhat_plots[[5]], rhat_plots[[6]], rhat_plots[[7]], nrow = 2)
+# show all plots
+do.call(grid.arrange, c(rhat_plots, nrow = 2))
 ```
 
 ## Now look at R hat values for specific parameters
