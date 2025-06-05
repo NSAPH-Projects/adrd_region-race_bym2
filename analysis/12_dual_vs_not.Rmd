@@ -1,0 +1,106 @@
+
+```{r setup, include=FALSE}
+## Set working directory as project root
+library(here)
+knitr::opts_knit$set(root.dir = here())
+```
+
+```{r, message=FALSE, warning=FALSE}
+## Load libraries ----
+library(tidyverse)
+library(sf)
+library(magrittr)
+library(viridis)
+library(data.table)
+library(knitr)
+```
+
+## Load ADRD data (Medicaid-adjusted and not Medicaid-adjusted)
+
+```{r}
+## Read data ----
+
+# model results
+adrd_res <- read_rds("data/intermediate/adrd_model_results.rds")
+adrd_dual_res <- read_rds("data/intermediate/adrd-dual_model_results.rds")
+nonadrd_res <- read_rds("data/intermediate/nonadrd_model_results.rds")
+nonadrd_dual_res <- read_rds("data/intermediate/nonadrd-dual_model_results.rds")
+
+# select columns of interest
+adrd_res <- adrd_res %>%
+  filter(race == 1) %>%
+  select(c(county, risk_ratio))
+adrd_dual_res <- adrd_dual_res %>%
+  filter(race == 1) %>%
+  select(c(county, risk_ratio))
+nonadrd_res <- nonadrd_res %>%
+  filter(race == 1) %>%
+  select(c(county, risk_ratio))
+nonadrd_dual_res <- nonadrd_dual_res %>%
+  filter(race == 1) %>%
+  select(c(county, risk_ratio))
+
+# non-modeled data
+
+# # race-specific data
+# adrd_ratios_df <- read_rds('data/symlinks/scratch/adrd_ratios_df.rds')
+# adrd_dual_ratios_df <- read_rds('data/symlinks/scratch/adrd-dual_ratios_df.rds')
+# 
+# # combine data sources for each outcome
+# adrd_res_df <- adrd_res %>%
+#   right_join(adrd_ratios_df)
+# adrd_dual_res_df <- adrd_dual_res %>%
+#   right_join(adrd_dual_ratios_df)
+
+# join dual and nondual within each outcome (note new suffixes)
+adrd_pos_med <- merge(adrd_res, adrd_dual_res, all = TRUE, 
+                 by = c("county"),
+                 suffixes = c("_nondual", "_dual"))
+nonadrd_pos_med <- merge(nonadrd_res, nonadrd_dual_res, all = TRUE, 
+                 by = c("county"),
+                 suffixes = c("_nondual", "_dual"))
+
+# join outcomes (adrd and non-adrd)
+pos_med <- merge(adrd_pos_med, nonadrd_pos_med, all = TRUE, 
+                 by = c("county"),
+                 suffixes = c("_adrd", "_nonadrd"))
+
+# # join with county geometry
+# county_sf <- read_rds("data/symlinks/scratch/county_sf.rds")
+# pos_med_sf <- county_sf %>% 
+#   select(county) %>% 
+#   right_join(pos_med)
+# 
+# # load state data
+# county_fips_df <- read_rds("data/symlinks/scratch/county_fips_df.rds")
+# state_sf <- read_sf("data/county/cb_2015_us_state/cb_2015_us_state_20m.shp")
+# state_sf %<>% 
+#   left_join(
+#     county_sf %>% 
+#       left_join(county_fips_df) %>% 
+#       st_drop_geometry() %>% 
+#       distinct(STATEFP, s_idx)
+#   ) %>% 
+#   filter(!is.na(s_idx))
+# 
+# # load counties with zero Black person-years for plotting
+# county_sf_zero_b <- read_rds("data/symlinks/scratch/county_sf_zero_b.rds")
+# 
+# # change projection
+# pos_med_sf <- st_transform(pos_med_sf, 
+#                            crs = st_crs("+proj=aea +lat_1=29.5 +lat_2=45.5 +lat_0=37.5
+#                                         +lon_0=-96 +x_0=0 +y_0=0 +datum=NAD83 +units=m +no_defs"))
+```
+
+
+```{r}
+
+# count number of counties where RR point estimates for BOTH outcomes (ADRD and non-ADRD) are lower when we adjust for Medicaid eligibility
+
+
+pos_med %>%
+  count((risk_ratio_nondual_adrd > risk_ratio_dual_adrd) & 
+          (risk_ratio_nondual_nonadrd > risk_ratio_dual_nonadrd))
+
+
+```
