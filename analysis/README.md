@@ -1,3 +1,5 @@
+### Analysis scripts
+
 [01-prep_county_adj.Rmd](01-prep_county_adj.Rmd)
 * Maps adjacency, shapefile, outcome counts and beneficiary counts to the same set of counties
 * Note: user chooses outcome (ADRD or non-ADRD) and main vs. sensitivity analysis
