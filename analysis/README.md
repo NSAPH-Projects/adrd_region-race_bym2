@@ -31,7 +31,7 @@
 * Choose stage 2 working models to store in working models folder
 
 
-[08_convergence.Rmd](08_convergence.Rmd)
+[08-convergence.Rmd](08_convergence.Rmd)
 * Assess MCMC convergence for all models
 
 
