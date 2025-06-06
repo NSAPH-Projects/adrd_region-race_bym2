@@ -2,4 +2,4 @@
 
 1. See [data/county/README.md](data/county/README.md) and [data/symlinks/README.md](data/symlinks/README.md) for raw data
 2. Run data processing scripts: see details in [data_processing/README.md](data_processing/README.md)
-3. Run analysis scripts: see instructions in [analysis/README.md](analysis/README.md)
+3. Run analysis scripts: see details in [analysis/README.md](analysis/README.md)
