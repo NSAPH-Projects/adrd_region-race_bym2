@@ -1,4 +1,4 @@
-## Data processing scripts
+### Data processing scripts
 
 [01_get_adrd_hosps.py](01_get_adrd_hosps.py)
 * Identify hospitalizations with ICD diagnosis codes indicating ADRD
