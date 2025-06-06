@@ -4,9 +4,9 @@
 
 [02_reassign_adrd_hosps.R](02_reassign_adrd_hosps.R)
 * Classify all hospitalizations as hospitalizations with vs. without ADRD in a more sophisticated way
-*   Load all hospitalizations
-*   Combine hospitalizations with same-day readmissions
-*   Consider a hospitalization to be a hosp. with ADRD if the original hosp. or any of the subsequent same-day readmissions had a diagnosis code for ADRD
+  * Load all hospitalizations
+  *   Combine hospitalizations with same-day readmissions
+  *   Consider a hospitalization to be a hosp. with ADRD if the original hosp. or any of the subsequent same-day readmissions had a diagnosis code for ADRD
 
 
 [03_get_adrd_hosps.py](03_get_adrd_hosps.py) and [03_get_nonadrd_hosps.py](03_get_nonadrd_hosps.py)
