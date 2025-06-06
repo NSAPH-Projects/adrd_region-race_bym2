@@ -27,11 +27,11 @@
 * Note: user chooses outcome (ADRD or non-ADRD) and main vs. sensitivity analysis
 
 
-[07-stage1_working_models.R](07-stage1_working_models.R)
+[07-stage2_working_models.R](07-stage2_working_models.R)
 * Choose stage 2 working models to store in working models folder
 
 
-[08-convergence.Rmd](08_convergence.Rmd)
+[08-convergence.Rmd](08-convergence.Rmd)
 * Assess MCMC convergence for all models
 
 
