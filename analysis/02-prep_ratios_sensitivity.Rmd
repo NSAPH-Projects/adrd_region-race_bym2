@@ -15,8 +15,8 @@ Description:
 ########## user input ########## 
 
 # outcome (adrd or nonadrd)
-outcome <- "adrd"
-#outcome <- "nonadrd"
+#outcome <- "adrd"
+outcome <- "nonadrd"
 ```
 
 ```{r, message=FALSE, warning=FALSE}

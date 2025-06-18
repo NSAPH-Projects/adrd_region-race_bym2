@@ -153,7 +153,8 @@ stage2_total_risk_df |>
         legend.position = "bottom",
         strip.text = element_text(size = 12),
         strip.background = element_blank(),
-        plot.background = element_rect(fill = "white", color = NA)) +
+        plot.background = element_rect(fill = "white", color = NA),
+        text = element_text(family = "Arial")) +
   # this scale is capping at max in previous plot
   scale_fill_viridis(option = "A", 
                      na.value = "gray70",
@@ -162,13 +163,17 @@ stage2_total_risk_df |>
                      guide = guide_colorbar(ticks = FALSE,
                                             barwidth = 12, barheight = 0.5))
 #ggsave(paste0(fig_path, "adrd_raw_vs_lambda.pdf"), width = 6, height = 4)
-ggsave(paste0(fig_path, paste0(outcome, "_raw_vs_lambda.png")), width = 6, height = 4, dpi = 1000)
+#ggsave(paste0(fig_path, paste0(outcome, "_raw_vs_lambda.png")), width = 6, height = 4, dpi = 1000)
 
 
 #------------------- lambda only -------------------#
 
+plot_title <- ifelse(str_detect(outcome, "nonadrd"), 
+                     "Hospitalization without ADRD",
+                     "Hospitalization with ADRD")
+
 # plot
-stage2_total_risk_df |>
+lambda_maps <- stage2_total_risk_df |>
   filter(raw_vs_model != "raw") |>
   mutate(estimate = ifelse(estimate <= log(0.3), log(0.3), estimate),
          estimate = ifelse(estimate >= log(3), log(3)-0.001, estimate)) |>
@@ -177,16 +182,19 @@ stage2_total_risk_df |>
   geom_sf(data = county_sf_zero_b, fill = "gray70", lwd = 0.0) + 
   geom_sf(data = state_sf, fill = NA, col = "white", lwd = 0.1) +
   theme_map() + 
-  labs(fill = expression('Relative risk    ')) +
+  labs(title = plot_title,
+       fill = expression('Relative risk ')) +
   facet_grid(~race,
              labeller = as_labeller(race_labels)
              ) +
-  theme(legend.title = element_text(size = 10, vjust = 0.8),
+  theme(plot.title = element_text(face = "bold"),
+        legend.title = element_text(size = 10, vjust = 0.8),
         legend.text = element_text(size = 8),
         legend.position = "bottom",
         strip.text = element_text(size = 12),
         strip.background = element_blank(),
-        plot.background = element_rect(fill = "white", color = NA)) +
+        plot.background = element_rect(fill = "white", color = NA),
+        text = element_text(family = "Arial")) +
   # this scale is capping at max in previous plot
   scale_fill_viridis(option = "A", 
                      na.value = "gray70",
@@ -194,11 +202,13 @@ stage2_total_risk_df |>
                      breaks = c(1, 2, 3),
                      labels = c("1", "2", "3+"),
                      guide = guide_colorbar(ticks = FALSE,
-                                            barwidth = 12, barheight = 0.5))
-#ggsave(paste0(fig_path, "adrd_raw_vs_lambda.pdf"), width = 6, height = 4)
-ggsave(paste0(fig_path, paste0(outcome, "_lambda.png")), width = 6, height = 3, dpi = 1000)
+                                            barwidth = 20, barheight = 0.5))
+# #ggsave(paste0(fig_path, "adrd_raw_vs_lambda.pdf"), width = 6, height = 4)
+# ggsave(paste0(fig_path, paste0("lambda_", outcome, ".png")), width = 6, height = 3, dpi = 1000)
 
-
+# save data for plot, not pdf (combine plots across outcomes in script 11)
+write_rds(lambda_maps, file = paste0("results/figures/intermediate/", outcome, 
+                                     "_lambda_maps.rds"))
 ```
 
 ```{r}
@@ -274,10 +284,14 @@ sc <- scale_fill_gradient2(high = "#7600bc", mid = "white", low = "#028A0F", na.
                          breaks = c(0.7, 0.9, 1.1, 1.3, 1.5, 1.7),
                          # this will overwrite labels!! make sure labels match actual values
                          labels = c("<0.7", "0.9", "1.1", "1.3", "1.5", ">1.7"), 
-                         guide = guide_colorbar(ticks = FALSE,
-                                            barwidth = 12, barheight = 0.5))
+                         guide = guide_colorbar(ticks = FALSE, barwidth = 20, barheight = 0.5,
+                                                title.position = "top", title.hjust = 0.5))
 
-shared_specific_df |>
+plot_title <- ifelse(str_detect(outcome, "nonadrd"), 
+                     "Hospitalization without ADRD",
+                     "Hospitalization with ADRD")
+
+shared_specific_plot <- shared_specific_df |>
   # exponentiate and restrict values for plotting
   mutate(exp_estimate = exp(estimate_sig),
          exp_estimate = ifelse(exp_estimate < 0.7, 0.7, exp_estimate),
@@ -288,22 +302,30 @@ shared_specific_df |>
   geom_sf(aes(fill = exp_estimate), lwd = 0) + 
   geom_sf(data = county_sf_zero_b, fill = "gray40", lwd = 0.0) + 
   geom_sf(data = state_sf, fill = NA, col = "black", lwd = 0.1) +
-  labs(fill = "Risk component:      ") +
+  labs(title = plot_title,
+       fill = "Component estimates, relative risk scale") +
   facet_grid(~ parameter,
              labeller = as_labeller(shared_specific_labels)
              ) +
   theme_map() + 
-  theme(legend.title = element_text(size = 10),
+  theme(plot.title = element_text(size = 12, face = "bold"),
+        legend.title = element_text(size = 10),
         legend.text = element_text(size = 10),
         legend.position = "bottom",
+        legend.justification = "center",
         strip.text = element_text(size = 12),
         strip.background = element_blank(),
-        plot.background = element_rect(fill = "white", color = NA)) +
+        plot.background = element_rect(fill = "white", color = NA),
+        text = element_text(family = "Arial")) +
   sc
-
+shared_specific_plot
 
 # ggsave(paste0(fig_path, paste0(outcome, "_shared_vs_specific_", sig_shared_specific, ".png")), width = 7, height = 2.5, dpi = 1000)
-ggsave(paste0(fig_path, paste0(outcome, "_shared_vs_specific_", sig_shared_specific, ".png")), width = 7, height = 2.5, dpi = 1000)
+# ggsave(paste0(fig_path, paste0(outcome, "_shared_vs_specific_", sig_shared_specific, ".png")), width = 7, height = 2.5, dpi = 1000)
+
+# save data for plot, not pdf (combine plots across outcomes in script 11)
+write_rds(shared_specific_plot, file = paste0("results/figures/intermediate/", outcome, 
+                                     "_shared_vs_specific_", sig_shared_specific, ".rds"))
 ```
 
 ```{r}
@@ -358,19 +380,6 @@ res_sf %>%
   ) %>%
   count(risk_ratio_direction) %>%
   mutate(pcnt = n / sum(n) * 100)
-
-# # for 95%
-# res_sf %>%
-#   #filter(model == "adrd_m1") %>%
-#   filter(race == 2) %>% # same risk ratio for white and black rows
-#   select(-geometry) %>%
-#   as.data.frame() %>%
-#   mutate(
-#     risk_ratio_direction = ifelse(risk_ratio_sig_95, risk_ratio, as.numeric(NA)),
-#     risk_ratio_direction = ifelse(risk_ratio_direction < 1, "Risk ratio < 1", "Risk ratio > 1")
-#   ) %>%
-#   count(risk_ratio_direction) %>%
-#   mutate(pcnt = n / sum(n) * 100)
 ```
 
 ```{r}
@@ -387,9 +396,9 @@ bin_df <- embed(bin_breaks, 2) |> as.data.frame()
 bin_means <- rowMeans(bin_df) |> format(nsmall = 1)
 
 # choose 80% or 95% for significance (or show all counties)
-#sig_rr <- 80
+sig_rr <- 80
 #sig_rr <- 95
-sig_rr <- 0
+#sig_rr <- 0
 
 # new column for risk ratio bins (with significance)
 res_sf <- res_sf %>% 
@@ -417,11 +426,11 @@ risk_ratios <- res_sf %>%
   geom_sf(aes(fill = risk_ratio_bins), lwd = 0.03) + 
   geom_sf(data = county_sf_zero_b, fill = "gray40", lwd = 0.0) + 
   geom_sf(data = state_sf, fill = NA, col = "black", lwd = 0.2) +
-  labs(fill = expression('Risk Ratio (Black/White)'),
+  labs(fill = expression('Risk Ratio \n(Black/White)'),
        #fill = expression('Risk Ratio (' *lambda[' 2ij']*'/'*lambda[' 1ij']*', Black/White)'),
        title = rr_title) +
   theme_map() +
-  theme(legend.position = "bottom", 
+  theme(legend.position = "right", 
         #legend.justification = "right", 
         #legend.direction = "vertical",
         legend.title = element_text(size = 12),
@@ -430,16 +439,6 @@ risk_ratios <- res_sf %>%
         plot.background = element_rect(fill = "white", color = NA),
         plot.title = element_text(hjust = 0.5, size = 14, face = "plain")) +
   scale_fill_manual(
-    # values = c("#08306b",
-    #            "#2171b5",
-    #            "#fee6ce",
-    #            "#fdd0a2", 
-    #            "#fdae6b", 
-    #            "#fd8d3c", 
-    #            "#f16913",
-    #            "#d94801",
-    #            "#a63603", 
-    #            "#7f2704"),
     values = c(#"#08306b",
                #"#313695",
                #"#2171b5",
@@ -460,11 +459,11 @@ risk_ratios <- res_sf %>%
   ) +
   guides(fill = guide_legend(
     title.position = "top",
-    nrow = 1,
-            label.position = "bottom",
-            keywidth = grid::unit(2, "lines"),
-            keyheight = grid::unit(.5, "lines"),
-            label.hjust = 0))
+    #nrow = 1,
+    label.position = "right",
+    keywidth = grid::unit(.5, "lines"),
+    keyheight = grid::unit(1, "lines"),
+    label.hjust = 0))
 risk_ratios
 
 # save data for plot, not pdf (combine plots across outcomes in script 11)
@@ -637,22 +636,27 @@ check_sds$parameter <- factor(check_sds$parameter,
 
 # labels for plotting
 param_labels <- c(
-  sd_lambda_stage1 = "\u03BB (Overall)",
-  sd_lambda_white = "\u03BB\u2081 (White)",
-  sd_lambda_black = "\u03BB\u2082 (Black)",
-  sd_phi = "\u03A6 (Shared)",
-  sd_psi_white = "\u03C8\u2081 (White-specific)",
-  sd_psi_black = "\u03C8\u2082 (Black-specific)"
+  sd_lambda_stage1 = "\u03BB\u1D62\u2C7C (Overall)",
+  sd_lambda_white = "\u03BB\u2081\u1D62\u2C7C (White)",
+  sd_lambda_black = "\u03BB\u2082\u1D62\u2C7C (Black)",
+  sd_phi = "\u03A6\u1D62\u2C7C (Shared)",
+  sd_psi_white = "\u03C8\u2081\u1D62\u2C7C (White-specific)",
+  sd_psi_black = "\u03C8\u2082\u1D62\u2C7C (Black-specific)"
 )
 
+plot_title <- ifelse(str_detect(outcome, "nonadrd"), 
+                     "Hospitalization without ADRD",
+                     "Hospitalization with ADRD")
+
 # plot SD
-check_sds %>%
+sd_maps <- check_sds %>%
   mutate(sd = ifelse(sd > 0.4, 0.4, sd)) %>%
   ggplot() +
   geom_sf(aes(fill = sd), lwd = 0.0) +
   geom_sf(data = county_sf_zero_b, fill = "gray50", lwd = 0.0) +
   geom_sf(data = state_sf, fill = NA, lwd = 0.3, col = "black") +
-  labs(fill = "Posterior standard deviation   ") +
+  labs(title = plot_title,
+       fill = "Posterior standard deviation   ") +
   scale_fill_gradient2(high = "red3", low = "white", na.value = "gray50",
                        limits = c(0, 0.4),
                        guide = guide_colorbar(ticks = FALSE,
@@ -661,11 +665,18 @@ check_sds %>%
   facet_wrap(~parameter, nrow = 2,
              labeller = as_labeller(param_labels)) +
   theme_map() +
-  theme(legend.position = "bottom",
+  theme(plot.title = element_text(size = 14, face = "bold"),
+        legend.position = "bottom",
         strip.background = element_blank(),
         strip.text = element_text(size = 14),
         legend.title = element_text(size = 12),
         legend.text = element_text(size = 10),
-        plot.background = element_rect(fill = "white", color = NA))
-ggsave(file = paste0(fig_path, paste0(outcome, "_posterior_sd.png")), width = 8, height = 5, dpi = 1000)
+        plot.background = element_rect(fill = "white", color = NA),
+        text = element_text(family = "Arial"))
+
+# ggsave(file = paste0(fig_path, paste0("posterior_sd_", outcome, ".png")), width = 8, height = 5, dpi = 1000)
+
+# save data for plot, not pdf (combine plots across outcomes in script 11)
+write_rds(sd_maps, file = paste0("results/figures/intermediate/", outcome, 
+                                     "_posterior_sd.rds"))
 ```
