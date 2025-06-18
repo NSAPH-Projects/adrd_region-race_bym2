@@ -1,3 +1,5 @@
+### Analysis scripts
+
 [01-prep_county_adj.Rmd](01-prep_county_adj.Rmd)
 * Maps adjacency, shapefile, outcome counts and beneficiary counts to the same set of counties
 * Note: user chooses outcome (ADRD or non-ADRD) and main vs. sensitivity analysis
@@ -27,11 +29,11 @@
 * Note: user chooses outcome (ADRD or non-ADRD) and main vs. sensitivity analysis
 
 
-[07-stage1_working_models.R](07-stage1_working_models.R)
+[07-stage2_working_models.R](07-stage2_working_models.R)
 * Choose stage 2 working models to store in working models folder
 
 
-[08_convergence.Rmd](08_convergence.Rmd)
+[08-convergence.Rmd](08-convergence.Rmd)
 * Assess MCMC convergence for all models
 
 
