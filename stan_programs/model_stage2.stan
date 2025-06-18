@@ -1,4 +1,4 @@
-// STAN implementation of BYM2 without covariates
+// STAN implementation of BYM2: stage 2
 functions {
   // ICAR model with sparse representation
   // @param phi vector of ICAR random effects
@@ -37,19 +37,15 @@ data {
 parameters {
   real alpha1;                // White intercept
   real alpha2;                // Black intercept
-  vector[s] nu;               // state random effect
-  real<lower = 0> sigma_s;    // state effect variance
-  // real<lower = 0> delta;   // Scaling of shared component (phi_hat)
-  
+  vector[s] nu;               // State random effect
+  real<lower = 0> sigma_s;    // State effect variance
+
   vector[n] psi1;             // White spatial random effects
   vector[n] psi2;             // Black spatial random effects
-  // vector[n] theta1;        // White non spatial random effects
-  // vector[n] theta2;        // Black non spatial random effects
   real<lower = 0> sigma1;     // BYM2 scaling for White
   real<lower = 0> sigma2;     // BYM2 scaling for Black
-  real logit_rho1;            // BYM2 spatial vs non spatial random effect for White
-  real logit_rho2;            // BYM2 spatial vs non spatial random effect for Black
-    
+  real logit_rho1;            // BYM2 shared vs. race-specific weighting for White
+  real logit_rho2;            // BYM2 shared vs. race-specific weighting for Black
 }
 
 
@@ -71,24 +67,20 @@ transformed parameters {
 model {
   y ~ poisson_log(log_offset + 
                   alpha1 * d1_idx + alpha2 * d2_idx + 
-                  state_mat_idx * nu +
-                  // phi_hat .* d1_idx * delta +
-                  // phi_hat .* d2_idx / delta +
-                  convolved_re_sigma
+                  state_mat_idx * nu + convolved_re_sigma
                   );
+  
   // fixed effects
   alpha1 ~ normal(0, 10);
   alpha2 ~ normal(0, 10);
+  
   // random effect of state
   nu ~ normal(0, sigma_s);
   sigma_s ~ normal(0, 5);
-  // delta ~ lognormal(0, .4117);
   
   // spatial random effects
   psi1 ~ icar_normal_lpdf(W_n, W_adj1, W_adj2);
   psi2 ~ icar_normal_lpdf(W_n, W_adj1, W_adj2);
-  // theta1 ~ normal(0, 1);
-  // theta2 ~ normal(0, 1);
   logit_rho1 ~ normal(-1.472219, 0.751132);
   logit_rho2 ~ normal(-1.472219, 0.751132);
   sigma1 ~ normal(0, 1);

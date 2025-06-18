@@ -1,4 +1,4 @@
-// STAN implementation of BYM2 for combined data without covariates
+// STAN implementation of BYM2: stage 1
 functions {
   // ICAR model with sparse representation
   // @param phi vector of ICAR random effects
@@ -23,31 +23,28 @@ data {
   vector[m] d1_idx;           // Race 1 indicator corresponding to y
   vector[m] d2_idx;           // Race 2 indicator corresponding to y
   
-  int<lower=1, upper=n> c_idx[m];  // maps each observation to a county
+  int<lower=1, upper=n> c_idx[m];  // maps each observation to a county 1:m
   
   // adjacency matrix
-  int W_n;                    // Number of edges
+  int W_n;                         // Number of edges
   int W_adj1[W_n];                 // Edge list 1 (one column of adjacency pairs)
   int W_adj2[W_n];                 // Edge list 2 (other column of adjacency pairs)
   
   // scaling factor
-  real<lower = 0> scaling_factor; // scales the variance of the spatial effects
+  real<lower = 0> scaling_factor;  // scales the variance of the spatial effects
 }
 
 
 parameters {
-  real alpha;                // Intercepts
+  real alpha;                // Intercept
   vector[s] nu;              // State random effect
   real<lower = 0> sigma_s;   // State effect variance
-  vector[n] phi;             // spatial random effect
-  // vector[n] theta;           // nonspatial random effect
-  real<lower = 0> sigma;     // BYM2 scaling
-  // real logit_rho;            // BYM2 spatial vs non spatial random effect 
+  vector[n] phi;             // Spatial random effect
+  real<lower = 0> sigma;     // BYM2 scaling for spatial random effect
 }
 
 
 transformed parameters {
-  // real<lower=0, upper=1> rho = inv_logit(logit_rho);
   // random effects component
   vector[n] convolved_re = sqrt(1 / scaling_factor) * phi;
   
@@ -57,14 +54,15 @@ transformed parameters {
 model {
   y ~ poisson_log(log_offset + 
                   alpha + state_mat_idx * nu + convolved_re[c_idx] * sigma);
+  
   // fixed effects
   alpha ~ normal(0, 10);
+  
   // random effect of state
   nu ~ normal(0, sigma_s);
   sigma_s ~ normal(0, 5);
-  // spatial and non spatial random effects
+  
+  // spatial random effects
   phi ~ icar_normal_lpdf(W_n, W_adj1, W_adj2);
-  // theta ~ normal(0, 1);
   sigma ~ normal(0, 1);
-  // logit_rho ~ normal(0, 1);
 }
